@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dynamite_postgres
+    environment:
+      POSTGRES_DB: dynamite_core
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - dynamite_pgdata:/var/lib/postgresql/data
+
+volumes:
+  dynamite_pgdata:

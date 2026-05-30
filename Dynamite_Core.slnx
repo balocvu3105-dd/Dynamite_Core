@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Dynamite.Application/Dynamite.Application.csproj" />
+    <Project Path="src/Dynamite.Bot/Dynamite.Bot.csproj" />
+    <Project Path="src/Dynamite.Core/Dynamite.Core.csproj" />
+    <Project Path="src/Dynamite.Infrastructure/Dynamite.Infrastructure.csproj" />
+    <Project Path="src/Dynamite.Shared/Dynamite.Shared.csproj" />
+  </Folder>
+  <Folder Name="/src/Dynamite.Modules/" />
+  <Folder Name="/src/Dynamite.Modules/Moderation/">
+    <Project Path="src/Dynamite.Modules/Moderation/Dynamite.Modules.Moderation.csproj" />
+  </Folder>
+  <Folder Name="/src/Dynamite.Modules/Welcome/">
+    <Project Path="src/Dynamite.Modules/Welcome/Dynamite.Modules.Welcome.csproj" />
+  </Folder>
+</Solution>
