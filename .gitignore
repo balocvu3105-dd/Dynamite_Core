@@ -486,3 +486,7 @@ appsettings.json
 # Secrets
 appsettings.json
 logs/
+
+# Secrets
+appsettings.json
+logs/
