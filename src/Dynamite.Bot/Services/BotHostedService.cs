@@ -4,7 +4,10 @@ using System.Reflection;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
+using Dynamite.Application.Interfaces;
 using Dynamite.Bot.Settings;
+using Dynamite.Modules.RoleManagement.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -17,17 +20,12 @@ public class BotHostedService : IHostedService
     private readonly DiscordSettings _settings;
     private readonly ILogger<BotHostedService> _logger;
 
-    // Fix: enumerate all module assemblies explicitly instead of combining
-    // Assembly.GetEntryAssembly() (which scans everything it can see) with a
-    // specific module assembly. If the entry assembly ever picks up the module
-    // assembly transitively, commands get registered twice and Discord.Net throws.
     private static readonly IReadOnlyList<Assembly> ModuleAssemblies =
     [
-        Assembly.GetExecutingAssembly(),                                   // Dynamite.Bot
+        Assembly.GetExecutingAssembly(),
         typeof(Dynamite.Modules.Moderation.Modules.ModerationModule).Assembly,
         typeof(Dynamite.Modules.Moderation.Modules.ConfigModule).Assembly,
-        // Add new module assemblies here as they are created.
-        // Example: typeof(Dynamite.Modules.Welcome.Modules.WelcomeModule).Assembly,
+        typeof(Dynamite.Modules.RoleManagement.Modules.AutoRoleModule).Assembly,
     ];
 
     public BotHostedService(
@@ -49,6 +47,10 @@ public class BotHostedService : IHostedService
         _client.Log += LogAsync;
         _client.Ready += OnReadyAsync;
         _client.InteractionCreated += OnInteractionCreatedAsync;
+        _client.UserJoined += OnUserJoinedAsync;
+        _client.ButtonExecuted += OnButtonExecutedAsync;
+        _client.SelectMenuExecuted += OnSelectMenuExecutedAsync;
+        _client.ModalSubmitted += OnModalSubmittedAsync;
 
         await _client.LoginAsync(TokenType.Bot, _settings.Token);
         await _client.StartAsync();
@@ -64,7 +66,6 @@ public class BotHostedService : IHostedService
 
     private async Task OnReadyAsync()
     {
-        // Deduplicate by assembly identity before scanning to be safe.
         var distinct = ModuleAssemblies.Distinct();
         foreach (var assembly in distinct)
         {
@@ -81,6 +82,59 @@ public class BotHostedService : IHostedService
 #endif
 
         _logger.LogInformation("Bot is ready!");
+    }
+
+    private async Task OnUserJoinedAsync(SocketGuildUser user)
+    {
+        using var scope = _services.CreateScope();
+        var autoRoleService = scope.ServiceProvider.GetRequiredService<IAutoRoleService>();
+
+        var roleIds = (await autoRoleService.GetRoleIdsToApplyAsync(user.Guild.Id)).ToList();
+        if (roleIds.Count == 0) return;
+
+        try
+        {
+            await user.AddRolesAsync(roleIds);
+            _logger.LogInformation("Applied {Count} auto roles to user {UserId} in guild {GuildId}",
+                roleIds.Count, user.Id, user.Guild.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to apply auto roles to user {UserId} in guild {GuildId}",
+                user.Id, user.Guild.Id);
+        }
+    }
+
+    private async Task OnButtonExecutedAsync(SocketMessageComponent interaction)
+    {
+        if (interaction.Data.CustomId.StartsWith(RolePanelInteractionService.ButtonPrefix))
+        {
+            var service = _services.GetRequiredService<RolePanelInteractionService>();
+            await service.HandleButtonAsync(interaction);
+            return;
+        }
+
+        var ctx = new SocketInteractionContext<SocketMessageComponent>(_client, interaction);
+        await _interactions.ExecuteCommandAsync(ctx, _services);
+    }
+
+    private async Task OnSelectMenuExecutedAsync(SocketMessageComponent interaction)
+    {
+        if (interaction.Data.CustomId.StartsWith(RolePanelInteractionService.SelectPrefix))
+        {
+            var service = _services.GetRequiredService<RolePanelInteractionService>();
+            await service.HandleSelectAsync(interaction);
+            return;
+        }
+
+        var ctx = new SocketInteractionContext<SocketMessageComponent>(_client, interaction);
+        await _interactions.ExecuteCommandAsync(ctx, _services);
+    }
+
+    private async Task OnModalSubmittedAsync(SocketModal modal)
+    {
+        var ctx = new SocketInteractionContext<SocketModal>(_client, modal);
+        await _interactions.ExecuteCommandAsync(ctx, _services);
     }
 
     private async Task OnInteractionCreatedAsync(SocketInteraction interaction)

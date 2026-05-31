@@ -1,3 +1,4 @@
+// src/Dynamite.Infrastructure/Persistence/AppDbContext.cs
 namespace Dynamite.Infrastructure.Persistence;
 
 using Dynamite.Core.Entities;
@@ -10,6 +11,11 @@ public class AppDbContext : DbContext
     public DbSet<GuildConfig> GuildConfigs => Set<GuildConfig>();
     public DbSet<Warning> Warnings => Set<Warning>();
     public DbSet<ModerationAction> ModerationActions => Set<ModerationAction>();
+
+    // Phase 3
+    public DbSet<AutoRoleConfig> AutoRoleConfigs => Set<AutoRoleConfig>();
+    public DbSet<RolePanel> RolePanels => Set<RolePanel>();
+    public DbSet<RolePanelItem> RolePanelItems => Set<RolePanelItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,3 +1,4 @@
+// src/Dynamite.Core/Entities/GuildConfig.cs
 namespace Dynamite.Core.Entities;
 
 public class GuildConfig : BaseEntity
@@ -15,4 +16,8 @@ public class GuildConfig : BaseEntity
 
     public ICollection<Warning> Warnings { get; set; } = [];
     public ICollection<ModerationAction> ModerationActions { get; set; } = [];
+
+    // Phase 3 additions
+    public ICollection<AutoRoleConfig> AutoRoles { get; set; } = [];
+    public ICollection<RolePanel> RolePanels { get; set; } = [];
 }
