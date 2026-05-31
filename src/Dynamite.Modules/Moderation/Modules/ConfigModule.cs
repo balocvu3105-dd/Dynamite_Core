@@ -2,7 +2,6 @@ namespace Dynamite.Modules.Moderation.Modules;
 
 using Discord;
 using Discord.Interactions;
-using Discord.WebSocket;
 using Dynamite.Application.Interfaces;
 using Dynamite.Modules.Moderation.Helpers;
 using Microsoft.Extensions.Logging;
@@ -28,10 +27,15 @@ public class ConfigModule : InteractionModuleBase<SocketInteractionContext>
 
         try
         {
-            await _configService.SetModLogChannelAsync(Context.Guild.Id, channel.Id);
+            // Fix: pass guild name so the config record stores the real name
+            // rather than the ID string if the guild hasn't been seen before.
+            await _configService.SetModLogChannelAsync(
+                Context.Guild.Id,
+                Context.Guild.Name,
+                channel.Id);
 
             await FollowupAsync(embed: EmbedHelper.Success(
-                "Mod Log Set",
+                "Mod log set",
                 $"Moderation logs will now be sent to {channel.Mention}."), ephemeral: true);
 
             _logger.LogInformation("Mod log channel set to {ChannelId} for guild {GuildId}",

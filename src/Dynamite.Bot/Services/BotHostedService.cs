@@ -17,6 +17,19 @@ public class BotHostedService : IHostedService
     private readonly DiscordSettings _settings;
     private readonly ILogger<BotHostedService> _logger;
 
+    // Fix: enumerate all module assemblies explicitly instead of combining
+    // Assembly.GetEntryAssembly() (which scans everything it can see) with a
+    // specific module assembly. If the entry assembly ever picks up the module
+    // assembly transitively, commands get registered twice and Discord.Net throws.
+    private static readonly IReadOnlyList<Assembly> ModuleAssemblies =
+    [
+        Assembly.GetExecutingAssembly(),                                   // Dynamite.Bot
+        typeof(Dynamite.Modules.Moderation.Modules.ModerationModule).Assembly,
+        typeof(Dynamite.Modules.Moderation.Modules.ConfigModule).Assembly,
+        // Add new module assemblies here as they are created.
+        // Example: typeof(Dynamite.Modules.Welcome.Modules.WelcomeModule).Assembly,
+    ];
+
     public BotHostedService(
         DiscordSocketClient client,
         InteractionService interactions,
@@ -51,8 +64,13 @@ public class BotHostedService : IHostedService
 
     private async Task OnReadyAsync()
     {
-await _interactions.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
-        await _interactions.AddModulesAsync(typeof(Dynamite.Modules.Moderation.Modules.ModerationModule).Assembly, _services);
+        // Deduplicate by assembly identity before scanning to be safe.
+        var distinct = ModuleAssemblies.Distinct();
+        foreach (var assembly in distinct)
+        {
+            await _interactions.AddModulesAsync(assembly, _services);
+            _logger.LogDebug("Loaded interaction modules from {Assembly}", assembly.GetName().Name);
+        }
 
 #if DEBUG
         await _interactions.RegisterCommandsToGuildAsync(_settings.TestGuildId);
@@ -76,10 +94,10 @@ await _interactions.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
         var level = log.Severity switch
         {
             LogSeverity.Critical => LogLevel.Critical,
-            LogSeverity.Error    => LogLevel.Error,
-            LogSeverity.Warning  => LogLevel.Warning,
-            LogSeverity.Info     => LogLevel.Information,
-            _                    => LogLevel.Debug
+            LogSeverity.Error => LogLevel.Error,
+            LogSeverity.Warning => LogLevel.Warning,
+            LogSeverity.Info => LogLevel.Information,
+            _ => LogLevel.Debug
         };
         _logger.Log(level, log.Exception, "[Discord] {Message}", log.Message);
         return Task.CompletedTask;

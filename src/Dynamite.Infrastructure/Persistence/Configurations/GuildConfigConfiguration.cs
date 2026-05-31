@@ -19,9 +19,23 @@ public class GuildConfigConfiguration : IEntityTypeConfiguration<GuildConfig>
             .HasMaxLength(100)
             .IsRequired();
 
+        // Fix: nullable ulong channel IDs must also use long conversion.
+        // Without this, EF maps them as numeric(20,0) instead of bigint,
+        // inconsistent with all other Discord ID columns.
+        builder.Property(g => g.ModLogChannelId)
+            .HasConversion<long?>();
+
+        builder.Property(g => g.ServerLogChannelId)
+            .HasConversion<long?>();
+
         builder.HasMany(g => g.Warnings)
             .WithOne(w => w.GuildConfig)
             .HasForeignKey(w => w.GuildConfigId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(g => g.ModerationActions)
+            .WithOne(a => a.GuildConfig)
+            .HasForeignKey(a => a.GuildConfigId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

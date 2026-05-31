@@ -1,7 +1,6 @@
 namespace Dynamite.Modules.Moderation.Services;
 
 using Discord;
-using Discord.Rest;
 using Discord.WebSocket;
 using Dynamite.Application.Interfaces;
 using Dynamite.Modules.Moderation.Helpers;
@@ -36,21 +35,18 @@ public class ModLogService
 
             if (config.ModLogChannelId is null)
             {
-                _logger.LogInformation("ModLog skipped — no channel configured");
+                _logger.LogInformation("ModLog skipped — no channel configured for guild {GuildId}", guildId);
                 return;
             }
 
-            var guild = _client.GetGuild(guildId);
-            _logger.LogInformation("ModLog guild cache — {Guild}", guild?.Name ?? "null");
-
-            var channel = guild?.GetTextChannel(config.ModLogChannelId.Value)
-                          ?? (ITextChannel?)await _client.Rest.GetChannelAsync(config.ModLogChannelId.Value);
-
-            _logger.LogInformation("ModLog channel — {Channel}", channel?.Name ?? "null");
+            var channelId = config.ModLogChannelId.Value;
+            var channel = await ResolveTextChannelAsync(guildId, channelId);
 
             if (channel is null)
             {
-                _logger.LogWarning("Mod log channel {ChannelId} not found", config.ModLogChannelId.Value);
+                _logger.LogWarning(
+                    "Mod log channel {ChannelId} not found or is not a text channel in guild {GuildId}",
+                    channelId, guildId);
                 return;
             }
 
@@ -62,5 +58,36 @@ public class ModLogService
         {
             _logger.LogError(ex, "Failed to send mod log for guild {GuildId}", guildId);
         }
+    }
+
+    // Fix: separate method to safely resolve a text channel from cache or REST.
+    // The old code did a direct cast from RestChannel → ITextChannel which throws
+    // an InvalidCastException if the configured channel is not a text channel.
+    // We check the type explicitly after the REST fallback instead.
+    private async Task<ITextChannel?> ResolveTextChannelAsync(ulong guildId, ulong channelId)
+    {
+        var guild = _client.GetGuild(guildId);
+
+        // Try cache first (no network call, always prefer this)
+        var cached = guild?.GetTextChannel(channelId);
+        if (cached is not null)
+        {
+            _logger.LogDebug("ModLog resolved channel from cache: #{Channel}", cached.Name);
+            return cached;
+        }
+
+        // Fall back to REST if cache missed (e.g. bot just restarted)
+        _logger.LogDebug("ModLog channel not in cache, falling back to REST for channel {ChannelId}", channelId);
+        var restChannel = await _client.Rest.GetChannelAsync(channelId);
+
+        if (restChannel is ITextChannel textChannel)
+            return textChannel;
+
+        if (restChannel is not null)
+            _logger.LogWarning(
+                "Channel {ChannelId} exists but is not a text channel (type: {Type})",
+                channelId, restChannel.GetType().Name);
+
+        return null;
     }
 }

@@ -79,6 +79,23 @@ public class ModerationService : IModerationService
         return action;
     }
 
+    // Fix: was missing entirely despite the enum having Unban = 3.
+    // The Discord action (guild.RemoveBanAsync) is done by the module/command layer,
+    // not here — this service only records what happened in the database.
+    public async Task<ModerationAction> UnbanAsync(
+        ulong guildId, string guildName, ulong targetId, ulong moderatorId,
+        string reason, CancellationToken ct = default)
+    {
+        var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
+        var action = await LogActionAsync(guildId, targetId, moderatorId,
+            ModerationActionType.Unban, reason, config.Id, ct: ct);
+
+        _logger.LogInformation("User {TargetId} unbanned from guild {GuildId} by {ModId}",
+            targetId, guildId, moderatorId);
+
+        return action;
+    }
+
     public async Task<ModerationAction> TimeoutAsync(
         ulong guildId, string guildName, ulong targetId, ulong moderatorId,
         string reason, TimeSpan duration, CancellationToken ct = default)

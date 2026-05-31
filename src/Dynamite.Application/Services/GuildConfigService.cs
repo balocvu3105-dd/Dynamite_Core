@@ -33,9 +33,12 @@ public class GuildConfigService : IGuildConfigService
         await _guildConfigRepo.SaveChangesAsync(ct);
     }
 
-   public async Task SetModLogChannelAsync(ulong guildId, ulong channelId, CancellationToken ct = default)
+    // Fix: accept guildName so GetOrCreateAsync stores the real name,
+    // not a fallback of guildId.ToString() when the config doesn't exist yet.
+    public async Task SetModLogChannelAsync(
+        ulong guildId, string guildName, ulong channelId, CancellationToken ct = default)
     {
-        var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildId.ToString(), ct);
+        var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
         config.ModLogChannelId = channelId;
         await UpdateConfigAsync(config, ct);
     }

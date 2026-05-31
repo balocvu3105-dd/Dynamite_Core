@@ -22,5 +22,12 @@ public class ModerationActionConfiguration : IEntityTypeConfiguration<Moderation
             .HasConversion<int>();
 
         builder.HasIndex(a => new { a.GuildId, a.TargetUserId });
+
+        // Fix: explicitly declare the relationship instead of relying on EF convention.
+        // This prevents silent behavior changes if entity or FK property naming ever drifts.
+        builder.HasOne(a => a.GuildConfig)
+            .WithMany(g => g.ModerationActions)
+            .HasForeignKey(a => a.GuildConfigId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
