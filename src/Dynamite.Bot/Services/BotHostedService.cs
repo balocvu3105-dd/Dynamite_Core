@@ -51,7 +51,8 @@ public class BotHostedService : IHostedService
 
     private async Task OnReadyAsync()
     {
-        await _interactions.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
+await _interactions.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
+        await _interactions.AddModulesAsync(typeof(Dynamite.Modules.Moderation.Modules.ModerationModule).Assembly, _services);
 
 #if DEBUG
         await _interactions.RegisterCommandsToGuildAsync(_settings.TestGuildId);

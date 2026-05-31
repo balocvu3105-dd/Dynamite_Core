@@ -26,7 +26,7 @@ public static class EmbedHelper
         string reason, string? extra = null)
     {
         var builder = new EmbedBuilder()
-            .WithTitle($"?? {action}")
+           .WithTitle($"🔨 {action}")
             .WithColor(ErrorColor)
             .WithTimestamp(DateTimeOffset.UtcNow)
             .AddField("Target", target, inline: true)

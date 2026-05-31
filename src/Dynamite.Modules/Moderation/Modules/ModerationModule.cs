@@ -240,3 +240,4 @@ public class ModerationModule : InteractionModuleBase<SocketInteractionContext>
         await FollowupAsync(embed: embed, ephemeral: true);
     }
 }
+

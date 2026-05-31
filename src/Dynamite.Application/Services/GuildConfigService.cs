@@ -33,11 +33,9 @@ public class GuildConfigService : IGuildConfigService
         await _guildConfigRepo.SaveChangesAsync(ct);
     }
 
-    public async Task SetModLogChannelAsync(ulong guildId, ulong channelId, CancellationToken ct = default)
+   public async Task SetModLogChannelAsync(ulong guildId, ulong channelId, CancellationToken ct = default)
     {
-        var config = await _guildConfigRepo.GetByGuildIdAsync(guildId, ct)
-            ?? throw new InvalidOperationException($"Guild {guildId} config not found.");
-
+        var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildId.ToString(), ct);
         config.ModLogChannelId = channelId;
         await UpdateConfigAsync(config, ct);
     }

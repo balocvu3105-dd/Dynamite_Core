@@ -5,6 +5,7 @@ using Dynamite.Application;
 using Dynamite.Bot.Services;
 using Dynamite.Bot.Settings;
 using Dynamite.Infrastructure;
+using Dynamite.Modules.Moderation.Services;
 using Serilog;
 
 var host = Host.CreateDefaultBuilder(args)
@@ -18,12 +19,9 @@ var host = Host.CreateDefaultBuilder(args)
     .ConfigureServices((context, services) =>
     {
         var config = context.Configuration;
-
         services.AddApplication();
         services.AddInfrastructure(config);
-
         services.Configure<DiscordSettings>(config.GetSection("Discord"));
-
         services.AddSingleton(new DiscordSocketClient(new DiscordSocketConfig
         {
             LogLevel = LogSeverity.Info,
@@ -32,13 +30,12 @@ var host = Host.CreateDefaultBuilder(args)
                 | GatewayIntents.GuildMessages
                 | GatewayIntents.MessageContent
         }));
-
         services.AddSingleton<InteractionService>(provider =>
         {
             var client = provider.GetRequiredService<DiscordSocketClient>();
             return new InteractionService(client);
         });
-
+        services.AddTransient<ModLogService>();
         services.AddHostedService<BotHostedService>();
     })
     .Build();
