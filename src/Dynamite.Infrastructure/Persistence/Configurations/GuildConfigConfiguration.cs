@@ -1,3 +1,4 @@
+// src/Dynamite.Infrastructure/Persistence/Configurations/GuildConfigConfiguration.cs
 namespace Dynamite.Infrastructure.Persistence.Configurations;
 
 using Dynamite.Core.Entities;
@@ -19,14 +20,34 @@ public class GuildConfigConfiguration : IEntityTypeConfiguration<GuildConfig>
             .HasMaxLength(100)
             .IsRequired();
 
-        // Fix: nullable ulong channel IDs must also use long conversion.
-        // Without this, EF maps them as numeric(20,0) instead of bigint,
-        // inconsistent with all other Discord ID columns.
         builder.Property(g => g.ModLogChannelId)
             .HasConversion<long?>();
 
+        // Logging channels (Phase 6)
         builder.Property(g => g.ServerLogChannelId)
             .HasConversion<long?>();
+
+        builder.Property(g => g.MessageLogChannelId)
+            .HasConversion<long?>();
+
+        builder.Property(g => g.MemberLogChannelId)
+            .HasConversion<long?>();
+
+        builder.Property(g => g.VoiceLogChannelId)
+            .HasConversion<long?>();
+
+        // Welcome + Verify (Phase 7)
+        builder.Property(g => g.WelcomeChannelId)
+            .HasConversion<long?>();
+
+        builder.Property(g => g.VerifyChannelId)
+            .HasConversion<long?>();
+
+        builder.Property(g => g.VerifyRoleId)
+            .HasConversion<long?>();
+
+        builder.Property(g => g.WelcomeMessage)
+            .HasMaxLength(500);
 
         builder.HasMany(g => g.Warnings)
             .WithOne(w => w.GuildConfig)

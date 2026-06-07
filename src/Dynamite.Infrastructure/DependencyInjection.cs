@@ -1,3 +1,4 @@
+// src/Dynamite.Infrastructure/DependencyInjection.cs
 namespace Dynamite.Infrastructure;
 
 using Dynamite.Core.Interfaces.Repositories;
@@ -19,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<IGuildConfigRepository, GuildConfigRepository>();
         services.AddScoped<IWarningRepository, WarningRepository>();
         services.AddScoped<IModerationRepository, ModerationRepository>();
+        services.AddScoped<IAntiSpamRepository, AntiSpamRepository>();
 
         return services;
     }

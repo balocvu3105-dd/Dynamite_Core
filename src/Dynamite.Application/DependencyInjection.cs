@@ -1,3 +1,4 @@
+// src/Dynamite.Application/DependencyInjection.cs
 namespace Dynamite.Application;
 
 using Dynamite.Application.Interfaces;
@@ -10,6 +11,9 @@ public static class DependencyInjection
     {
         services.AddScoped<IGuildConfigService, GuildConfigService>();
         services.AddScoped<IModerationService, ModerationService>();
+        services.AddScoped<IServerLogService, ServerLogService>();
+        services.AddScoped<IWelcomeService, WelcomeService>();
+        services.AddScoped<IAntiSpamService, AntiSpamService>();
         return services;
     }
 }

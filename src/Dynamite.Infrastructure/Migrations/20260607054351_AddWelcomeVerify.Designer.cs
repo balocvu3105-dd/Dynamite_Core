@@ -3,6 +3,7 @@ using System;
 using Dynamite.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Dynamite.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260607054351_AddWelcomeVerify")]
+    partial class AddWelcomeVerify
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,59 +24,6 @@ namespace Dynamite.Infrastructure.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("Dynamite.Core.Entities.AntiSpamConfig", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("AntiInvite")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("AntiRaid")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("AntiScamLink")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("Enabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid>("GuildConfigId")
-                        .HasColumnType("uuid");
-
-                    b.Property<long>("GuildId")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("MentionThreshold")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("MessageThreshold")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("MessageWindowSeconds")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("RaidThreshold")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GuildConfigId")
-                        .IsUnique();
-
-                    b.HasIndex("GuildId")
-                        .IsUnique();
-
-                    b.ToTable("AntiSpamConfigs");
-                });
 
             modelBuilder.Entity("Dynamite.Core.Entities.AutoRoleConfig", b =>
                 {
@@ -341,17 +291,6 @@ namespace Dynamite.Infrastructure.Migrations
                     b.ToTable("Warnings");
                 });
 
-            modelBuilder.Entity("Dynamite.Core.Entities.AntiSpamConfig", b =>
-                {
-                    b.HasOne("Dynamite.Core.Entities.GuildConfig", "GuildConfig")
-                        .WithOne("AntiSpamConfig")
-                        .HasForeignKey("Dynamite.Core.Entities.AntiSpamConfig", "GuildConfigId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("GuildConfig");
-                });
-
             modelBuilder.Entity("Dynamite.Core.Entities.AutoRoleConfig", b =>
                 {
                     b.HasOne("Dynamite.Core.Entities.GuildConfig", "GuildConfig")
@@ -409,8 +348,6 @@ namespace Dynamite.Infrastructure.Migrations
 
             modelBuilder.Entity("Dynamite.Core.Entities.GuildConfig", b =>
                 {
-                    b.Navigation("AntiSpamConfig");
-
                     b.Navigation("AutoRoles");
 
                     b.Navigation("ModerationActions");

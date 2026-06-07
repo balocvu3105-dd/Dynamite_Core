@@ -1,3 +1,4 @@
+// src/Dynamite.Bot/Services/BotHostedService.cs
 namespace Dynamite.Bot.Services;
 
 using System.Reflection;
@@ -6,7 +7,10 @@ using Discord.Interactions;
 using Discord.WebSocket;
 using Dynamite.Application.Interfaces;
 using Dynamite.Bot.Settings;
+using Dynamite.Modules.Logging;
 using Dynamite.Modules.RoleManagement.Services;
+using Dynamite.Modules.Security;
+using Dynamite.Modules.Welcome;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -26,6 +30,10 @@ public class BotHostedService : IHostedService
         typeof(Dynamite.Modules.Moderation.Modules.ModerationModule).Assembly,
         typeof(Dynamite.Modules.Moderation.Modules.ConfigModule).Assembly,
         typeof(Dynamite.Modules.RoleManagement.Modules.AutoRoleModule).Assembly,
+        typeof(Dynamite.Modules.Logging.Modules.LogConfigModule).Assembly,
+        typeof(Dynamite.Modules.Welcome.Modules.WelcomeConfigModule).Assembly,
+        typeof(Dynamite.Modules.Security.Modules.AntiSpamConfigModule).Assembly,
+        typeof(Dynamite.Modules.Setup.SetupModule).Assembly,
     ];
 
     public BotHostedService(
@@ -73,6 +81,15 @@ public class BotHostedService : IHostedService
             _logger.LogDebug("Loaded interaction modules from {Assembly}", assembly.GetName().Name);
         }
 
+        // Phase 6
+        _services.GetRequiredService<LoggingEventHandler>().Subscribe();
+
+        // Phase 7
+        _services.GetRequiredService<WelcomeEventHandler>().Subscribe();
+
+        // Phase 8
+        _services.GetRequiredService<SecurityEventHandler>().Subscribe();
+
 #if DEBUG
         await _interactions.RegisterCommandsToGuildAsync(_settings.TestGuildId);
         _logger.LogInformation("Commands registered to test guild {GuildId}", _settings.TestGuildId);
@@ -107,7 +124,16 @@ public class BotHostedService : IHostedService
 
     private async Task OnButtonExecutedAsync(SocketMessageComponent interaction)
     {
-        if (interaction.Data.CustomId.StartsWith(RolePanelInteractionService.ButtonPrefix))
+        var customId = interaction.Data.CustomId;
+
+        if (customId == VerifyInteractionService.VerifyButtonId)
+        {
+            var service = _services.GetRequiredService<VerifyInteractionService>();
+            await service.HandleVerifyAsync(interaction);
+            return;
+        }
+
+        if (customId.StartsWith(RolePanelInteractionService.ButtonPrefix))
         {
             var service = _services.GetRequiredService<RolePanelInteractionService>();
             await service.HandleButtonAsync(interaction);

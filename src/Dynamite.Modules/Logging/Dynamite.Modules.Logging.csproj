@@ -1,4 +1,4 @@
-<!-- src/Dynamite.Modules/Welcome/Dynamite.Modules.Welcome.csproj -->
+<!-- src/Dynamite.Modules/Logging/Dynamite.Modules.Logging.csproj -->
 <Project Sdk="Microsoft.NET.Sdk">
 	<ItemGroup>
 		<ProjectReference Include="..\..\Dynamite.Application\Dynamite.Application.csproj" />
@@ -8,8 +8,6 @@
 		<PackageReference Include="Discord.Net" Version="3.19.1" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
-		<PackageReference Include="SkiaSharp" Version="2.88.8" />
-		<PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.88.8" />
 	</ItemGroup>
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
