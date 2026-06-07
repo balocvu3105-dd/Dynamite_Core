@@ -14,9 +14,10 @@ public class AppDbContext : DbContext
     public DbSet<AutoRoleConfig> AutoRoleConfigs => Set<AutoRoleConfig>();
     public DbSet<RolePanel> RolePanels => Set<RolePanel>();
     public DbSet<RolePanelItem> RolePanelItems => Set<RolePanelItem>();
-
-    // Phase 8
     public DbSet<AntiSpamConfig> AntiSpamConfigs => Set<AntiSpamConfig>();
+
+    // Phase 9 — Dashboard API
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

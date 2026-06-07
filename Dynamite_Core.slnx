@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Dynamite.API/Dynamite.API.csproj" />
     <Project Path="src/Dynamite.Application/Dynamite.Application.csproj" />
     <Project Path="src/Dynamite.Bot/Dynamite.Bot.csproj" />
     <Project Path="src/Dynamite.Core/Dynamite.Core.csproj" />
