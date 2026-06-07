@@ -22,6 +22,9 @@ public static class DependencyInjection
         services.AddScoped<IModerationRepository, ModerationRepository>();
         services.AddScoped<IAntiSpamRepository, AntiSpamRepository>();
 
+        // Phase 9b
+        services.AddScoped<IGuildPresenceRepository, GuildPresenceRepository>();
+
         return services;
     }
 }

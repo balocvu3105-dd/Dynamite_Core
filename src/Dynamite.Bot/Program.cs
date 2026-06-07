@@ -16,6 +16,7 @@ using Dynamite.Modules.Moderation.Services;
 using Dynamite.Modules.RoleManagement.Helpers;
 using Dynamite.Modules.RoleManagement.Services;
 using Dynamite.Modules.Security;
+using Dynamite.Modules.Setup;
 using Dynamite.Modules.Welcome;
 using Dynamite.Modules.Welcome.Helpers;
 using Serilog;
@@ -64,6 +65,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<RolePanelInteractionService>();
         services.AddTransient<RolePanelBuilder>();
 
+        // Phase 4
+        services.AddTransient<SetupExecutor>();
+
         // Phase 6
         services.AddSingleton<MessageLogger>();
         services.AddSingleton<MemberLogger>();
@@ -82,6 +86,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ViolationTracker>();
         services.AddSingleton<EscalationEngine>();
         services.AddSingleton<SecurityEventHandler>();
+
+        // Phase 9b
+        services.AddSingleton<GuildPresenceSyncService>();
 
         services.AddHostedService<BotHostedService>();
     })

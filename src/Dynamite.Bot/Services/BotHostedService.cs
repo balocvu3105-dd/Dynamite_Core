@@ -22,6 +22,7 @@ public class BotHostedService : IHostedService
     private readonly InteractionService _interactions;
     private readonly IServiceProvider _services;
     private readonly DiscordSettings _settings;
+    private readonly GuildPresenceSyncService _presenceSync;
     private readonly ILogger<BotHostedService> _logger;
 
     private static readonly IReadOnlyList<Assembly> ModuleAssemblies =
@@ -41,12 +42,14 @@ public class BotHostedService : IHostedService
         InteractionService interactions,
         IServiceProvider services,
         IOptions<DiscordSettings> settings,
+        GuildPresenceSyncService presenceSync,
         ILogger<BotHostedService> logger)
     {
         _client = client;
         _interactions = interactions;
         _services = services;
         _settings = settings.Value;
+        _presenceSync = presenceSync;
         _logger = logger;
     }
 
@@ -59,6 +62,10 @@ public class BotHostedService : IHostedService
         _client.ButtonExecuted += OnButtonExecutedAsync;
         _client.SelectMenuExecuted += OnSelectMenuExecutedAsync;
         _client.ModalSubmitted += OnModalSubmittedAsync;
+
+        // Phase 9b
+        _client.JoinedGuild += guild => _presenceSync.OnGuildJoinedAsync(guild);
+        _client.LeftGuild += guild => _presenceSync.OnGuildLeftAsync(guild);
 
         await _client.LoginAsync(TokenType.Bot, _settings.Token);
         await _client.StartAsync();
@@ -81,14 +88,12 @@ public class BotHostedService : IHostedService
             _logger.LogDebug("Loaded interaction modules from {Assembly}", assembly.GetName().Name);
         }
 
-        // Phase 6
         _services.GetRequiredService<LoggingEventHandler>().Subscribe();
-
-        // Phase 7
         _services.GetRequiredService<WelcomeEventHandler>().Subscribe();
-
-        // Phase 8
         _services.GetRequiredService<SecurityEventHandler>().Subscribe();
+
+        // Phase 9b
+        await _presenceSync.SyncOnReadyAsync(_client);
 
 #if DEBUG
         await _interactions.RegisterCommandsToGuildAsync(_settings.TestGuildId);
@@ -128,15 +133,15 @@ public class BotHostedService : IHostedService
 
         if (customId == VerifyInteractionService.VerifyButtonId)
         {
-            var service = _services.GetRequiredService<VerifyInteractionService>();
-            await service.HandleVerifyAsync(interaction);
+            var verifyService = _services.GetRequiredService<VerifyInteractionService>();
+            await verifyService.HandleVerifyAsync(interaction);
             return;
         }
 
         if (customId.StartsWith(RolePanelInteractionService.ButtonPrefix))
         {
-            var service = _services.GetRequiredService<RolePanelInteractionService>();
-            await service.HandleButtonAsync(interaction);
+            var rolePanelService = _services.GetRequiredService<RolePanelInteractionService>();
+            await rolePanelService.HandleButtonAsync(interaction);
             return;
         }
 
@@ -148,8 +153,8 @@ public class BotHostedService : IHostedService
     {
         if (interaction.Data.CustomId.StartsWith(RolePanelInteractionService.SelectPrefix))
         {
-            var service = _services.GetRequiredService<RolePanelInteractionService>();
-            await service.HandleSelectAsync(interaction);
+            var rolePanelService = _services.GetRequiredService<RolePanelInteractionService>();
+            await rolePanelService.HandleSelectAsync(interaction);  // ← đúng tên
             return;
         }
 
@@ -165,13 +170,16 @@ public class BotHostedService : IHostedService
 
     private async Task OnInteractionCreatedAsync(SocketInteraction interaction)
     {
+        // Skip interaction types có dedicated handlers
+        if (interaction is SocketMessageComponent or SocketModal) return;
+
         var ctx = new SocketInteractionContext(_client, interaction);
         await _interactions.ExecuteCommandAsync(ctx, _services);
     }
 
-    private Task LogAsync(LogMessage log)
+    private Task LogAsync(LogMessage msg)
     {
-        var level = log.Severity switch
+        var level = msg.Severity switch
         {
             LogSeverity.Critical => LogLevel.Critical,
             LogSeverity.Error => LogLevel.Error,
@@ -179,7 +187,7 @@ public class BotHostedService : IHostedService
             LogSeverity.Info => LogLevel.Information,
             _ => LogLevel.Debug
         };
-        _logger.Log(level, log.Exception, "[Discord] {Message}", log.Message);
+        _logger.Log(level, msg.Exception, "[Discord] {Message}", msg.Message);
         return Task.CompletedTask;
     }
 }

@@ -4,6 +4,7 @@ namespace Dynamite.API.Controllers;
 using Dynamite.API.Auth;
 using Dynamite.API.DTOs.Auth;
 using Dynamite.API.DTOs.Guild;
+using Dynamite.API.Services;
 using Dynamite.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,24 +17,26 @@ public class GuildsController : ControllerBase
     private readonly DiscordOAuthService _discord;
     private readonly GuildAuthorizationService _guildAuth;
     private readonly IGuildConfigService _guildConfig;
+    private readonly GuildPresenceService _presence;
     private readonly ILogger<GuildsController> _logger;
 
     public GuildsController(
         DiscordOAuthService discord,
         GuildAuthorizationService guildAuth,
         IGuildConfigService guildConfig,
+        GuildPresenceService presence,
         ILogger<GuildsController> logger)
     {
         _discord = discord;
         _guildAuth = guildAuth;
         _guildConfig = guildConfig;
+        _presence = presence;
         _logger = logger;
     }
 
     /// <summary>
     /// GET /api/guilds
-    /// Trả về danh sách guilds user có thể manage.
-    /// Cần Discord access token — client phải gửi kèm header X-Discord-Token.
+    /// Trả về danh sách guilds user có thể manage + BotPresent thực.
     /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetGuilds(
@@ -44,26 +47,81 @@ public class GuildsController : ControllerBase
             return BadRequest(new { error = "X-Discord-Token header is required." });
 
         var guilds = await _discord.GetManageableGuildsAsync(discordToken, ct);
+        var guildList = guilds.ToList();
 
-        var result = guilds.Select(g => new GuildSummaryDto(
+        // Batch check BotPresent — 1 query duy nhất, không N+1
+        var guildIds = guildList.Select(g => g.Id);
+        var presentIds = await _presence.GetPresentGuildIdsAsync(guildIds, ct);
+
+        var result = guildList.Select(g => new GuildSummaryDto(
             Id: g.Id,
             Name: g.Name,
             IconUrl: g.Icon is not null
                 ? $"https://cdn.discordapp.com/icons/{g.Id}/{g.Icon}.png"
                 : null,
-            BotPresent: true // Phase 9b: check thực từ bot's guild list
+            BotPresent: presentIds.Contains(g.Id)  // ← real check
         ));
 
         return Ok(result);
     }
 
     /// <summary>
+    /// GET /api/guilds/{guildId}/info
+    /// Trả về channels + roles — dùng cho dashboard dropdowns.
+    /// Gọi Discord REST bằng bot token để lấy live data.
+    /// </summary>
+    [HttpGet("{guildId}/info")]
+    public async Task<IActionResult> GetGuildInfo(
+        string guildId,
+        [FromHeader(Name = "X-Discord-Token")] string? discordToken,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(discordToken))
+            return BadRequest(new { error = "X-Discord-Token header is required." });
+
+        if (!ulong.TryParse(guildId, out var guildIdUlong))
+            return BadRequest(new { error = "Invalid guild ID." });
+
+        // Kiểm tra bot có trong server không trước khi fetch
+        var botPresent = await _presence.IsBotPresentAsync(guildIdUlong, ct);
+
+        // Fetch guild details từ Discord REST (dùng user token)
+        var guildDetail = await _discord.GetGuildDetailAsync(discordToken, guildId, ct);
+        if (guildDetail is null)
+            return NotFound(new { error = "Guild not found or access denied." });
+
+        var channels = guildDetail.Channels.Select(c => new ChannelDto(
+            Id: c.Id,
+            Name: c.Name,
+            Type: c.Type
+        ));
+
+        var roles = guildDetail.Roles
+            .Where(r => r.Name != "@everyone")  // filter @everyone ra
+            .Select(r => new RoleDto(
+                Id: r.Id,
+                Name: r.Name,
+                Color: $"#{r.Color:X6}",
+                IsManaged: r.Managed
+            ));
+
+        return Ok(new GuildInfoDto(
+            Id: guildId,
+            Name: guildDetail.Name,
+            IconUrl: guildDetail.Icon is not null
+                ? $"https://cdn.discordapp.com/icons/{guildId}/{guildDetail.Icon}.png"
+                : null,
+            BotPresent: botPresent,
+            Channels: channels,
+            Roles: roles
+        ));
+    }
+
+    /// <summary>
     /// GET /api/guilds/{guildId}/settings
     /// </summary>
     [HttpGet("{guildId}/settings")]
-    public async Task<IActionResult> GetSettings(
-        string guildId,
-        CancellationToken ct)
+    public async Task<IActionResult> GetSettings(string guildId, CancellationToken ct)
     {
         if (!ulong.TryParse(guildId, out var guildIdUlong))
             return BadRequest(new { error = "Invalid guild ID." });
@@ -87,7 +145,6 @@ public class GuildsController : ControllerBase
 
     /// <summary>
     /// PATCH /api/guilds/{guildId}/settings
-    /// Chỉ update các field được gửi lên (nullable = không thay đổi).
     /// </summary>
     [HttpPatch("{guildId}/settings")]
     public async Task<IActionResult> UpdateSettings(
@@ -100,7 +157,6 @@ public class GuildsController : ControllerBase
 
         var config = await _guildConfig.GetOrCreateConfigAsync(guildIdUlong, string.Empty);
 
-        // Chỉ update field nào client gửi lên
         if (request.ModerationEnabled.HasValue)
             config.ModerationEnabled = request.ModerationEnabled.Value;
         if (request.WelcomeEnabled.HasValue)
@@ -122,6 +178,6 @@ public class GuildsController : ControllerBase
 
         await _guildConfig.UpdateConfigAsync(config);
 
-        return Ok(new { message = "Settings updated successfully." });
+        return Ok(new { message = "Settings updated." });
     }
 }

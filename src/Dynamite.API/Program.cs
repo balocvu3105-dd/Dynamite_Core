@@ -2,6 +2,7 @@
 using System.Text;
 using Dynamite.API.Auth;
 using Dynamite.API.Middleware;
+using Dynamite.API.Services;
 using Dynamite.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -11,12 +12,10 @@ using Microsoft.OpenApi.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 // ─── Database ────────────────────────────────────────────────────────────────
-// Dùng chung DB với Dynamite.Bot — cùng connection string
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
-// Cho phép React dashboard (localhost:3000 hoặc localhost:5173) gọi API
 var allowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins")
     .Get<string[]>() ?? [];
@@ -28,7 +27,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials(); // Cần cho cookie-based auth
+              .AllowCredentials();
     });
 });
 
@@ -54,16 +53,13 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(jwtSecret)),
-        ClockSkew = TimeSpan.Zero  // Không cho phép tolerance — 15 phút là 15 phút
+        ClockSkew = TimeSpan.Zero
     };
 
-    // Support cả cookie lẫn Bearer header
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
         {
-            // 1. Thử đọc từ Authorization header (Bearer token)
-            // 2. Nếu không có, thử đọc từ cookie
             if (!context.Request.Headers.ContainsKey("Authorization"))
             {
                 var cookieToken = context.Request.Cookies["access_token"];
@@ -80,12 +76,15 @@ builder.Services.AddAuthorization();
 // ─── App Services ─────────────────────────────────────────────────────────────
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddHttpClient<DiscordOAuthService>();
+builder.Services.AddScoped<GuildAuthorizationService>();
+
+// Phase 9b
+builder.Services.AddScoped<GuildPresenceService>();
 
 // ─── Controllers ─────────────────────────────────────────────────────────────
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
-        // PascalCase → camelCase trong JSON response
         options.JsonSerializerOptions.PropertyNamingPolicy =
             System.Text.Json.JsonNamingPolicy.CamelCase;
     });
@@ -101,7 +100,6 @@ builder.Services.AddSwaggerGen(options =>
         Description = "REST API for Dynamite Discord Bot Dashboard"
     });
 
-    // Cho phép test API với JWT token trong Swagger UI
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -132,7 +130,6 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 // ─── Middleware Pipeline ──────────────────────────────────────────────────────
-// Order matters — error handler phải đứng đầu tiên
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
