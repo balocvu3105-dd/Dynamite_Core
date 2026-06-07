@@ -1,0 +1,6 @@
+@Dynamite.API_HostAddress = http://localhost:5114
+
+GET {{Dynamite.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
