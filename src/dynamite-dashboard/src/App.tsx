@@ -36,15 +36,12 @@ export default function App() {
       <BrowserRouter>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            {/* Public */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/auth/callback" element={<CallbackPage />} />
 
-            {/* Protected */}
             <Route element={<ProtectedRoute />}>
               <Route path="/servers" element={<ServersPage />} />
 
-              {/* Dashboard with layout */}
               <Route path="/dashboard/:guildId" element={<DashboardLayout />}>
                 <Route index element={<Navigate to="overview" replace />} />
                 <Route path="overview" element={<OverviewPage />} />

@@ -3,11 +3,13 @@ import { useParams } from 'react-router-dom'
 import { welcomeApi, guildsApi } from '@/api'
 import { Card, Select, Input, Button, Toggle, Spinner } from '@/components/ui'
 import { useState, useEffect } from 'react'
+import { useToast } from '@/hooks/useToast'
 import type { WelcomeConfig } from '@/types'
 
 export default function WelcomePage() {
     const { guildId } = useParams<{ guildId: string }>()
     const qc = useQueryClient()
+    const toast = useToast()
 
     const { data: config, isLoading: loadingConfig } = useQuery({
         queryKey: ['welcome', guildId],
@@ -33,7 +35,11 @@ export default function WelcomePage() {
 
     const { mutate: save, isPending } = useMutation({
         mutationFn: () => welcomeApi.update(guildId!, form),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['welcome', guildId] }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['welcome', guildId] })
+            toast.success('Welcome settings saved.')
+        },
+        onError: () => toast.error('Failed to save welcome settings.'),
     })
 
     const textChannels = guildInfo?.channels.filter((c) => c.type === 'text') ?? []
@@ -69,9 +75,11 @@ export default function WelcomePage() {
                             id="welcomeChannel"
                             label="Welcome channel"
                             value={form.welcomeChannelId ?? ''}
-                            onChange={(e) => setForm((f) => ({ ...f, welcomeChannelId: e.target.value || null }))}
+                            onChange={(e) =>
+                                setForm((f) => ({ ...f, welcomeChannelId: e.target.value || null }))
+                            }
                         >
-                            <option value="">— Select channel —</option>
+                            <option value="">— Not set —</option>
                             {textChannels.map((ch) => (
                                 <option key={ch.id} value={ch.id}>#{ch.name}</option>
                             ))}
@@ -82,10 +90,14 @@ export default function WelcomePage() {
                             label="Welcome message"
                             placeholder="Welcome {user} to {server}!"
                             value={form.welcomeMessage ?? ''}
-                            onChange={(e) => setForm((f) => ({ ...f, welcomeMessage: e.target.value || null }))}
+                            onChange={(e) =>
+                                setForm((f) => ({ ...f, welcomeMessage: e.target.value || null }))
+                            }
                         />
-                        <p className="text-xs text-[--color-text-muted] -mt-3">
-                            Use <code className="bg-[--color-surface-raised] px-1 rounded">{'{user}'}</code> and <code className="bg-[--color-surface-raised] px-1 rounded">{'{server}'}</code> as placeholders.
+                        <p className="text-xs text-[--color-text-muted]">
+                            Variables: <code className="text-[--color-brand]">{'{user}'}</code> — mention,{' '}
+                            <code className="text-[--color-brand]">{'{username}'}</code> — name,{' '}
+                            <code className="text-[--color-brand]">{'{server}'}</code> — server name
                         </p>
                     </>
                 )}
@@ -95,16 +107,20 @@ export default function WelcomePage() {
             <Card className="space-y-5">
                 <div>
                     <p className="text-sm font-medium text-[--color-text]">Verification</p>
-                    <p className="text-xs text-[--color-text-muted] mt-0.5">Assign a role when members verify</p>
+                    <p className="text-xs text-[--color-text-muted] mt-0.5">
+                        Role assigned when a member clicks the verify button
+                    </p>
                 </div>
 
                 <Select
                     id="verifyChannel"
-                    label="Verify channel"
+                    label="Verify panel channel"
                     value={form.verifyChannelId ?? ''}
-                    onChange={(e) => setForm((f) => ({ ...f, verifyChannelId: e.target.value || null }))}
+                    onChange={(e) =>
+                        setForm((f) => ({ ...f, verifyChannelId: e.target.value || null }))
+                    }
                 >
-                    <option value="">— Not configured —</option>
+                    <option value="">— Not set —</option>
                     {textChannels.map((ch) => (
                         <option key={ch.id} value={ch.id}>#{ch.name}</option>
                     ))}
@@ -114,9 +130,11 @@ export default function WelcomePage() {
                     id="verifyRole"
                     label="Verified role"
                     value={form.verifyRoleId ?? ''}
-                    onChange={(e) => setForm((f) => ({ ...f, verifyRoleId: e.target.value || null }))}
+                    onChange={(e) =>
+                        setForm((f) => ({ ...f, verifyRoleId: e.target.value || null }))
+                    }
                 >
-                    <option value="">— Not configured —</option>
+                    <option value="">— Not set —</option>
                     {roles.map((r) => (
                         <option key={r.id} value={r.id}>{r.name}</option>
                     ))}

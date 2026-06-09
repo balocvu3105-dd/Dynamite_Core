@@ -124,8 +124,10 @@ public class ModerationService : IModerationService
     }
 
     public async Task<IEnumerable<Warning>> GetWarningsAsync(
-        ulong guildId, ulong userId, CancellationToken ct = default)
-        => await _warningRepo.GetActiveWarningsAsync(guildId, userId, ct);
+    ulong guildId, ulong userId, CancellationToken ct = default)
+    => userId == 0UL
+        ? await _warningRepo.GetAllActiveWarningsAsync(guildId, ct)
+        : await _warningRepo.GetActiveWarningsAsync(guildId, userId, ct);
 
     public async Task<IEnumerable<ModerationAction>> GetHistoryAsync(
         ulong guildId, ulong userId, CancellationToken ct = default)

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Shield, MessageSquare, FileText, Lock, Bot } from 'lucide-react'
 import { guildsApi } from '@/api'
 import { Card, Toggle, Spinner, Badge } from '@/components/ui'
+import { useToast } from '@/hooks/useToast'
 import type { ModuleStatus } from '@/types'
 
 const MODULE_META: Record<string, { label: string; description: string; icon: React.ElementType }> = {
@@ -16,6 +17,7 @@ const MODULE_META: Record<string, { label: string; description: string; icon: Re
 export default function OverviewPage() {
     const { guildId } = useParams<{ guildId: string }>()
     const qc = useQueryClient()
+    const toast = useToast()
 
     const { data: modules, isLoading } = useQuery({
         queryKey: ['modules', guildId],
@@ -26,7 +28,12 @@ export default function OverviewPage() {
     const { mutate: toggleModule, isPending } = useMutation({
         mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) =>
             guildsApi.updateModule(guildId!, name, enabled),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['modules', guildId] }),
+        onSuccess: (_, { name, enabled }) => {
+            qc.invalidateQueries({ queryKey: ['modules', guildId] })
+            const label = MODULE_META[name]?.label ?? name
+            toast.success(`${label} ${enabled ? 'enabled' : 'disabled'}.`)
+        },
+        onError: () => toast.error('Failed to update module.'),
     })
 
     if (isLoading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>
@@ -54,7 +61,7 @@ export default function OverviewPage() {
                                 <div className="flex items-center gap-2">
                                     <p className="text-sm font-medium text-[--color-text]">{meta.label}</p>
                                     <Badge variant={mod.enabled ? 'success' : 'default'}>
-                                        {mod.enabled ? 'On' : 'Off'}
+                                        {mod.enabled ? 'Active' : 'Disabled'}
                                     </Badge>
                                 </div>
                                 <p className="text-xs text-[--color-text-muted] mt-0.5">{meta.description}</p>
