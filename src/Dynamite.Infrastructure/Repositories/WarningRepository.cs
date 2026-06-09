@@ -1,3 +1,4 @@
+// src/Dynamite.Infrastructure/Repositories/WarningRepository.cs
 namespace Dynamite.Infrastructure.Repositories;
 
 using Dynamite.Core.Entities;
@@ -20,4 +21,12 @@ public class WarningRepository : BaseRepository<Warning>, IWarningRepository
         ulong guildId, ulong userId, CancellationToken ct = default)
         => await DbSet
             .CountAsync(w => w.GuildId == guildId && w.TargetUserId == userId && w.IsActive, ct);
+
+    /// <summary>
+    /// Fetch a single warning scoped to a guild — prevents cross-guild data access.
+    /// </summary>
+    public async Task<Warning?> GetByGuildAndIdAsync(
+        ulong guildId, Guid warningId, CancellationToken ct = default)
+        => await DbSet
+            .FirstOrDefaultAsync(w => w.GuildId == guildId && w.Id == warningId, ct);
 }

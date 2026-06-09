@@ -87,24 +87,20 @@ public class DiscordOAuthService
         var guilds = JsonSerializer.Deserialize<List<DiscordGuildRaw>>(json) ?? [];
 
         return guilds
-            .Where(g => (g.Permissions & ManageGuildPermission) != 0)
+            // Discord trả permissions là string — parse về long trước khi check
+            .Where(g => long.TryParse(g.Permissions, out var perms) && (perms & ManageGuildPermission) != 0)
             .Select(g => new DiscordGuildDto(
                 Id: g.Id,
                 Name: g.Name,
                 Icon: g.Icon,
-                Permissions: g.Permissions));
+                Permissions: long.TryParse(g.Permissions, out var p) ? p : 0));
     }
 
-    /// <summary>
-    /// Fetch guild channels + roles từ Discord REST.
-    /// Dùng user access token — user phải có quyền view guild.
-    /// </summary>
     public async Task<DiscordGuildDetailRaw?> GetGuildDetailAsync(
         string discordAccessToken,
         string guildId,
         CancellationToken ct = default)
     {
-        // Fetch channels
         using var chanReq = new HttpRequestMessage(
             HttpMethod.Get, $"{DiscordApiBase}/guilds/{guildId}/channels");
         chanReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", discordAccessToken);
@@ -115,7 +111,6 @@ public class DiscordOAuthService
         var chanJson = await chanResp.Content.ReadAsStringAsync(ct);
         var channels = JsonSerializer.Deserialize<List<DiscordChannelRaw>>(chanJson) ?? [];
 
-        // Fetch roles (via GET /guilds/{id} — includes roles array)
         using var guildReq = new HttpRequestMessage(
             HttpMethod.Get, $"{DiscordApiBase}/guilds/{guildId}");
         guildReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", discordAccessToken);
@@ -146,8 +141,6 @@ public class DiscordOAuthService
         );
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
-
     private static string MapChannelType(int type) => type switch
     {
         0 => "text",
@@ -160,7 +153,7 @@ public class DiscordOAuthService
     };
 }
 
-// ─── Internal raw DTOs (JSON deserialization) ─────────────────────────────────
+// ─── Internal raw DTOs ────────────────────────────────────────────────────────
 
 file record DiscordTokenResponse(
     [property: JsonPropertyName("access_token")] string AccessToken);
@@ -171,11 +164,12 @@ file record DiscordUserRaw(
     [property: JsonPropertyName("avatar")] string? Avatar,
     [property: JsonPropertyName("email")] string? Email);
 
+// Fix: permissions từ Discord API là string, không phải long
 file record DiscordGuildRaw(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("icon")] string? Icon,
-    [property: JsonPropertyName("permissions")] long Permissions);
+    [property: JsonPropertyName("permissions")] string Permissions);
 
 file record DiscordGuildFullRaw(
     [property: JsonPropertyName("name")] string Name,
@@ -193,7 +187,7 @@ file record DiscordChannelRaw(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("type")] int Type);
 
-// Public records cho GuildsController dùng
+// Public records cho GuildsController
 public record DiscordGuildDetailRaw(
     string Name,
     string? Icon,

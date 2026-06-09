@@ -1,3 +1,4 @@
+// src/Dynamite.Application/Services/ModerationService.cs
 namespace Dynamite.Application.Services;
 
 using Dynamite.Application.Interfaces;
@@ -79,9 +80,6 @@ public class ModerationService : IModerationService
         return action;
     }
 
-    // Fix: was missing entirely despite the enum having Unban = 3.
-    // The Discord action (guild.RemoveBanAsync) is done by the module/command layer,
-    // not here — this service only records what happened in the database.
     public async Task<ModerationAction> UnbanAsync(
         ulong guildId, string guildName, ulong targetId, ulong moderatorId,
         string reason, CancellationToken ct = default)
@@ -132,6 +130,29 @@ public class ModerationService : IModerationService
     public async Task<IEnumerable<ModerationAction>> GetHistoryAsync(
         ulong guildId, ulong userId, CancellationToken ct = default)
         => await _moderationRepo.GetUserHistoryAsync(guildId, userId, ct);
+
+    /// <summary>
+    /// Soft-delete a warning (IsActive = false) scoped to a guild.
+    /// Throws KeyNotFoundException if the warning doesn't exist in this guild.
+    /// We soft-delete rather than hard-delete to preserve audit trail integrity.
+    /// </summary>
+    public async Task DeleteWarningAsync(
+        ulong guildId, Guid warningId, CancellationToken ct = default)
+    {
+        var warning = await _warningRepo.GetByGuildAndIdAsync(guildId, warningId, ct);
+
+        if (warning is null)
+            throw new KeyNotFoundException($"Warning {warningId} not found in guild {guildId}.");
+
+        // Soft delete: keep the record for audit trail, just mark inactive
+        warning.IsActive = false;
+        warning.UpdatedAt = DateTime.UtcNow;
+
+        await _warningRepo.UpdateAsync(warning, ct);
+        await _warningRepo.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Warning {WarningId} deleted in guild {GuildId}", warningId, guildId);
+    }
 
     private async Task<ModerationAction> LogActionAsync(
         ulong guildId, ulong targetId, ulong moderatorId,

@@ -3,6 +3,8 @@ using System.Text;
 using Dynamite.API.Auth;
 using Dynamite.API.Middleware;
 using Dynamite.API.Services;
+using Dynamite.Application;
+using Dynamite.Infrastructure;
 using Dynamite.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -11,9 +13,9 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ─── Database ────────────────────────────────────────────────────────────────
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+// ─── Application + Infrastructure layers ─────────────────────────────────────
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 var allowedOrigins = builder.Configuration

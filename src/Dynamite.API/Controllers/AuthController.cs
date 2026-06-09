@@ -25,6 +25,53 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// POST /api/auth/discord
+    /// SPA flow: frontend gửi code lên đây, backend exchange lấy Discord token → issue JWT.
+    /// </summary>
+    [HttpPost("/api/auth/discord")]
+    [AllowAnonymous]
+    public async Task<IActionResult> SpaLogin(
+        [FromBody] SpaLoginRequest body,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(body.Code))
+            return BadRequest(new { error = "Code is required." });
+
+        // Exchange code → Discord access token
+        var discordAccessToken = await _discord.ExchangeCodeAsync(body.Code, ct);
+
+        // Lấy user info từ Discord
+        var discordUser = await _discord.GetCurrentUserAsync(discordAccessToken, ct);
+
+        // Issue JWT
+        var (accessToken, expiry) = _jwt.GenerateAccessToken(
+            discordUser.Id,
+            discordUser.Username,
+            discordUser.Avatar);
+
+        var refreshToken = await _jwt.GenerateRefreshTokenAsync(discordUser.Id, ct);
+
+        _logger.LogInformation("User {UserId} ({Username}) logged in via SPA",
+            discordUser.Id, discordUser.Username);
+
+        // Trả về accessToken + discordToken (để frontend gửi X-Discord-Token header)
+        return Ok(new
+        {
+            accessToken,
+            refreshToken,
+            discordToken = discordAccessToken,
+            expiresIn = (int)(expiry - DateTime.UtcNow).TotalSeconds,
+            user = new
+            {
+                id = discordUser.Id,
+                username = discordUser.Username,
+                avatar = discordUser.Avatar,
+                email = discordUser.Email,
+            }
+        });
+    }
+
+    /// <summary>
     /// GET /auth/login
     /// Redirect user sang Discord OAuth2 authorization page.
     /// </summary>
@@ -48,17 +95,12 @@ public class AuthController : ControllerBase
         [FromQuery] string? error,
         CancellationToken ct)
     {
-        // User từ chối authorize
         if (error is not null || code is null)
             return BadRequest(new { error = "Authorization was denied or code is missing." });
 
-        // Exchange code → Discord access token
         var discordAccessToken = await _discord.ExchangeCodeAsync(code, ct);
-
-        // Lấy user info từ Discord
         var discordUser = await _discord.GetCurrentUserAsync(discordAccessToken, ct);
 
-        // Issue JWT
         var (accessToken, expiry) = _jwt.GenerateAccessToken(
             discordUser.Id,
             discordUser.Username,
@@ -66,7 +108,6 @@ public class AuthController : ControllerBase
 
         var refreshToken = await _jwt.GenerateRefreshTokenAsync(discordUser.Id, ct);
 
-        // Set cả cookie lẫn trả về body — support 2 cách
         SetRefreshTokenCookie(refreshToken);
 
         _logger.LogInformation("User {UserId} ({Username}) logged in",
@@ -81,8 +122,6 @@ public class AuthController : ControllerBase
 
     /// <summary>
     /// POST /auth/refresh
-    /// Dùng refresh token để lấy access token mới.
-    /// Đọc từ cookie hoặc request body.
     /// </summary>
     [HttpPost("refresh")]
     [AllowAnonymous]
@@ -90,9 +129,7 @@ public class AuthController : ControllerBase
         [FromBody] RefreshRequest? body,
         CancellationToken ct)
     {
-        // Ưu tiên cookie, fallback về body
-        var token = Request.Cookies["refresh_token"]
-            ?? body?.RefreshToken;
+        var token = Request.Cookies["refresh_token"] ?? body?.RefreshToken;
 
         if (string.IsNullOrEmpty(token))
             return Unauthorized(new { error = "Refresh token is missing." });
@@ -101,7 +138,6 @@ public class AuthController : ControllerBase
         if (discordUserId is null)
             return Unauthorized(new { error = "Refresh token is invalid or expired." });
 
-        // Revoke token cũ và issue cặp token mới
         await _jwt.RevokeRefreshTokenAsync(token, ct);
 
         var (accessToken, expiry) = _jwt.GenerateAccessToken(
@@ -111,17 +147,11 @@ public class AuthController : ControllerBase
 
         SetRefreshTokenCookie(newRefreshToken);
 
-        return Ok(new
-        {
-            accessToken,
-            refreshToken = newRefreshToken,
-            accessTokenExpiry = expiry
-        });
+        return Ok(new { accessToken, refreshToken = newRefreshToken, accessTokenExpiry = expiry });
     }
 
     /// <summary>
     /// POST /auth/logout
-    /// Revoke refresh token → user phải login lại sau 15 phút.
     /// </summary>
     [HttpPost("logout")]
     [Authorize]
@@ -129,13 +159,11 @@ public class AuthController : ControllerBase
         [FromBody] RefreshRequest? body,
         CancellationToken ct)
     {
-        var token = Request.Cookies["refresh_token"]
-            ?? body?.RefreshToken;
+        var token = Request.Cookies["refresh_token"] ?? body?.RefreshToken;
 
         if (!string.IsNullOrEmpty(token))
             await _jwt.RevokeRefreshTokenAsync(token, ct);
 
-        // Xóa cookie
         Response.Cookies.Delete("refresh_token");
         Response.Cookies.Delete("access_token");
 
@@ -144,30 +172,32 @@ public class AuthController : ControllerBase
 
     /// <summary>
     /// GET /auth/me
-    /// Trả về thông tin user hiện tại từ JWT claims.
     /// </summary>
     [HttpGet("me")]
     [Authorize]
     public IActionResult Me()
     {
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+        var userId   = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                     ?? User.FindFirst("sub")?.Value;
         var username = User.FindFirst("username")?.Value;
-        var avatar = User.FindFirst("avatar")?.Value;
+        var avatar   = User.FindFirst("avatar")?.Value;
 
         return Ok(new { userId, username, avatar });
     }
-
-    // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private void SetRefreshTokenCookie(string token)
     {
         Response.Cookies.Append("refresh_token", token, new CookieOptions
         {
-            HttpOnly = true,   // JS không đọc được — chống XSS
-            Secure = true,   // Chỉ gửi qua HTTPS
+            HttpOnly = true,
+            Secure   = true,
             SameSite = SameSiteMode.Lax,
-            Expires = DateTimeOffset.UtcNow.AddDays(7)
+            Expires  = DateTimeOffset.UtcNow.AddDays(7)
         });
     }
 }
+
+/// <summary>
+/// Request body cho POST /api/auth/discord (SPA flow)
+/// </summary>
+public record SpaLoginRequest(string Code);

@@ -45,17 +45,45 @@ public class ModerationController : ControllerBase
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(w => new WarningDto(
-                Id: w.Id.ToString(),
-                UserId: w.TargetUserId.ToString(),   // ← TargetUserId
+                Id:          w.Id.ToString(),
+                UserId:      w.TargetUserId.ToString(),
                 ModeratorId: w.ModeratorId.ToString(),
-                Reason: w.Reason,
-                CreatedAt: w.CreatedAt));
+                Reason:      w.Reason,
+                CreatedAt:   w.CreatedAt));
 
         return Ok(new PagedResult<WarningDto>(
-            Items: items,
-            Total: list.Count,
-            Page: page,
+            Items:    items,
+            Total:    list.Count,
+            Page:     page,
             PageSize: pageSize));
+    }
+
+    /// <summary>
+    /// DELETE /api/guilds/{guildId}/warnings/{warningId}
+    /// Soft-deletes a warning (marks IsActive = false).
+    /// Scoped to guild — cannot delete warnings from other guilds.
+    /// </summary>
+    [HttpDelete("warnings/{warningId}")]
+    public async Task<IActionResult> DeleteWarning(
+        string guildId,
+        string warningId,
+        CancellationToken ct)
+    {
+        if (!ulong.TryParse(guildId, out var guildIdUlong))
+            return BadRequest(new { error = "Invalid guild ID." });
+
+        if (!Guid.TryParse(warningId, out var warningGuid))
+            return BadRequest(new { error = "Invalid warning ID." });
+
+        try
+        {
+            await _moderation.DeleteWarningAsync(guildIdUlong, warningGuid, ct);
+            return Ok(new { message = "Warning deleted." });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { error = "Warning not found." });
+        }
     }
 
     /// <summary>
@@ -74,28 +102,38 @@ public class ModerationController : ControllerBase
 
         var userIdUlong = ulong.TryParse(userId, out var uid) ? uid : 0UL;
 
-        var all = await _moderation.GetHistoryAsync(guildIdUlong, userIdUlong, ct);
+        IEnumerable<Dynamite.Core.Entities.ModerationAction> all;
+
+        if (userIdUlong == 0UL)
+        {
+            // No userId filter — return recent actions for the whole guild
+            all = await _moderation.GetHistoryAsync(guildIdUlong, 0UL, ct);
+        }
+        else
+        {
+            all = await _moderation.GetHistoryAsync(guildIdUlong, userIdUlong, ct);
+        }
 
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
 
         var list = all.ToList();
         var items = list
-            .OrderByDescending(l => l.CreatedAt)
+            .OrderByDescending(a => a.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(l => new ModLogDto(
-                Id: l.Id.ToString(),
-                Action: l.ActionType.ToString(),    // ← ActionType
-                TargetUserId: l.TargetUserId.ToString(),
-                ModeratorId: l.ModeratorId.ToString(),
-                Reason: l.Reason,
-                CreatedAt: l.CreatedAt));
+            .Select(a => new ModLogDto(
+                Id:           a.Id.ToString(),
+                Action:       a.ActionType.ToString().ToLowerInvariant(),
+                TargetUserId: a.TargetUserId.ToString(),
+                ModeratorId:  a.ModeratorId.ToString(),
+                Reason:       a.Reason,
+                CreatedAt:    a.CreatedAt));
 
         return Ok(new PagedResult<ModLogDto>(
-            Items: items,
-            Total: list.Count,
-            Page: page,
+            Items:    items,
+            Total:    list.Count,
+            Page:     page,
             PageSize: pageSize));
     }
 }
