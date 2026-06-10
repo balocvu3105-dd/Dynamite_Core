@@ -26,6 +26,7 @@
                 <ProjectReference Include="..\Dynamite.Modules\Security\Dynamite.Modules.Security.csproj" />
                 <ProjectReference Include="..\Dynamite.Modules.Giveaway\Dynamite.Modules.Giveaway.csproj" />
                 <ProjectReference Include="..\Dynamite.Modules.Ticket\Dynamite.Modules.Ticket.csproj" />
+                <ProjectReference Include="..\Dynamite.Modules.Economy\Dynamite.Modules.Economy.csproj" />
         </ItemGroup>
         <ItemGroup>
                 <Content Update="appsettings.json">

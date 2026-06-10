@@ -25,6 +25,8 @@ using Dynamite.Modules.Ticket.Interactions;
 using Dynamite.Modules.Ticket.Services;
 using Dynamite.Modules.Welcome;
 using Dynamite.Modules.Welcome.Helpers;
+using Dynamite.Modules.Economy.Commands;
+using Dynamite.Modules.Economy.Services;
 using Serilog;
 
 var host = Host.CreateDefaultBuilder(args)
@@ -106,6 +108,14 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<ITicketRepository, TicketRepository>();
         services.AddScoped<TicketService>();
         services.AddSingleton<TicketInteractionService>();
+
+        // Phase 10c — Economy
+        services.AddScoped<IWalletRepository, WalletRepository>();
+        services.AddScoped<IShopRepository, ShopRepository>();
+        services.AddScoped<WalletService>();
+        services.AddScoped<FishingService>();
+        services.AddScoped<ShopService>();
+        services.AddMemoryCache();
 
         services.AddHostedService<BotHostedService>();
     })
