@@ -1,4 +1,4 @@
-# src/Dynamite.API/Dockerfile
+# src/Dynamite.Migrator/Dockerfile
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
@@ -6,16 +6,15 @@ COPY src/Dynamite.Shared/Dynamite.Shared.csproj               src/Dynamite.Share
 COPY src/Dynamite.Core/Dynamite.Core.csproj                   src/Dynamite.Core/
 COPY src/Dynamite.Application/Dynamite.Application.csproj     src/Dynamite.Application/
 COPY src/Dynamite.Infrastructure/Dynamite.Infrastructure.csproj src/Dynamite.Infrastructure/
-COPY src/Dynamite.API/Dynamite.API.csproj                     src/Dynamite.API/
+COPY src/Dynamite.Migrator/Dynamite.Migrator.csproj           src/Dynamite.Migrator/
 
-RUN dotnet restore src/Dynamite.API/Dynamite.API.csproj
+RUN dotnet restore src/Dynamite.Migrator/Dynamite.Migrator.csproj
 
 COPY src/ src/
-RUN dotnet publish src/Dynamite.API/Dynamite.API.csproj \
+RUN dotnet publish src/Dynamite.Migrator/Dynamite.Migrator.csproj \
     -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
-EXPOSE 5000
-ENTRYPOINT ["dotnet", "Dynamite.API.dll"]
+ENTRYPOINT ["dotnet", "Dynamite.Migrator.dll"]

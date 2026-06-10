@@ -2,7 +2,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Copy csproj files và restore trước (layer caching)
 COPY src/Dynamite.Shared/Dynamite.Shared.csproj               src/Dynamite.Shared/
 COPY src/Dynamite.Core/Dynamite.Core.csproj                   src/Dynamite.Core/
 COPY src/Dynamite.Application/Dynamite.Application.csproj     src/Dynamite.Application/
@@ -20,12 +19,10 @@ COPY src/Dynamite.Bot/Dynamite.Bot.csproj                     src/Dynamite.Bot/
 
 RUN dotnet restore src/Dynamite.Bot/Dynamite.Bot.csproj
 
-# Copy toàn bộ source và build
 COPY src/ src/
 RUN dotnet publish src/Dynamite.Bot/Dynamite.Bot.csproj \
-    -c Release -o /app/publish --no-restore
+    -c Release -o /app/publish
 
-# Runtime image
 FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
 WORKDIR /app
 

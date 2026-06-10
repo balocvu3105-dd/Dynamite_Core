@@ -1,0 +1,16 @@
+# docker-compose.override.yml
+# Dev overrides — tự động được load khi chạy `docker compose up`
+
+services:
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  api:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+
+  bot:
+    environment:
+      Serilog__MinimumLevel__Default: Debug
