@@ -29,19 +29,20 @@ public class BotHostedService : IHostedService
     private readonly GuildPresenceSyncService _presenceSync;
     private readonly ILogger<BotHostedService> _logger;
 
-    private static readonly IReadOnlyList<Assembly> ModuleAssemblies =
-    [
-        Assembly.GetExecutingAssembly(),
-        typeof(Dynamite.Modules.Moderation.Modules.ModerationModule).Assembly,
-        typeof(Dynamite.Modules.Moderation.Modules.ConfigModule).Assembly,
-        typeof(Dynamite.Modules.RoleManagement.Modules.AutoRoleModule).Assembly,
-        typeof(Dynamite.Modules.Logging.Modules.LogConfigModule).Assembly,
-        typeof(Dynamite.Modules.Welcome.Modules.WelcomeConfigModule).Assembly,
-        typeof(Dynamite.Modules.Security.Modules.AntiSpamConfigModule).Assembly,
-        typeof(Dynamite.Modules.Setup.SetupModule).Assembly,
-        typeof(Dynamite.Modules.Giveaway.Commands.GiveawayCommands).Assembly,
-        typeof(Dynamite.Modules.Ticket.Commands.TicketCommands).Assembly,
-    ];
+   private static readonly IReadOnlyList<Assembly> ModuleAssemblies =
+[
+    Assembly.GetExecutingAssembly(),
+    typeof(Dynamite.Modules.Moderation.Modules.ModerationModule).Assembly,
+    typeof(Dynamite.Modules.Moderation.Modules.ConfigModule).Assembly,
+    typeof(Dynamite.Modules.RoleManagement.Modules.AutoRoleModule).Assembly,
+    typeof(Dynamite.Modules.Logging.Modules.LogConfigModule).Assembly,
+    typeof(Dynamite.Modules.Welcome.Modules.WelcomeConfigModule).Assembly,
+    typeof(Dynamite.Modules.Security.Modules.AntiSpamConfigModule).Assembly,
+    typeof(Dynamite.Modules.Setup.SetupModule).Assembly,
+    typeof(Dynamite.Modules.Giveaway.Commands.GiveawayCommands).Assembly,
+    typeof(Dynamite.Modules.Ticket.Commands.TicketCommands).Assembly,
+    typeof(Dynamite.Modules.Economy.Commands.EconomyCommands).Assembly,  // thêm dòng này
+];
 
     public BotHostedService(
         DiscordSocketClient client,
@@ -68,6 +69,9 @@ public class BotHostedService : IHostedService
         _client.ButtonExecuted += OnButtonExecutedAsync;
         _client.SelectMenuExecuted += OnSelectMenuExecutedAsync;
         _client.ModalSubmitted += OnModalSubmittedAsync;
+
+        // Global error handler for all interaction executions
+        _interactions.InteractionExecuted += OnInteractionExecutedAsync;
 
         // Phase 9b
         _client.JoinedGuild += guild => _presenceSync.OnGuildJoinedAsync(guild);
@@ -184,11 +188,12 @@ public class BotHostedService : IHostedService
         await _interactions.ExecuteCommandAsync(ctx, _services);
     }
 
-    private async Task OnModalSubmittedAsync(SocketModal modal)
-    {
-        var ctx = new SocketInteractionContext<SocketModal>(_client, modal);
-        await _interactions.ExecuteCommandAsync(ctx, _services);
-    }
+   private async Task OnModalSubmittedAsync(SocketModal modal)
+{
+    _logger.LogInformation("Modal submitted: {CustomId}", modal.Data.CustomId);
+    var ctx = new SocketInteractionContext(_client, modal);
+    await _interactions.ExecuteCommandAsync(ctx, _services);
+}
 
     private async Task OnInteractionCreatedAsync(SocketInteraction interaction)
     {
@@ -196,6 +201,14 @@ public class BotHostedService : IHostedService
 
         var ctx = new SocketInteractionContext(_client, interaction);
         await _interactions.ExecuteCommandAsync(ctx, _services);
+    }
+
+    private Task OnInteractionExecutedAsync(ICommandInfo? command, IInteractionContext context, IResult result)
+    {
+        if (!result.IsSuccess)
+            _logger.LogError("Interaction failed — Error: {Error} | Reason: {Reason} | Command: {Command}",
+                result.Error, result.ErrorReason, command?.Name ?? "unknown");
+        return Task.CompletedTask;
     }
 
     private Task LogAsync(LogMessage msg)

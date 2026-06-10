@@ -34,9 +34,7 @@ public class RolePanelModule : InteractionModuleBase<SocketInteractionContext>
         [Summary("type", "Button or Select Menu")] RolePanelType panelType,
         [Summary("channel", "Channel to post the panel in")] ITextChannel channel)
     {
-        // Fix: custom_id chỉ chứa panelType + channelId để tránh vượt 100 ký tự.
-        // Title và Description được nhập trong modal fields thay vì encode vào custom_id.
-        var customId = $"rolepanel_create:{(int)panelType}:{channel.Id}";
+        var customId = $"rolepanel_create_{(int)panelType}_{channel.Id}";
         await RespondWithModalAsync<RolePanelCreateModal>(customId);
     }
 
@@ -102,11 +100,27 @@ public class RolePanelModule : InteractionModuleBase<SocketInteractionContext>
             $"Role Panels ({panels.Count})",
             string.Join("\n\n", lines)), ephemeral: true);
     }
+}
 
-    // Modal handler — được gọi sau khi admin submit RolePanelCreateModal.
-    // custom_id format: "rolepanel_create:{panelType}:{channelId}"
-    // Discord.Net wildcard routing: "*" matches a single path segment.
-    [ModalInteraction("rolepanel_create:*:*")]
+// Modal handler tách riêng khỏi [Group] vì Discord.Net prefix tất cả interactions
+// bên trong group module — modal handler phải nằm ngoài group để match đúng custom_id.
+public class RolePanelModalModule : InteractionModuleBase<SocketInteractionContext>
+{
+    private readonly IRolePanelService _panelService;
+    private readonly RolePanelBuilder _panelBuilder;
+    private readonly ILogger<RolePanelModalModule> _logger;
+
+    public RolePanelModalModule(
+        IRolePanelService panelService,
+        RolePanelBuilder panelBuilder,
+        ILogger<RolePanelModalModule> logger)
+    {
+        _panelService = panelService;
+        _panelBuilder = panelBuilder;
+        _logger = logger;
+    }
+
+    [ModalInteraction("rolepanel_create_*_*")]
     public async Task OnRolePanelModalAsync(string panelTypeStr, string channelIdStr, RolePanelCreateModal modal)
     {
         await DeferAsync(ephemeral: true);
@@ -128,7 +142,6 @@ public class RolePanelModule : InteractionModuleBase<SocketInteractionContext>
 
         var panelType = (RolePanelType)panelTypeInt;
 
-        // Parse "RoleID Label [Emoji]" từng dòng từ modal input
         var items = ParseRolesInput(modal.RolesInput);
         if (items.Count == 0)
         {
@@ -147,24 +160,23 @@ public class RolePanelModule : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
-        // Build Discord component trước để validate — nếu build thất bại thì không post
-        var tempPanel = new Dynamite.Core.Entities.RolePanel
-        {
-            Title = modal.PanelTitle,
-            Description = string.IsNullOrWhiteSpace(modal.Description) ? null : modal.Description,
-            PanelType = panelType,
-            Items = items.Select(i => new Dynamite.Core.Entities.RolePanelItem
-            {
-                RoleId = i.RoleId,
-                Label = i.Label,
-                Emoji = i.Emoji,
-                Id = Guid.NewGuid()
-            }).ToList()
-        };
+        // FIX: Persist vào DB trước để lấy Guid thật của items,
+        // sau đó dùng Guid đó để build button custom_id.
+        // Nếu build trước → Guid trong button khác Guid trong DB → lookup fail.
+        var rolePanelItems = items.Select(i => new RolePanelItemDto(i.RoleId, i.Label, i.Emoji, null));
+        var savedPanel = await _panelService.CreatePanelAsync(
+            Context.Guild.Id,
+            Context.Guild.Name,
+            channelId,
+            0, // placeholder messageId — sẽ update sau khi post
+            modal.PanelTitle,
+            string.IsNullOrWhiteSpace(modal.Description) ? null : modal.Description,
+            panelType,
+            rolePanelItems);
 
-        var (embed, component) = _panelBuilder.Build(tempPanel);
+        // Build component từ savedPanel — Guid của items khớp với DB
+        var (embed, component) = _panelBuilder.Build(savedPanel);
 
-        // Post message vào target channel
         IUserMessage message;
         try
         {
@@ -173,23 +185,16 @@ public class RolePanelModule : InteractionModuleBase<SocketInteractionContext>
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to post role panel to channel {ChannelId}", channelId);
+            // Rollback DB record nếu post thất bại
+            await _panelService.DeletePanelAsync(savedPanel.Id);
             await FollowupAsync(embed: RoleManagementEmbeds.Error(
                 "Failed to Post",
                 "Could not send the panel to that channel. Check my permissions."), ephemeral: true);
             return;
         }
 
-        // Persist panel vào database sau khi message đã được post thành công
-        var rolePanelItems = items.Select(i => new RolePanelItemDto(i.RoleId, i.Label, i.Emoji, null));
-        await _panelService.CreatePanelAsync(
-            Context.Guild.Id,
-            Context.Guild.Name,
-            channelId,
-            message.Id,
-            modal.PanelTitle,
-            string.IsNullOrWhiteSpace(modal.Description) ? null : modal.Description,
-            panelType,
-            rolePanelItems);
+        // Update messageId thật vào DB
+        await _panelService.UpdateMessageIdAsync(savedPanel.Id, message.Id);
 
         await FollowupAsync(embed: RoleManagementEmbeds.Success(
             "Panel Created",
@@ -221,11 +226,8 @@ public class RolePanelModule : InteractionModuleBase<SocketInteractionContext>
 }
 
 // Modal nhận title, description, và danh sách roles từ admin.
-// IModal.Title (readonly property) = tiêu đề của cửa sổ modal trên Discord UI.
-// PanelTitle (input field) = title của role panel sẽ được tạo.
 public class RolePanelCreateModal : IModal
 {
-    // IModal.Title = tên hiển thị trên cửa sổ modal — bắt buộc implement
     public string Title => "Create Role Panel";
 
     [InputLabel("Panel Title")]
