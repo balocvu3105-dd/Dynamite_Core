@@ -5,6 +5,7 @@ using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Giveaway.Services;
 using Discord.WebSocket;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
@@ -13,6 +14,7 @@ public class GiveawayServiceTests
 {
     private readonly Mock<IGiveawayRepository> _repoMock;
     private readonly Mock<DiscordSocketClient> _clientMock;
+    private readonly Mock<IServiceScopeFactory> _scopeFactoryMock;
     private readonly GiveawayService _sut;
 
     private static readonly Guid GiveawayId = Guid.NewGuid();
@@ -23,11 +25,14 @@ public class GiveawayServiceTests
 
     public GiveawayServiceTests()
     {
-        _repoMock   = new Mock<IGiveawayRepository>();
-        _clientMock = new Mock<DiscordSocketClient>();
+        _repoMock        = new Mock<IGiveawayRepository>();
+        _clientMock      = new Mock<DiscordSocketClient>();
+        _scopeFactoryMock = new Mock<IServiceScopeFactory>();
+
         _sut = new GiveawayService(
             _repoMock.Object,
             _clientMock.Object,
+            _scopeFactoryMock.Object,
             NullLogger<GiveawayService>.Instance);
     }
 

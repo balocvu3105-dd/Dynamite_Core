@@ -27,6 +27,7 @@ using Dynamite.Modules.Welcome;
 using Dynamite.Modules.Welcome.Helpers;
 using Dynamite.Modules.Economy.Commands;
 using Dynamite.Modules.Economy.Services;
+using Dynamite.Shared;
 using Serilog;
 
 var host = Host.CreateDefaultBuilder(args)
@@ -45,6 +46,18 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddInfrastructure(config);
         services.Configure<DiscordSettings>(config.GetSection("Discord"));
 
+        // ─── Scheduled Restart ────────────────────────────────────────────────
+        services.Configure<ScheduledRestartSettings>(
+            config.GetSection("ScheduledRestart"));
+
+        // ─── Graceful Shutdown Timeout ────────────────────────────────────────
+        // Default là 5s — tăng lên 30s để StopAsync có đủ thời gian
+        // gửi audit log notifications và drain các request đang xử lý
+        services.Configure<HostOptions>(options =>
+        {
+            options.ShutdownTimeout = TimeSpan.FromSeconds(30);
+        });
+
         services.AddSingleton(new DiscordSocketClient(new DiscordSocketConfig
         {
             LogLevel = LogSeverity.Info,
@@ -61,6 +74,13 @@ var host = Host.CreateDefaultBuilder(args)
             var client = provider.GetRequiredService<DiscordSocketClient>();
             return new InteractionService(client);
         });
+
+        // ─── Bot Status Provider ──────────────────────────────────────────────
+        // Register as cả BotStatusProvider (concrete) lẫn IBotStatusProvider (interface)
+        // Singleton vì cần share state giữa BotHostedService và bất kỳ consumer nào
+        services.AddSingleton<BotStatusProvider>();
+        services.AddSingleton<IBotStatusProvider>(sp =>
+            sp.GetRequiredService<BotStatusProvider>());
 
         // Phase 2
         services.AddTransient<ModLogService>();
@@ -116,6 +136,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<FishingService>();
         services.AddScoped<ShopService>();
         services.AddMemoryCache();
+
+        // ─── Phase E3 — Scheduled Restart ────────────────────────────────────
+        services.AddHostedService<ScheduledRestartService>();
 
         services.AddHostedService<BotHostedService>();
     })

@@ -8,13 +8,11 @@ using Discord.WebSocket;
 using Dynamite.Application.Interfaces;
 using Dynamite.Bot.Settings;
 using Dynamite.Core.Enums;
-using Dynamite.Modules.Giveaway.Helpers;
 using Dynamite.Modules.Giveaway.Interactions;
 using Dynamite.Modules.Logging;
 using Dynamite.Modules.Logging.Helpers;
 using Dynamite.Modules.RoleManagement.Services;
 using Dynamite.Modules.Security;
-using Dynamite.Modules.Ticket.Helpers;
 using Dynamite.Modules.Ticket.Interactions;
 using Dynamite.Modules.Welcome;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +27,7 @@ public class BotHostedService : IHostedService
     private readonly IServiceProvider _services;
     private readonly DiscordSettings _settings;
     private readonly GuildPresenceSyncService _presenceSync;
+    private readonly BotStatusProvider _statusProvider;
     private readonly ILogger<BotHostedService> _logger;
 
     private static readonly IReadOnlyList<Assembly> ModuleAssemblies =
@@ -52,6 +51,7 @@ public class BotHostedService : IHostedService
         IServiceProvider services,
         IOptions<DiscordSettings> settings,
         GuildPresenceSyncService presenceSync,
+        BotStatusProvider statusProvider,
         ILogger<BotHostedService> logger)
     {
         _client = client;
@@ -59,6 +59,7 @@ public class BotHostedService : IHostedService
         _services = services;
         _settings = settings.Value;
         _presenceSync = presenceSync;
+        _statusProvider = statusProvider;
         _logger = logger;
     }
 
@@ -85,8 +86,64 @@ public class BotHostedService : IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        _statusProvider.SetNotReady();
+        _logger.LogInformation("Bot shutting down — sending audit log notifications...");
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await SendShutdownNotificationsAsync(cts.Token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Some shutdown notifications could not be sent");
+        }
+
         await _client.StopAsync();
         _logger.LogInformation("Bot stopped");
+    }
+
+    private async Task SendShutdownNotificationsAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = _services.CreateScope();
+            var logService = scope.ServiceProvider.GetRequiredService<IServerLogService>();
+
+            var embed = new EmbedBuilder()
+                .WithTitle("🔴 Bot Shutting Down")
+                .WithDescription("Dynamite is going offline for maintenance or scheduled restart.\nIt will be back online shortly.")
+                .WithColor(new Color(0xED4245))
+                .WithTimestamp(DateTimeOffset.UtcNow)
+                .WithFooter("Dynamite | Graceful Shutdown")
+                .Build();
+
+            foreach (var guild in _client.Guilds)
+            {
+                if (ct.IsCancellationRequested) break;
+
+                try
+                {
+                    var auditChannelId = await logService.GetLogChannelAsync(guild.Id, LogCategory.Audit, ct);
+                    if (auditChannelId is null) continue;
+
+                    var channel = guild.GetTextChannel(auditChannelId.Value);
+                    if (channel is null) continue;
+
+                    await channel.SendMessageAsync(embed: embed);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Could not send shutdown notification to guild {GuildId}", guild.Id);
+                }
+            }
+
+            _logger.LogInformation("Shutdown notifications sent");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send shutdown notifications");
+        }
     }
 
     private async Task OnReadyAsync()
@@ -112,6 +169,7 @@ public class BotHostedService : IHostedService
         _logger.LogInformation("Commands registered globally");
 #endif
 
+        _statusProvider.SetReady();
         _logger.LogInformation("Bot is ready!");
     }
 
@@ -140,6 +198,7 @@ public class BotHostedService : IHostedService
     {
         var customId = interaction.Data.CustomId;
 
+        // Verify button — dedicated handler
         if (customId == VerifyInteractionService.VerifyButtonId)
         {
             var verifyService = _services.GetRequiredService<VerifyInteractionService>();
@@ -147,69 +206,73 @@ public class BotHostedService : IHostedService
             return;
         }
 
-        if (customId.StartsWith(RolePanelInteractionService.ButtonPrefix))
-        {
-            var rolePanelService = _services.GetRequiredService<RolePanelInteractionService>();
-            await rolePanelService.HandleButtonAsync(interaction);
-            return;
-        }
-
-        if (customId == GiveawayEmbedBuilder.EnterButtonId)
+        // Giveaway enter button
+        if (customId == Dynamite.Modules.Giveaway.Helpers.GiveawayEmbedBuilder.EnterButtonId)
         {
             var giveawayService = _services.GetRequiredService<GiveawayInteractionService>();
             await giveawayService.HandleButtonAsync(interaction);
             return;
         }
 
-        if (customId == TicketEmbedBuilder.OpenButtonId ||
-            customId == TicketEmbedBuilder.CloseButtonId ||
-            customId == TicketEmbedBuilder.DeleteButtonId)
+        // Ticket buttons (open / close / delete)
+        if (customId == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.OpenButtonId  ||
+            customId == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.CloseButtonId ||
+            customId == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.DeleteButtonId)
         {
             var ticketService = _services.GetRequiredService<TicketInteractionService>();
             await ticketService.HandleButtonAsync(interaction);
             return;
         }
 
-        var ctx = new SocketInteractionContext<SocketMessageComponent>(_client, interaction);
-        await _interactions.ExecuteCommandAsync(ctx, _services);
+        // RolePanel buttons — fallthrough
+        var rolePanelService = _services.GetRequiredService<RolePanelInteractionService>();
+        await rolePanelService.HandleButtonAsync(interaction);
     }
 
     private async Task OnSelectMenuExecutedAsync(SocketMessageComponent interaction)
     {
-        if (interaction.Data.CustomId.StartsWith(RolePanelInteractionService.SelectPrefix))
-        {
-            var rolePanelService = _services.GetRequiredService<RolePanelInteractionService>();
-            await rolePanelService.HandleSelectAsync(interaction);
-            return;
-        }
-
-        var ctx = new SocketInteractionContext<SocketMessageComponent>(_client, interaction);
-        await _interactions.ExecuteCommandAsync(ctx, _services);
+        var rolePanelService = _services.GetRequiredService<RolePanelInteractionService>();
+        await rolePanelService.HandleSelectAsync(interaction);
     }
 
     private async Task OnModalSubmittedAsync(SocketModal modal)
     {
-        _logger.LogInformation("Modal submitted: {CustomId}", modal.Data.CustomId);
+        // Modal interactions đi thẳng qua InteractionService
+        // (RolePanelModule modal handler dùng [ModalInteraction] attribute — Discord.Net route tự động)
+        using var scope = _services.CreateScope();
         var ctx = new SocketInteractionContext(_client, modal);
-        await _interactions.ExecuteCommandAsync(ctx, _services);
+        await _interactions.ExecuteCommandAsync(ctx, scope.ServiceProvider);
     }
 
     private async Task OnInteractionCreatedAsync(SocketInteraction interaction)
     {
-        if (interaction is SocketMessageComponent or SocketModal) return;
+        // Skip các interaction đã có dedicated handlers
+        if (interaction is SocketMessageComponent component)
+        {
+            var id = component.Data.CustomId;
+            if (id == VerifyInteractionService.VerifyButtonId) return;
+            if (id == Dynamite.Modules.Giveaway.Helpers.GiveawayEmbedBuilder.EnterButtonId) return;
+            if (id == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.OpenButtonId)  return;
+            if (id == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.CloseButtonId) return;
+            if (id == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.DeleteButtonId) return;
+            return;
+        }
 
+        if (interaction is SocketModal) return;
+
+        using var scope = _services.CreateScope();
         var ctx = new SocketInteractionContext(_client, interaction);
-        await _interactions.ExecuteCommandAsync(ctx, _services);
+        await _interactions.ExecuteCommandAsync(ctx, scope.ServiceProvider);
     }
 
-    private Task OnInteractionExecutedAsync(ICommandInfo? command, IInteractionContext context, IResult result)
+    private Task OnInteractionExecutedAsync(
+        ICommandInfo? command, IInteractionContext context, IResult result)
     {
         if (!result.IsSuccess)
         {
             _logger.LogError("Interaction failed — Error: {Error} | Reason: {Reason} | Command: {Command}",
                 result.Error, result.ErrorReason, command?.Name ?? "unknown");
 
-            // Forward bot errors to audit log
             _ = Task.Run(async () =>
             {
                 try
@@ -251,6 +314,16 @@ public class BotHostedService : IHostedService
             _ => LogLevel.Debug
         };
         _logger.Log(level, msg.Exception, "[Discord] {Message}", msg.Message);
+        return Task.CompletedTask;
+    }
+
+    private static Task SafeRun(Func<Task> handler)
+    {
+        _ = Task.Run(async () =>
+        {
+            try { await handler(); }
+            catch { /* swallow */ }
+        });
         return Task.CompletedTask;
     }
 }
