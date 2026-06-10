@@ -6,6 +6,7 @@
     <Project Path="src/Dynamite.Core/Dynamite.Core.csproj" />
     <Project Path="src/Dynamite.Infrastructure/Dynamite.Infrastructure.csproj" />
     <Project Path="src/Dynamite.Modules.Giveaway/Dynamite.Modules.Giveaway.csproj" />
+    <Project Path="src/Dynamite.Modules.Ticket/Dynamite.Modules.Ticket.csproj" />
     <Project Path="src/Dynamite.Shared/Dynamite.Shared.csproj" />
   </Folder>
   <Folder Name="/src/Dynamite.Modules/" />

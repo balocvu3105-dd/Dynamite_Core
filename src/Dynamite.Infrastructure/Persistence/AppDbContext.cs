@@ -25,7 +25,10 @@ public class AppDbContext : DbContext
     // Phase 10a
     public DbSet<Giveaway> Giveaways => Set<Giveaway>();
     public DbSet<GiveawayEntry> GiveawayEntries => Set<GiveawayEntry>();
-
+    
+    // Phase 10b
+    public DbSet<TicketConfig> TicketConfigs => Set<TicketConfig>();
+    public DbSet<Ticket> Tickets => Set<Ticket>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

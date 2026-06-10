@@ -7,9 +7,13 @@ using Discord.Interactions;
 using Discord.WebSocket;
 using Dynamite.Application.Interfaces;
 using Dynamite.Bot.Settings;
+using Dynamite.Modules.Giveaway.Helpers;
+using Dynamite.Modules.Giveaway.Interactions;
 using Dynamite.Modules.Logging;
 using Dynamite.Modules.RoleManagement.Services;
 using Dynamite.Modules.Security;
+using Dynamite.Modules.Ticket.Helpers;
+using Dynamite.Modules.Ticket.Interactions;
 using Dynamite.Modules.Welcome;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -35,6 +39,8 @@ public class BotHostedService : IHostedService
         typeof(Dynamite.Modules.Welcome.Modules.WelcomeConfigModule).Assembly,
         typeof(Dynamite.Modules.Security.Modules.AntiSpamConfigModule).Assembly,
         typeof(Dynamite.Modules.Setup.SetupModule).Assembly,
+        typeof(Dynamite.Modules.Giveaway.Commands.GiveawayCommands).Assembly,
+        typeof(Dynamite.Modules.Ticket.Commands.TicketCommands).Assembly,
     ];
 
     public BotHostedService(
@@ -145,6 +151,22 @@ public class BotHostedService : IHostedService
             return;
         }
 
+        if (customId == GiveawayEmbedBuilder.EnterButtonId)
+        {
+            var giveawayService = _services.GetRequiredService<GiveawayInteractionService>();
+            await giveawayService.HandleButtonAsync(interaction);
+            return;
+        }
+
+        if (customId == TicketEmbedBuilder.OpenButtonId ||
+            customId == TicketEmbedBuilder.CloseButtonId ||
+            customId == TicketEmbedBuilder.DeleteButtonId)
+        {
+            var ticketService = _services.GetRequiredService<TicketInteractionService>();
+            await ticketService.HandleButtonAsync(interaction);
+            return;
+        }
+
         var ctx = new SocketInteractionContext<SocketMessageComponent>(_client, interaction);
         await _interactions.ExecuteCommandAsync(ctx, _services);
     }
@@ -154,7 +176,7 @@ public class BotHostedService : IHostedService
         if (interaction.Data.CustomId.StartsWith(RolePanelInteractionService.SelectPrefix))
         {
             var rolePanelService = _services.GetRequiredService<RolePanelInteractionService>();
-            await rolePanelService.HandleSelectAsync(interaction);  // ← đúng tên
+            await rolePanelService.HandleSelectAsync(interaction);
             return;
         }
 
@@ -170,7 +192,6 @@ public class BotHostedService : IHostedService
 
     private async Task OnInteractionCreatedAsync(SocketInteraction interaction)
     {
-        // Skip interaction types có dedicated handlers
         if (interaction is SocketMessageComponent or SocketModal) return;
 
         var ctx = new SocketInteractionContext(_client, interaction);

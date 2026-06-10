@@ -10,6 +10,9 @@ using Dynamite.Bot.Settings;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Infrastructure;
 using Dynamite.Infrastructure.Repositories;
+using Dynamite.Modules.Giveaway.Commands;
+using Dynamite.Modules.Giveaway.Interactions;
+using Dynamite.Modules.Giveaway.Services;
 using Dynamite.Modules.Logging;
 using Dynamite.Modules.Logging.Loggers;
 using Dynamite.Modules.Moderation.Services;
@@ -17,6 +20,9 @@ using Dynamite.Modules.RoleManagement.Helpers;
 using Dynamite.Modules.RoleManagement.Services;
 using Dynamite.Modules.Security;
 using Dynamite.Modules.Setup;
+using Dynamite.Modules.Ticket.Commands;
+using Dynamite.Modules.Ticket.Interactions;
+using Dynamite.Modules.Ticket.Services;
 using Dynamite.Modules.Welcome;
 using Dynamite.Modules.Welcome.Helpers;
 using Serilog;
@@ -89,6 +95,17 @@ var host = Host.CreateDefaultBuilder(args)
 
         // Phase 9b
         services.AddSingleton<GuildPresenceSyncService>();
+
+        // Phase 10a — Giveaway
+        services.AddScoped<IGiveawayRepository, GiveawayRepository>();
+        services.AddScoped<GiveawayService>();
+        services.AddSingleton<GiveawayInteractionService>();
+        services.AddHostedService<GiveawayTimerService>();
+
+        // Phase 10b — Ticket
+        services.AddScoped<ITicketRepository, TicketRepository>();
+        services.AddScoped<TicketService>();
+        services.AddSingleton<TicketInteractionService>();
 
         services.AddHostedService<BotHostedService>();
     })
