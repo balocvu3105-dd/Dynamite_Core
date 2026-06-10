@@ -17,24 +17,28 @@ export function Button({
   disabled,
   ...props
 }: ButtonProps) {
+  const variantClass = {
+    primary: 'bg-(--color-brand) text-white hover:bg-(--color-brand-hover) focus:ring-(--color-brand)',
+    secondary: 'bg-(--color-surface-alt) text-(--color-text) hover:bg-(--color-border) focus:ring-(--color-border)',
+    danger: 'bg-(--color-danger) text-white hover:opacity-90 focus:ring-(--color-danger)',
+    ghost: 'text-(--color-text-muted) hover:text-(--color-text) hover:bg-(--color-surface-alt)',
+  }[variant]
+
+  const sizeClass = {
+    sm: 'px-3 py-1.5 text-sm',
+    md: 'px-4 py-2 text-sm',
+    lg: 'px-6 py-3 text-base',
+  }[size]
+
   return (
     <button
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[--color-surface] disabled:opacity-50 disabled:cursor-not-allowed',
-        {
-          'bg-[--color-brand] text-white hover:bg-[--color-brand-hover] focus:ring-[--color-brand]':
-            variant === 'primary',
-          'bg-[--color-surface-alt] text-[--color-text] hover:bg-[--color-border] focus:ring-[--color-border]':
-            variant === 'secondary',
-          'bg-[--color-danger] text-white hover:opacity-90 focus:ring-[--color-danger]':
-            variant === 'danger',
-          'text-[--color-text-muted] hover:text-[--color-text] hover:bg-[--color-surface-alt]':
-            variant === 'ghost',
-          'px-3 py-1.5 text-sm': size === 'sm',
-          'px-4 py-2 text-sm': size === 'md',
-          'px-6 py-3 text-base': size === 'lg',
-        },
+        'inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors',
+        'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--color-surface)',
+        'disabled:opacity-50 disabled:cursor-not-allowed',
+        variantClass,
+        sizeClass,
         className
       )}
       {...props}
@@ -52,11 +56,12 @@ interface SpinnerProps {
 }
 
 export function Spinner({ size = 'md', className }: SpinnerProps) {
+  const sizeClass = { sm: 'w-4 h-4', md: 'w-6 h-6', lg: 'w-8 h-8' }[size]
   return (
     <div
       className={cn(
-        'animate-spin rounded-full border-2 border-[--color-border] border-t-[--color-brand]',
-        { 'w-4 h-4': size === 'sm', 'w-6 h-6': size === 'md', 'w-8 h-8': size === 'lg' },
+        'animate-spin rounded-full border-2 border-(--color-border) border-t-(--color-brand)',
+        sizeClass,
         className
       )}
     />
@@ -72,7 +77,7 @@ export function Card({ className, children, ...props }: CardProps) {
   return (
     <div
       className={cn(
-        'bg-[--color-surface-alt] border border-[--color-border] rounded-lg p-5',
+        'bg-(--color-surface-alt) border border-(--color-border) rounded-lg p-5',
         className
       )}
       {...props}
@@ -90,16 +95,18 @@ interface BadgeProps {
 }
 
 export function Badge({ variant = 'default', children, className }: BadgeProps) {
+  const variantClass = {
+    success: 'bg-(--color-success)/15 text-(--color-success)',
+    danger: 'bg-(--color-danger)/15 text-(--color-danger)',
+    warning: 'bg-(--color-warning)/15 text-(--color-warning)',
+    default: 'bg-(--color-border) text-(--color-text-muted)',
+  }[variant]
+
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-        {
-          'bg-[--color-success]/15 text-[--color-success]': variant === 'success',
-          'bg-[--color-danger]/15 text-[--color-danger]': variant === 'danger',
-          'bg-[--color-warning]/15 text-[--color-warning]': variant === 'warning',
-          'bg-[--color-border] text-[--color-text-muted]': variant === 'default',
-        },
+        variantClass,
         className
       )}
     >
@@ -122,9 +129,13 @@ export function Toggle({ checked, onChange, disabled }: ToggleProps) {
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
+      style={{
+        backgroundColor: checked ? 'var(--color-brand)' : 'var(--color-border)',
+      }}
       className={cn(
-        'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[--color-brand] focus:ring-offset-2 focus:ring-offset-[--color-surface] disabled:opacity-50 disabled:cursor-not-allowed',
-        checked ? 'bg-[--color-brand]' : 'bg-[--color-border]'
+        'relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors',
+        'focus:outline-none focus:ring-2 focus:ring-(--color-brand) focus:ring-offset-2 focus:ring-offset-(--color-surface)',
+        'disabled:opacity-50 disabled:cursor-not-allowed'
       )}
     >
       <span
@@ -147,20 +158,22 @@ export function Input({ label, error, className, id, ...props }: InputProps) {
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
-        <label htmlFor={id} className="text-sm font-medium text-[--color-text]">
+        <label htmlFor={id} className="text-sm font-medium text-(--color-text)">
           {label}
         </label>
       )}
       <input
         id={id}
         className={cn(
-          'w-full rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-sm text-[--color-text] placeholder:text-[--color-text-muted] focus:outline-none focus:ring-2 focus:ring-[--color-brand] focus:border-transparent transition-colors',
-          error && 'border-[--color-danger]',
+          'w-full rounded-md border border-(--color-border) bg-(--color-surface)',
+          'px-3 py-2 text-sm text-(--color-text) placeholder:text-(--color-text-muted)',
+          'focus:outline-none focus:ring-2 focus:ring-(--color-brand) focus:border-transparent transition-colors',
+          error && 'border-(--color-danger)',
           className
         )}
         {...props}
       />
-      {error && <p className="text-xs text-[--color-danger]">{error}</p>}
+      {error && <p className="text-xs text-(--color-danger)">{error}</p>}
     </div>
   )
 }
@@ -175,23 +188,21 @@ export function Select({ label, placeholder, className, id, children, ...props }
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
-        <label htmlFor={id} className="text-sm font-medium text-[--color-text]">
+        <label htmlFor={id} className="text-sm font-medium text-(--color-text)">
           {label}
         </label>
       )}
       <select
         id={id}
         className={cn(
-          'w-full rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-sm text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-brand] focus:border-transparent transition-colors',
+          'w-full rounded-md border border-(--color-border) bg-(--color-surface)',
+          'px-3 py-2 text-sm text-(--color-text)',
+          'focus:outline-none focus:ring-2 focus:ring-(--color-brand) focus:border-transparent transition-colors',
           className
         )}
         {...props}
       >
-        {placeholder && (
-          <option value="" disabled>
-            {placeholder}
-          </option>
-        )}
+        {placeholder && <option value="" disabled>{placeholder}</option>}
         {children}
       </select>
     </div>
