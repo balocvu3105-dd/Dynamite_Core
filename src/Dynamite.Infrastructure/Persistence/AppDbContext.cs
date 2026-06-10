@@ -22,6 +22,10 @@ public class AppDbContext : DbContext
     // Phase 9b
     public DbSet<GuildPresence> GuildPresences => Set<GuildPresence>();
 
+    // Phase 10a
+    public DbSet<Giveaway> Giveaways => Set<Giveaway>();
+    public DbSet<GiveawayEntry> GiveawayEntries => Set<GiveawayEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
