@@ -7,9 +7,11 @@ using Discord.Interactions;
 using Discord.WebSocket;
 using Dynamite.Application.Interfaces;
 using Dynamite.Bot.Settings;
+using Dynamite.Core.Enums;
 using Dynamite.Modules.Giveaway.Helpers;
 using Dynamite.Modules.Giveaway.Interactions;
 using Dynamite.Modules.Logging;
+using Dynamite.Modules.Logging.Helpers;
 using Dynamite.Modules.RoleManagement.Services;
 using Dynamite.Modules.Security;
 using Dynamite.Modules.Ticket.Helpers;
@@ -29,20 +31,20 @@ public class BotHostedService : IHostedService
     private readonly GuildPresenceSyncService _presenceSync;
     private readonly ILogger<BotHostedService> _logger;
 
-   private static readonly IReadOnlyList<Assembly> ModuleAssemblies =
-[
-    Assembly.GetExecutingAssembly(),
-    typeof(Dynamite.Modules.Moderation.Modules.ModerationModule).Assembly,
-    typeof(Dynamite.Modules.Moderation.Modules.ConfigModule).Assembly,
-    typeof(Dynamite.Modules.RoleManagement.Modules.AutoRoleModule).Assembly,
-    typeof(Dynamite.Modules.Logging.Modules.LogConfigModule).Assembly,
-    typeof(Dynamite.Modules.Welcome.Modules.WelcomeConfigModule).Assembly,
-    typeof(Dynamite.Modules.Security.Modules.AntiSpamConfigModule).Assembly,
-    typeof(Dynamite.Modules.Setup.SetupModule).Assembly,
-    typeof(Dynamite.Modules.Giveaway.Commands.GiveawayCommands).Assembly,
-    typeof(Dynamite.Modules.Ticket.Commands.TicketCommands).Assembly,
-    typeof(Dynamite.Modules.Economy.Commands.EconomyCommands).Assembly,  // thêm dòng này
-];
+    private static readonly IReadOnlyList<Assembly> ModuleAssemblies =
+    [
+        Assembly.GetExecutingAssembly(),
+        typeof(Dynamite.Modules.Moderation.Modules.ModerationModule).Assembly,
+        typeof(Dynamite.Modules.Moderation.Modules.ConfigModule).Assembly,
+        typeof(Dynamite.Modules.RoleManagement.Modules.AutoRoleModule).Assembly,
+        typeof(Dynamite.Modules.Logging.Modules.LogConfigModule).Assembly,
+        typeof(Dynamite.Modules.Welcome.Modules.WelcomeConfigModule).Assembly,
+        typeof(Dynamite.Modules.Security.Modules.AntiSpamConfigModule).Assembly,
+        typeof(Dynamite.Modules.Setup.SetupModule).Assembly,
+        typeof(Dynamite.Modules.Giveaway.Commands.GiveawayCommands).Assembly,
+        typeof(Dynamite.Modules.Ticket.Commands.TicketCommands).Assembly,
+        typeof(Dynamite.Modules.Economy.Commands.EconomyCommands).Assembly,
+    ];
 
     public BotHostedService(
         DiscordSocketClient client,
@@ -70,10 +72,8 @@ public class BotHostedService : IHostedService
         _client.SelectMenuExecuted += OnSelectMenuExecutedAsync;
         _client.ModalSubmitted += OnModalSubmittedAsync;
 
-        // Global error handler for all interaction executions
         _interactions.InteractionExecuted += OnInteractionExecutedAsync;
 
-        // Phase 9b
         _client.JoinedGuild += guild => _presenceSync.OnGuildJoinedAsync(guild);
         _client.LeftGuild += guild => _presenceSync.OnGuildLeftAsync(guild);
 
@@ -102,7 +102,6 @@ public class BotHostedService : IHostedService
         _services.GetRequiredService<WelcomeEventHandler>().Subscribe();
         _services.GetRequiredService<SecurityEventHandler>().Subscribe();
 
-        // Phase 9b
         await _presenceSync.SyncOnReadyAsync(_client);
 
 #if DEBUG
@@ -188,12 +187,12 @@ public class BotHostedService : IHostedService
         await _interactions.ExecuteCommandAsync(ctx, _services);
     }
 
-   private async Task OnModalSubmittedAsync(SocketModal modal)
-{
-    _logger.LogInformation("Modal submitted: {CustomId}", modal.Data.CustomId);
-    var ctx = new SocketInteractionContext(_client, modal);
-    await _interactions.ExecuteCommandAsync(ctx, _services);
-}
+    private async Task OnModalSubmittedAsync(SocketModal modal)
+    {
+        _logger.LogInformation("Modal submitted: {CustomId}", modal.Data.CustomId);
+        var ctx = new SocketInteractionContext(_client, modal);
+        await _interactions.ExecuteCommandAsync(ctx, _services);
+    }
 
     private async Task OnInteractionCreatedAsync(SocketInteraction interaction)
     {
@@ -206,8 +205,38 @@ public class BotHostedService : IHostedService
     private Task OnInteractionExecutedAsync(ICommandInfo? command, IInteractionContext context, IResult result)
     {
         if (!result.IsSuccess)
+        {
             _logger.LogError("Interaction failed — Error: {Error} | Reason: {Reason} | Command: {Command}",
                 result.Error, result.ErrorReason, command?.Name ?? "unknown");
+
+            // Forward bot errors to audit log
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    if (context.Guild is null) return;
+                    using var scope = _services.CreateScope();
+                    var logService = scope.ServiceProvider.GetRequiredService<IServerLogService>();
+                    var auditChannelId = await logService.GetLogChannelAsync(context.Guild.Id, LogCategory.Audit);
+                    if (auditChannelId is null) return;
+
+                    var guild = _client.GetGuild(context.Guild.Id);
+                    var channel = guild?.GetTextChannel(auditChannelId.Value);
+                    if (channel is null) return;
+
+                    var embed = LogEmbedHelper.BotError(
+                        command?.Name ?? "unknown",
+                        result.Error?.ToString() ?? "Unknown",
+                        result.ErrorReason);
+
+                    await channel.SendMessageAsync(embed: embed);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send error to audit log");
+                }
+            });
+        }
         return Task.CompletedTask;
     }
 
@@ -216,9 +245,9 @@ public class BotHostedService : IHostedService
         var level = msg.Severity switch
         {
             LogSeverity.Critical => LogLevel.Critical,
-            LogSeverity.Error => LogLevel.Error,
-            LogSeverity.Warning => LogLevel.Warning,
-            LogSeverity.Info => LogLevel.Information,
+            LogSeverity.Error    => LogLevel.Error,
+            LogSeverity.Warning  => LogLevel.Warning,
+            LogSeverity.Info     => LogLevel.Information,
             _ => LogLevel.Debug
         };
         _logger.Log(level, msg.Exception, "[Discord] {Message}", msg.Message);

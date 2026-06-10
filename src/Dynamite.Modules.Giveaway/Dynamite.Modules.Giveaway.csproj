@@ -4,6 +4,7 @@
     <ProjectReference Include="..\Dynamite.Core\Dynamite.Core.csproj" />
     <ProjectReference Include="..\Dynamite.Application\Dynamite.Application.csproj" />
     <ProjectReference Include="..\Dynamite.Shared\Dynamite.Shared.csproj" />
+    <ProjectReference Include="..\Dynamite.Modules\Logging\Dynamite.Modules.Logging.csproj" />
   </ItemGroup>
 
   <ItemGroup>

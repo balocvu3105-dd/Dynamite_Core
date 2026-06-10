@@ -33,7 +33,6 @@ public class MessageLogger
         var msg = message.Value;
         if (msg.Author.IsBot) return;
 
-        // Fix: resolve channel riêng, không dùng ternary với 2 incompatible types
         ITextChannel? textChannel = null;
         if (channel.HasValue && channel.Value is ITextChannel tc)
             textChannel = tc;
@@ -42,20 +41,20 @@ public class MessageLogger
 
         if (textChannel is null) return;
 
-        var embed = LogEmbedHelper.MessageDeleted(
-            msg.Author.ToString() ?? msg.Author.Username,
-            msg.Author.Id,
-            $"<#{textChannel.Id}>",
-            msg.Content);
+        var channelMention = $"<#{textChannel.Id}>";
+        var authorTag = msg.Author.ToString() ?? msg.Author.Username;
 
+        var embed = LogEmbedHelper.MessageDeleted(authorTag, msg.Author.Id, channelMention, msg.Content);
         await SendLogAsync(textChannel.GuildId, LogCategory.Message, embed);
+
+        var auditEmbed = LogEmbedHelper.MessageDeletedAudit(authorTag, msg.Author.Id, channelMention, msg.Content, msg.Id);
+        await SendLogAsync(textChannel.GuildId, LogCategory.Audit, auditEmbed);
     }
 
     public async Task OnMessagesBulkDeletedAsync(
         IReadOnlyCollection<Cacheable<IMessage, ulong>> messages,
         Cacheable<IMessageChannel, ulong> channel)
     {
-        // Fix: same pattern — resolve channel riêng
         ITextChannel? textChannel = null;
         if (channel.HasValue && channel.Value is ITextChannel tc)
             textChannel = tc;
@@ -64,8 +63,13 @@ public class MessageLogger
 
         if (textChannel is null) return;
 
-        var embed = LogEmbedHelper.MessagesBulkDeleted($"<#{textChannel.Id}>", messages.Count);
+        var channelMention = $"<#{textChannel.Id}>";
+
+        var embed = LogEmbedHelper.MessagesBulkDeleted(channelMention, messages.Count);
         await SendLogAsync(textChannel.GuildId, LogCategory.Message, embed);
+
+        var auditEmbed = LogEmbedHelper.MessagesBulkDeletedAudit(channelMention, messages.Count);
+        await SendLogAsync(textChannel.GuildId, LogCategory.Audit, auditEmbed);
     }
 
     public async Task OnMessageUpdatedAsync(
@@ -79,15 +83,15 @@ public class MessageLogger
         if (beforeMsg.Content == after.Content) return;
         if (channel is not ITextChannel textChannel) return;
 
-        var embed = LogEmbedHelper.MessageEdited(
-            after.Author.ToString() ?? after.Author.Username,
-            after.Author.Id,
-            $"<#{channel.Id}>",
-            beforeMsg.Content,
-            after.Content,
-            after.GetJumpUrl());
+        var channelMention = $"<#{channel.Id}>";
+        var authorTag = after.Author.ToString() ?? after.Author.Username;
+        var jumpUrl = after.GetJumpUrl();
 
+        var embed = LogEmbedHelper.MessageEdited(authorTag, after.Author.Id, channelMention, beforeMsg.Content, after.Content, jumpUrl);
         await SendLogAsync(textChannel.GuildId, LogCategory.Message, embed);
+
+        var auditEmbed = LogEmbedHelper.MessageEditedAudit(authorTag, after.Author.Id, channelMention, beforeMsg.Content, after.Content, after.Id, jumpUrl);
+        await SendLogAsync(textChannel.GuildId, LogCategory.Audit, auditEmbed);
     }
 
     private async Task SendLogAsync(ulong guildId, LogCategory category, Embed embed)

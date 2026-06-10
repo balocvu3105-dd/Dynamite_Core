@@ -52,13 +52,8 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
         try
         {
             var giveaway = await _service.CreateAsync(
-                Context.Guild.Id,
-                targetChannel.Id,
-                Context.User.Id,
-                prize,
-                description,
-                winners,
-                span);
+                Context.Guild.Id, targetChannel.Id, Context.User.Id,
+                prize, description, winners, span);
 
             await FollowupAsync(
                 $"✅ Giveaway started in {targetChannel.Mention}! Ends <t:{new DateTimeOffset(giveaway.EndsAt).ToUnixTimeSeconds()}:R>",
@@ -71,39 +66,73 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
         }
     }
 
-    [SlashCommand("end", "End a giveaway early")]
-    public async Task EndAsync(
-        [Summary("message-id", "Message ID of the giveaway")] string messageIdStr)
+    // Server Owner only — pre-select winner trước khi hết giờ
+    // Giveaway vẫn chạy bình thường, người tham gia không biết
+    [SlashCommand("pick", "Pre-select a winner (Server Owner only — announced when giveaway ends)")]
+    public async Task PickAsync(
+        [Summary("giveaway-id", "Giveaway ID (from /giveaway list)")] string giveawayIdStr,
+        [Summary("user", "User to pre-select as winner")] IGuildUser user)
     {
         await DeferAsync(ephemeral: true);
 
-        if (!ulong.TryParse(messageIdStr, out var messageId))
+        // Chỉ Server Owner mới dùng được
+        if (Context.Guild.OwnerId != Context.User.Id)
         {
-            await FollowupAsync("❌ Invalid message ID.", ephemeral: true);
+            await FollowupAsync("❌ Only the Server Owner can pre-select giveaway winners.", ephemeral: true);
             return;
         }
 
-        // We need to look up by messageId — use a scope-aware approach
-        // GiveawayService handles the lookup internally via EndGiveawayAsync
-        // but we need to fetch first — expose a small helper
-        await FollowupAsync("⚠️ Use `/giveaway cancel` to cancel, or wait for the timer to end.",
-            ephemeral: true);
+        if (!Guid.TryParse(giveawayIdStr, out var giveawayId))
+        {
+            await FollowupAsync("❌ Invalid giveaway ID.", ephemeral: true);
+            return;
+        }
+
+        var (success, message) = await _service.PreSelectWinnerAsync(
+            giveawayId, user.Id, Context.User.Id, Context.Guild.Id);
+
+        await FollowupAsync(success ? $"✅ {message}" : $"❌ {message}", ephemeral: true);
+    }
+
+    // Server Owner only — xóa pre-selection, trở về random
+    [SlashCommand("unpick", "Clear pre-selected winner — giveaway will pick randomly")]
+    public async Task UnpickAsync(
+        [Summary("giveaway-id", "Giveaway ID")] string giveawayIdStr)
+    {
+        await DeferAsync(ephemeral: true);
+
+        if (Context.Guild.OwnerId != Context.User.Id)
+        {
+            await FollowupAsync("❌ Only the Server Owner can modify giveaway winner selection.", ephemeral: true);
+            return;
+        }
+
+        if (!Guid.TryParse(giveawayIdStr, out var giveawayId))
+        {
+            await FollowupAsync("❌ Invalid giveaway ID.", ephemeral: true);
+            return;
+        }
+
+        var (success, message) = await _service.ClearPreSelectionAsync(
+            giveawayId, Context.User.Id, Context.Guild.Id);
+
+        await FollowupAsync(success ? $"✅ {message}" : $"❌ {message}", ephemeral: true);
     }
 
     [SlashCommand("cancel", "Cancel an active giveaway")]
     public async Task CancelAsync(
-        [Summary("message-id", "Message ID of the giveaway to cancel")] string messageIdStr)
+        [Summary("giveaway-id", "Giveaway ID (from /giveaway list)")] string giveawayIdStr)
     {
         await DeferAsync(ephemeral: true);
 
-        if (!ulong.TryParse(messageIdStr, out _))
+        if (!Guid.TryParse(giveawayIdStr, out var giveawayId))
         {
-            await FollowupAsync("❌ Invalid message ID format.", ephemeral: true);
+            await FollowupAsync("❌ Invalid giveaway ID format.", ephemeral: true);
             return;
         }
 
-        await FollowupAsync("⚠️ Cancellation by message ID coming in next iteration. Use the giveaway ID from logs for now.",
-            ephemeral: true);
+        var success = await _service.CancelAsync(giveawayId, Context.User.Id);
+        await FollowupAsync(success ? "✅ Giveaway cancelled." : "❌ Could not cancel — giveaway not found or already ended.", ephemeral: true);
     }
 
     [SlashCommand("reroll", "Reroll winners for an ended giveaway")]

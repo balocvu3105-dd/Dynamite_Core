@@ -5,12 +5,12 @@ using Discord;
 
 public static class LogEmbedHelper
 {
-    // Consistent colors per category
-    private static readonly Color MessageColor = new(0x3498DB); // blue
-    private static readonly Color MemberColor = new(0x2ECC71); // green
-    private static readonly Color VoiceColor = new(0x9B59B6); // purple
-    private static readonly Color ServerColor = new(0xE67E22); // orange
-    private static readonly Color DangerColor = new(0xED4245); // red
+    private static readonly Color MessageColor = new(0x3498DB);
+    private static readonly Color MemberColor  = new(0x2ECC71);
+    private static readonly Color VoiceColor   = new(0x9B59B6);
+    private static readonly Color ServerColor  = new(0xE67E22);
+    private static readonly Color DangerColor  = new(0xED4245);
+    private static readonly Color AuditColor   = new(0x2C3E50); // dark slate — serious/immutable
 
     // ── MESSAGE ──────────────────────────────────────────────
 
@@ -21,6 +21,18 @@ public static class LogEmbedHelper
             .AddField("Author", $"{authorTag} (`{authorId}`)", inline: true)
             .AddField("Channel", channelMention, inline: true)
             .AddField("Content", Truncate(content, 1024))
+            .Build();
+
+    public static Embed MessageDeletedAudit(
+        string authorTag, ulong authorId,
+        string channelMention, string content,
+        ulong messageId)
+        => Build("🗑️ [AUDIT] Message Deleted", AuditColor)
+            .AddField("Author", $"{authorTag} (`{authorId}`)", inline: true)
+            .AddField("Channel", channelMention, inline: true)
+            .AddField("Message ID", $"`{messageId}`", inline: true)
+            .AddField("Content", Truncate(content, 1024))
+            .WithFooter("Audit Log — immutable record")
             .Build();
 
     public static Embed MessageEdited(
@@ -34,10 +46,31 @@ public static class LogEmbedHelper
             .WithUrl(jumpUrl)
             .Build();
 
+    public static Embed MessageEditedAudit(
+        string authorTag, ulong authorId,
+        string channelMention, string before, string after,
+        ulong messageId, string jumpUrl)
+        => Build("✏️ [AUDIT] Message Edited", AuditColor)
+            .AddField("Author", $"{authorTag} (`{authorId}`)", inline: true)
+            .AddField("Channel", channelMention, inline: true)
+            .AddField("Message ID", $"`{messageId}`", inline: true)
+            .AddField("Before", Truncate(before, 512))
+            .AddField("After", Truncate(after, 512))
+            .WithUrl(jumpUrl)
+            .WithFooter("Audit Log — immutable record")
+            .Build();
+
     public static Embed MessagesBulkDeleted(
         string channelMention, int count)
         => Build("🗑️ Bulk Delete", DangerColor)
             .WithDescription($"{count} messages were deleted in {channelMention}.")
+            .Build();
+
+    public static Embed MessagesBulkDeletedAudit(
+        string channelMention, int count)
+        => Build("🗑️ [AUDIT] Bulk Delete", AuditColor)
+            .WithDescription($"{count} messages were bulk deleted in {channelMention}.")
+            .WithFooter("Audit Log — immutable record")
             .Build();
 
     // ── MEMBER ───────────────────────────────────────────────
@@ -56,9 +89,29 @@ public static class LogEmbedHelper
             .Build();
     }
 
+    public static Embed MemberJoinedAudit(string tag, ulong userId, DateTimeOffset accountCreated)
+    {
+        var age = DateTimeOffset.UtcNow - accountCreated;
+        var isNew = age.TotalDays < 7;
+        var ageStr = $"{(int)age.TotalDays}d {age.Hours}h";
+
+        return Build("✅ [AUDIT] Member Joined", AuditColor)
+            .AddField("User", $"{tag} (`{userId}`)", inline: true)
+            .AddField("Account Age", isNew ? $"⚠️ {ageStr} — NEW ACCOUNT" : ageStr, inline: true)
+            .AddField("Account Created", $"<t:{accountCreated.ToUnixTimeSeconds()}:F>", inline: false)
+            .WithFooter("Audit Log — immutable record")
+            .Build();
+    }
+
     public static Embed MemberLeft(string tag, ulong userId)
         => Build("👋 Member Left", DangerColor)
             .AddField("User", $"{tag} (`{userId}`)", inline: true)
+            .Build();
+
+    public static Embed MemberLeftAudit(string tag, ulong userId)
+        => Build("👋 [AUDIT] Member Left", AuditColor)
+            .AddField("User", $"{tag} (`{userId}`)", inline: true)
+            .WithFooter("Audit Log — immutable record")
             .Build();
 
     public static Embed RoleAdded(string tag, ulong userId, string roleName)
@@ -67,10 +120,24 @@ public static class LogEmbedHelper
             .AddField("Role", roleName, inline: true)
             .Build();
 
+    public static Embed RoleAddedAudit(string tag, ulong userId, string roleName, ulong roleId)
+        => Build("🎭 [AUDIT] Role Added", AuditColor)
+            .AddField("User", $"{tag} (`{userId}`)", inline: true)
+            .AddField("Role", $"{roleName} (`{roleId}`)", inline: true)
+            .WithFooter("Audit Log — immutable record")
+            .Build();
+
     public static Embed RoleRemoved(string tag, ulong userId, string roleName)
         => Build("🎭 Role Removed", DangerColor)
             .AddField("User", $"{tag} (`{userId}`)", inline: true)
             .AddField("Role", roleName, inline: true)
+            .Build();
+
+    public static Embed RoleRemovedAudit(string tag, ulong userId, string roleName, ulong roleId)
+        => Build("🎭 [AUDIT] Role Removed", AuditColor)
+            .AddField("User", $"{tag} (`{userId}`)", inline: true)
+            .AddField("Role", $"{roleName} (`{roleId}`)", inline: true)
+            .WithFooter("Audit Log — immutable record")
             .Build();
 
     public static Embed NicknameChanged(
@@ -79,6 +146,15 @@ public static class LogEmbedHelper
             .AddField("User", $"{tag} (`{userId}`)", inline: true)
             .AddField("Before", before ?? "*none*", inline: true)
             .AddField("After", after ?? "*none*", inline: true)
+            .Build();
+
+    public static Embed NicknameChangedAudit(
+        string tag, ulong userId, string? before, string? after)
+        => Build("📝 [AUDIT] Nickname Changed", AuditColor)
+            .AddField("User", $"{tag} (`{userId}`)", inline: true)
+            .AddField("Before", before ?? "*none*", inline: true)
+            .AddField("After", after ?? "*none*", inline: true)
+            .WithFooter("Audit Log — immutable record")
             .Build();
 
     // ── VOICE ────────────────────────────────────────────────
@@ -111,10 +187,26 @@ public static class LogEmbedHelper
             .AddField("Type", type, inline: true)
             .Build();
 
+    public static Embed ChannelCreatedAudit(string channelName, string type, ulong channelId)
+        => Build("📢 [AUDIT] Channel Created", AuditColor)
+            .AddField("Name", channelName, inline: true)
+            .AddField("Type", type, inline: true)
+            .AddField("Channel ID", $"`{channelId}`", inline: true)
+            .WithFooter("Audit Log — immutable record")
+            .Build();
+
     public static Embed ChannelDeleted(string channelName, string type)
         => Build("🗑️ Channel Deleted", DangerColor)
             .AddField("Name", channelName, inline: true)
             .AddField("Type", type, inline: true)
+            .Build();
+
+    public static Embed ChannelDeletedAudit(string channelName, string type, ulong channelId)
+        => Build("🗑️ [AUDIT] Channel Deleted", AuditColor)
+            .AddField("Name", channelName, inline: true)
+            .AddField("Type", type, inline: true)
+            .AddField("Channel ID", $"`{channelId}`", inline: true)
+            .WithFooter("Audit Log — immutable record")
             .Build();
 
     public static Embed RoleCreated(string roleName)
@@ -122,9 +214,33 @@ public static class LogEmbedHelper
             .AddField("Name", roleName, inline: true)
             .Build();
 
+    public static Embed RoleCreatedAudit(string roleName, ulong roleId)
+        => Build("🎭 [AUDIT] Role Created", AuditColor)
+            .AddField("Name", roleName, inline: true)
+            .AddField("Role ID", $"`{roleId}`", inline: true)
+            .WithFooter("Audit Log — immutable record")
+            .Build();
+
     public static Embed RoleDeleted(string roleName)
         => Build("🗑️ Role Deleted", DangerColor)
             .AddField("Name", roleName, inline: true)
+            .Build();
+
+    public static Embed RoleDeletedAudit(string roleName, ulong roleId)
+        => Build("🗑️ [AUDIT] Role Deleted", AuditColor)
+            .AddField("Name", roleName, inline: true)
+            .AddField("Role ID", $"`{roleId}`", inline: true)
+            .WithFooter("Audit Log — immutable record")
+            .Build();
+
+    // ── BOT ERRORS ───────────────────────────────────────────
+
+    public static Embed BotError(string commandName, string error, string reason)
+        => Build("🚨 [AUDIT] Bot Error", DangerColor)
+            .AddField("Command", commandName, inline: true)
+            .AddField("Error Type", error, inline: true)
+            .AddField("Reason", Truncate(reason, 1024))
+            .WithFooter("Audit Log — immutable record")
             .Build();
 
     // ── HELPERS ──────────────────────────────────────────────

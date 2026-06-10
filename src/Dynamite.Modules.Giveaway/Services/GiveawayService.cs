@@ -3,36 +3,38 @@ namespace Dynamite.Modules.Giveaway.Services;
 
 using Discord;
 using Discord.WebSocket;
+using Dynamite.Application.Interfaces;
 using Dynamite.Core.Entities;
+using Dynamite.Core.Enums;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Giveaway.Helpers;
+using Dynamite.Modules.Logging.Helpers;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 public class GiveawayService
 {
     private readonly IGiveawayRepository _repo;
     private readonly DiscordSocketClient _client;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<GiveawayService> _logger;
     private static readonly Random _rng = new();
 
     public GiveawayService(
         IGiveawayRepository repo,
         DiscordSocketClient client,
+        IServiceScopeFactory scopeFactory,
         ILogger<GiveawayService> logger)
     {
         _repo = repo;
         _client = client;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
     public async Task<Giveaway> CreateAsync(
-        ulong guildId,
-        ulong channelId,
-        ulong hostId,
-        string prize,
-        string? description,
-        int winnerCount,
-        TimeSpan duration)
+        ulong guildId, ulong channelId, ulong hostId,
+        string prize, string? description, int winnerCount, TimeSpan duration)
     {
         var channel = _client.GetGuild(guildId)?.GetTextChannel(channelId)
             ?? throw new InvalidOperationException("Channel not found.");
@@ -47,17 +49,14 @@ public class GiveawayService
             WinnerCount = winnerCount,
             StartsAt = DateTime.UtcNow,
             EndsAt = DateTime.UtcNow.Add(duration),
-            MessageId = 0 // placeholder, updated after send
+            MessageId = 0
         };
 
-        // Send embed first to get messageId
         var embed = GiveawayEmbedBuilder.BuildActiveEmbed(giveaway, 0);
         var components = GiveawayEmbedBuilder.BuildEnterButton().Build();
-
         var message = await channel.SendMessageAsync(embed: embed, components: components);
 
         giveaway.MessageId = message.Id;
-
         await _repo.AddAsync(giveaway);
         await _repo.SaveChangesAsync();
 
@@ -90,23 +89,96 @@ public class GiveawayService
         await _repo.AddEntryAsync(entry);
         await _repo.SaveChangesAsync();
 
-        // Update embed entry count
         var entryCount = await _repo.GetEntryCountAsync(giveaway.Id);
         await UpdateEmbedAsync(giveaway, entryCount);
 
         return (true, "You have entered the giveaway! 🎉");
     }
 
+    // Server Owner pre-selects a winner — giveaway vẫn chạy bình thường đến hết giờ
+    // Timer sẽ announce người này thay vì random khi EndsAt tới
+    public async Task<(bool success, string message)> PreSelectWinnerAsync(
+        Guid giveawayId, ulong winnerId, ulong requesterId, ulong guildId)
+    {
+        var giveaway = await _repo.GetByIdAsync(giveawayId);
+        if (giveaway is null) return (false, "Giveaway not found.");
+        if (giveaway.IsEnded) return (false, "Giveaway has already ended.");
+        if (giveaway.IsCancelled) return (false, "Giveaway has been cancelled.");
+
+        // Verify winner is a member of the guild
+        var guild = _client.GetGuild(guildId);
+        var member = guild?.GetUser(winnerId);
+        if (member is null) return (false, "User not found in this server.");
+
+        giveaway.PreSelectedWinnerId = winnerId;
+        giveaway.PreSelectedAt = DateTime.UtcNow;
+        giveaway.PreSelectedBy = requesterId;
+        await _repo.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Giveaway {Id} winner pre-selected: {WinnerId} by {RequesterId}",
+            giveawayId, winnerId, requesterId);
+
+        // Ghi vào audit log ngay lập tức
+        await SendGiveawayAuditAsync(guildId,
+            $"🎯 **[AUDIT] Giveaway Winner Pre-Selected**\n" +
+            $"**Giveaway:** {giveaway.Prize} (`{giveaway.Id}`)\n" +
+            $"**Pre-selected winner:** <@{winnerId}> (`{winnerId}`)\n" +
+            $"**Selected by:** <@{requesterId}>\n" +
+            $"**Giveaway ends:** <t:{new DateTimeOffset(giveaway.EndsAt).ToUnixTimeSeconds()}:R>\n" +
+            $"*Winner will be announced when giveaway ends — participants are unaware.*");
+
+        return (true, $"Winner pre-selected: <@{winnerId}>. Will be announced when giveaway ends.");
+    }
+
+    // Clear pre-selection — trở về random bình thường
+    public async Task<(bool success, string message)> ClearPreSelectionAsync(
+        Guid giveawayId, ulong requesterId, ulong guildId)
+    {
+        var giveaway = await _repo.GetByIdAsync(giveawayId);
+        if (giveaway is null) return (false, "Giveaway not found.");
+        if (giveaway.IsEnded) return (false, "Giveaway has already ended.");
+        if (giveaway.PreSelectedWinnerId is null) return (false, "No pre-selection to clear.");
+
+        var prevWinnerId = giveaway.PreSelectedWinnerId;
+        giveaway.PreSelectedWinnerId = null;
+        giveaway.PreSelectedAt = null;
+        giveaway.PreSelectedBy = null;
+        await _repo.SaveChangesAsync();
+
+        await SendGiveawayAuditAsync(guildId,
+            $"🔄 **[AUDIT] Giveaway Pre-Selection Cleared**\n" +
+            $"**Giveaway:** {giveaway.Prize} (`{giveaway.Id}`)\n" +
+            $"**Previous winner:** <@{prevWinnerId}>\n" +
+            $"**Cleared by:** <@{requesterId}>\n" +
+            $"*Giveaway will now pick a random winner.*");
+
+        return (true, "Pre-selection cleared. Giveaway will pick a random winner.");
+    }
+
     public async Task EndGiveawayAsync(Giveaway giveaway)
     {
         if (giveaway.IsEnded) return;
 
-        var entries = await _repo.GetEntriesAsync(giveaway.Id);
-        var winners = PickWinners(entries, giveaway.WinnerCount);
+        List<ulong> winners;
+        bool wasPreSelected = giveaway.PreSelectedWinnerId.HasValue;
+
+        if (wasPreSelected)
+        {
+            // Pre-selected winner — bỏ qua random
+            winners = [giveaway.PreSelectedWinnerId!.Value];
+            _logger.LogInformation("Giveaway {Id} ended with pre-selected winner {WinnerId}",
+                giveaway.Id, giveaway.PreSelectedWinnerId);
+        }
+        else
+        {
+            // Random như bình thường
+            var entries = await _repo.GetEntriesAsync(giveaway.Id);
+            winners = PickWinners(entries, giveaway.WinnerCount);
+        }
 
         giveaway.IsEnded = true;
         giveaway.WinnerIds = string.Join(",", winners.Select(w => w.ToString()));
-
         await _repo.SaveChangesAsync();
 
         var guild = _client.GetGuild(giveaway.GuildId);
@@ -115,7 +187,6 @@ public class GiveawayService
 
         var winnerMentions = winners.Select(id => $"<@{id}>").ToList();
 
-        // Edit original message
         try
         {
             var msg = await channel.GetMessageAsync(giveaway.MessageId) as IUserMessage;
@@ -135,7 +206,6 @@ public class GiveawayService
             _logger.LogWarning(ex, "Could not edit giveaway message {MessageId}", giveaway.MessageId);
         }
 
-        // Announce winners
         if (winners.Count > 0)
         {
             var announce = $"🎉 Congratulations {string.Join(", ", winnerMentions)}! " +
@@ -147,8 +217,26 @@ public class GiveawayService
             await channel.SendMessageAsync($"😔 No one entered the giveaway for **{giveaway.Prize}**.");
         }
 
-        _logger.LogInformation("Ended giveaway {Id}, winners: {Winners}",
-            giveaway.Id, giveaway.WinnerIds ?? "none");
+        // Audit log khi end — ghi rõ nếu winner được pre-selected
+        var entryCount = await _repo.GetEntryCountAsync(giveaway.Id);
+        if (wasPreSelected)
+        {
+            await SendGiveawayAuditAsync(giveaway.GuildId,
+                $"✅ **[AUDIT] Giveaway Ended — Pre-Selected Winner**\n" +
+                $"**Giveaway:** {giveaway.Prize} (`{giveaway.Id}`)\n" +
+                $"**Winner:** {string.Join(", ", winnerMentions)}\n" +
+                $"**Pre-selected by:** <@{giveaway.PreSelectedBy}> at <t:{new DateTimeOffset(giveaway.PreSelectedAt!.Value).ToUnixTimeSeconds()}:F>\n" +
+                $"**Total entries:** {entryCount}\n" +
+                $"⚠️ *Winner was manually pre-selected, not randomly drawn.*");
+        }
+        else
+        {
+            await SendGiveawayAuditAsync(giveaway.GuildId,
+                $"✅ **[AUDIT] Giveaway Ended — Random Draw**\n" +
+                $"**Giveaway:** {giveaway.Prize} (`{giveaway.Id}`)\n" +
+                $"**Winner(s):** {(winners.Count > 0 ? string.Join(", ", winnerMentions) : "none")}\n" +
+                $"**Total entries:** {entryCount}");
+        }
     }
 
     public async Task<(bool success, string message)> RerollAsync(Guid giveawayId, ulong requesterId)
@@ -160,6 +248,7 @@ public class GiveawayService
         var entries = await _repo.GetEntriesAsync(giveaway.Id);
         if (entries.Count == 0) return (false, "No entries to reroll from.");
 
+        var prevWinners = giveaway.WinnerIds;
         var newWinners = PickWinners(entries, giveaway.WinnerCount);
         giveaway.WinnerIds = string.Join(",", newWinners.Select(w => w.ToString()));
         await _repo.SaveChangesAsync();
@@ -173,10 +262,18 @@ public class GiveawayService
                 $"🔄 **Reroll!** New winner(s) for **{giveaway.Prize}**: {string.Join(", ", mentions)}");
         }
 
+        // Audit log reroll
+        await SendGiveawayAuditAsync(giveaway.GuildId,
+            $"🔄 **[AUDIT] Giveaway Rerolled**\n" +
+            $"**Giveaway:** {giveaway.Prize} (`{giveaway.Id}`)\n" +
+            $"**Previous winners:** {prevWinners ?? "none"}\n" +
+            $"**New winners:** {giveaway.WinnerIds}\n" +
+            $"**Rerolled by:** <@{requesterId}>");
+
         return (true, "Rerolled successfully.");
     }
 
-    public async Task<bool> CancelAsync(Guid giveawayId)
+    public async Task<bool> CancelAsync(Guid giveawayId, ulong requesterId = 0)
     {
         var giveaway = await _repo.GetByIdAsync(giveawayId);
         if (giveaway is null || giveaway.IsEnded) return false;
@@ -208,6 +305,15 @@ public class GiveawayService
             }
         }
 
+        // Audit log cancel
+        if (requesterId != 0)
+        {
+            await SendGiveawayAuditAsync(giveaway.GuildId,
+                $"❌ **[AUDIT] Giveaway Cancelled**\n" +
+                $"**Giveaway:** {giveaway.Prize} (`{giveaway.Id}`)\n" +
+                $"**Cancelled by:** <@{requesterId}>");
+        }
+
         return true;
     }
 
@@ -231,10 +337,30 @@ public class GiveawayService
         }
     }
 
+    private async Task SendGiveawayAuditAsync(ulong guildId, string message)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var logService = scope.ServiceProvider.GetRequiredService<IServerLogService>();
+            var auditChannelId = await logService.GetLogChannelAsync(guildId, LogCategory.Audit);
+            if (auditChannelId is null) return;
+
+            var guild = _client.GetGuild(guildId);
+            var channel = guild?.GetTextChannel(auditChannelId.Value);
+            if (channel is null) return;
+
+            await channel.SendMessageAsync(message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send giveaway audit log for guild {GuildId}", guildId);
+        }
+    }
+
     private static List<ulong> PickWinners(List<GiveawayEntry> entries, int count)
     {
         if (entries.Count == 0) return [];
-
         var shuffled = entries.OrderBy(_ => _rng.Next()).ToList();
         return shuffled.Take(Math.Min(count, shuffled.Count))
                        .Select(e => e.UserId)
