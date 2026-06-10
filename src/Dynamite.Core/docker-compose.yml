@@ -1,0 +1,86 @@
+# docker-compose.yml
+name: dynamite-core
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: dynamite_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dynamite_net
+
+  bot:
+    build:
+      context: .
+      dockerfile: src/Dynamite.Bot/Dockerfile
+    container_name: dynamite_bot
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      Discord__Token: ${DISCORD_TOKEN}
+      Discord__TestGuildId: ${DISCORD_TEST_GUILD_ID}
+      ConnectionStrings__DefaultConnection: >
+        Host=postgres;Port=5432; Database=${POSTGRES_DB}; Username=${POSTGRES_USER}; Password=${POSTGRES_PASSWORD}
+    volumes:
+      - bot_logs:/app/logs
+    networks:
+      - dynamite_net
+
+  api:
+    build:
+      context: .
+      dockerfile: src/Dynamite.API/Dockerfile
+    container_name: dynamite_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5000
+      ConnectionStrings__DefaultConnection: >
+        Host=postgres;Port=5432; Database=${POSTGRES_DB}; Username=${POSTGRES_USER}; Password=${POSTGRES_PASSWORD}
+      Discord__ClientId: ${DISCORD_CLIENT_ID}
+      Discord__ClientSecret: ${DISCORD_CLIENT_SECRET}
+      Jwt__Secret: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+    ports:
+      - "${API_PORT:-5000}:5000"
+    networks:
+      - dynamite_net
+
+  dashboard:
+    build:
+      context: src/dynamite-dashboard
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:5000}
+    container_name: dynamite_dashboard
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-3000}:80"
+    networks:
+      - dynamite_net
+
+volumes:
+  postgres_data:
+  bot_logs:
+
+networks:
+  dynamite_net:
+    driver: bridge

@@ -1,0 +1,19 @@
+# docker-compose.override.yml
+# Dev overrides — tự động được load khi chạy `docker compose up`
+
+services:
+
+  postgres:
+    ports:
+      - "5432:5432" # Expose postgres ra host để dùng với EF migrations
+
+  api:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    # Hot reload không dùng được trong Docker dễ dàng
+    # Nên dev API thì chạy local, chỉ dùng Docker cho postgres
+
+  bot:
+    environment:
+      # Override sang Debug logging khi dev
+      Serilog__MinimumLevel__Default: Debug

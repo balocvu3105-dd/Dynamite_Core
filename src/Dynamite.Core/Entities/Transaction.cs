@@ -19,7 +19,7 @@ public class Transaction : BaseEntity
     public long Amount { get; set; }
     public TransactionType Type { get; set; }
     public string? Note { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public new DateTime CreatedAt { get; set; }
 
     public UserWallet? FromWallet { get; set; }
     public UserWallet? ToWallet { get; set; }

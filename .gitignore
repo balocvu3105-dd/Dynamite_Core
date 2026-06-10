@@ -490,3 +490,5 @@ logs/
 # Secrets
 appsettings.json
 logs/
+
+docker-compose.override.local.yml

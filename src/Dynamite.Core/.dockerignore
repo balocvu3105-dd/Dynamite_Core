@@ -1,0 +1,16 @@
+# .dockerignore
+**/.git
+**/.gitignore
+**/bin
+**/obj
+**/*.user
+**/.vs
+**/node_modules
+**/dist
+**/.env
+**/logs
+**/appsettings.Development.json
+**/appsettings.*.json
+!**/appsettings.json
+README.md
+docker-compose*.yml
