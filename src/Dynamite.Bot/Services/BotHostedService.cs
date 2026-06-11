@@ -30,6 +30,8 @@ public class BotHostedService : IHostedService
     private readonly BotStatusProvider _statusProvider;
     private readonly ILogger<BotHostedService> _logger;
 
+    private bool _modulesLoaded = false;
+
     private static readonly IReadOnlyList<Assembly> ModuleAssemblies =
     [
         Assembly.GetExecutingAssembly(),
@@ -148,11 +150,15 @@ public class BotHostedService : IHostedService
 
     private async Task OnReadyAsync()
     {
-        var distinct = ModuleAssemblies.Distinct();
-        foreach (var assembly in distinct)
+        if (!_modulesLoaded)
         {
-            await _interactions.AddModulesAsync(assembly, _services);
-            _logger.LogDebug("Loaded interaction modules from {Assembly}", assembly.GetName().Name);
+            var distinct = ModuleAssemblies.Distinct();
+            foreach (var assembly in distinct)
+            {
+                await _interactions.AddModulesAsync(assembly, _services);
+                _logger.LogDebug("Loaded interaction modules from {Assembly}", assembly.GetName().Name);
+            }
+            _modulesLoaded = true;
         }
 
         _services.GetRequiredService<LoggingEventHandler>().Subscribe();
@@ -162,10 +168,14 @@ public class BotHostedService : IHostedService
         await _presenceSync.SyncOnReadyAsync(_client);
 
 #if DEBUG
-        await _interactions.RegisterCommandsToGuildAsync(_settings.TestGuildId);
+        var guild = _client.GetGuild(_settings.TestGuildId);
+        await guild.DeleteApplicationCommandsAsync();
+        _logger.LogInformation("Cleared all guild commands for {GuildId}", _settings.TestGuildId);
+
+        await _interactions.RegisterCommandsToGuildAsync(_settings.TestGuildId, true);
         _logger.LogInformation("Commands registered to test guild {GuildId}", _settings.TestGuildId);
 #else
-        await _interactions.RegisterCommandsGloballyAsync();
+        await _interactions.RegisterCommandsGloballyAsync(true);
         _logger.LogInformation("Commands registered globally");
 #endif
 
@@ -198,7 +208,6 @@ public class BotHostedService : IHostedService
     {
         var customId = interaction.Data.CustomId;
 
-        // Verify button — dedicated handler
         if (customId == VerifyInteractionService.VerifyButtonId)
         {
             var verifyService = _services.GetRequiredService<VerifyInteractionService>();
@@ -206,7 +215,6 @@ public class BotHostedService : IHostedService
             return;
         }
 
-        // Giveaway enter button
         if (customId == Dynamite.Modules.Giveaway.Helpers.GiveawayEmbedBuilder.EnterButtonId)
         {
             var giveawayService = _services.GetRequiredService<GiveawayInteractionService>();
@@ -214,7 +222,6 @@ public class BotHostedService : IHostedService
             return;
         }
 
-        // Ticket buttons (open / close / delete)
         if (customId == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.OpenButtonId  ||
             customId == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.CloseButtonId ||
             customId == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.DeleteButtonId)
@@ -224,7 +231,6 @@ public class BotHostedService : IHostedService
             return;
         }
 
-        // RolePanel buttons — fallthrough
         var rolePanelService = _services.GetRequiredService<RolePanelInteractionService>();
         await rolePanelService.HandleButtonAsync(interaction);
     }
@@ -237,8 +243,6 @@ public class BotHostedService : IHostedService
 
     private async Task OnModalSubmittedAsync(SocketModal modal)
     {
-        // Modal interactions đi thẳng qua InteractionService
-        // (RolePanelModule modal handler dùng [ModalInteraction] attribute — Discord.Net route tự động)
         using var scope = _services.CreateScope();
         var ctx = new SocketInteractionContext(_client, modal);
         await _interactions.ExecuteCommandAsync(ctx, scope.ServiceProvider);
@@ -246,60 +250,82 @@ public class BotHostedService : IHostedService
 
     private async Task OnInteractionCreatedAsync(SocketInteraction interaction)
     {
-        // Skip các interaction đã có dedicated handlers
-        if (interaction is SocketMessageComponent component)
-        {
-            var id = component.Data.CustomId;
-            if (id == VerifyInteractionService.VerifyButtonId) return;
-            if (id == Dynamite.Modules.Giveaway.Helpers.GiveawayEmbedBuilder.EnterButtonId) return;
-            if (id == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.OpenButtonId)  return;
-            if (id == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.CloseButtonId) return;
-            if (id == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.DeleteButtonId) return;
-            return;
-        }
-
+        // ButtonExecuted / SelectMenuExecuted / ModalSubmitted đã có dedicated handlers
+        if (interaction is SocketMessageComponent) return;
         if (interaction is SocketModal) return;
 
-        using var scope = _services.CreateScope();
-        var ctx = new SocketInteractionContext(_client, interaction);
-        await _interactions.ExecuteCommandAsync(ctx, scope.ServiceProvider);
+        try
+        {
+            using var scope = _services.CreateScope();
+            var ctx = new SocketInteractionContext(_client, interaction);
+            var result = await _interactions.ExecuteCommandAsync(ctx, scope.ServiceProvider);
+            if (!result.IsSuccess)
+                _logger.LogError("ExecuteCommandAsync failed: {Error} — {Reason}", result.Error, result.ErrorReason);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "OnInteractionCreatedAsync threw for interaction type {Type}", interaction.GetType().Name);
+        }
     }
 
     private Task OnInteractionExecutedAsync(
         ICommandInfo? command, IInteractionContext context, IResult result)
     {
-        if (!result.IsSuccess)
+        if (result.IsSuccess) return Task.CompletedTask;
+
+        _logger.LogError("Interaction failed — Error: {Error} | Reason: {Reason} | Command: {Command}",
+            result.Error, result.ErrorReason, command?.Name ?? "unknown");
+
+        // Respond to user với error message — bắt buộc để tránh "Ứng dụng không phản hồi"
+        _ = Task.Run(async () =>
         {
-            _logger.LogError("Interaction failed — Error: {Error} | Reason: {Reason} | Command: {Command}",
-                result.Error, result.ErrorReason, command?.Name ?? "unknown");
-
-            _ = Task.Run(async () =>
+            try
             {
-                try
+                var errorMessage = result.Error switch
                 {
-                    if (context.Guild is null) return;
-                    using var scope = _services.CreateScope();
-                    var logService = scope.ServiceProvider.GetRequiredService<IServerLogService>();
-                    var auditChannelId = await logService.GetLogChannelAsync(context.Guild.Id, LogCategory.Audit);
-                    if (auditChannelId is null) return;
+                    InteractionCommandError.UnmetPrecondition => $"❌ {result.ErrorReason}",
+                    InteractionCommandError.BadArgs           => "❌ Invalid arguments provided.",
+                    InteractionCommandError.Exception         => "❌ An unexpected error occurred.",
+                    _                                         => $"❌ Command failed: {result.ErrorReason}"
+                };
 
-                    var guild = _client.GetGuild(context.Guild.Id);
-                    var channel = guild?.GetTextChannel(auditChannelId.Value);
-                    if (channel is null) return;
+                // Cố respond — nếu đã deferred thì dùng FollowupAsync, nếu chưa thì RespondAsync
+                if (context.Interaction.HasResponded)
+                    await context.Interaction.FollowupAsync(errorMessage, ephemeral: true);
+                else
+                    await context.Interaction.RespondAsync(errorMessage, ephemeral: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send error response to user");
+            }
 
-                    var embed = LogEmbedHelper.BotError(
-                        command?.Name ?? "unknown",
-                        result.Error?.ToString() ?? "Unknown",
-                        result.ErrorReason);
+            // Gửi lên audit log nếu có
+            try
+            {
+                if (context.Guild is null) return;
+                using var scope = _services.CreateScope();
+                var logService = scope.ServiceProvider.GetRequiredService<IServerLogService>();
+                var auditChannelId = await logService.GetLogChannelAsync(context.Guild.Id, LogCategory.Audit);
+                if (auditChannelId is null) return;
 
-                    await channel.SendMessageAsync(embed: embed);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to send error to audit log");
-                }
-            });
-        }
+                var guild = _client.GetGuild(context.Guild.Id);
+                var channel = guild?.GetTextChannel(auditChannelId.Value);
+                if (channel is null) return;
+
+                var embed = LogEmbedHelper.BotError(
+                    command?.Name ?? "unknown",
+                    result.Error?.ToString() ?? "Unknown",
+                    result.ErrorReason);
+
+                await channel.SendMessageAsync(embed: embed);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send error to audit log");
+            }
+        });
+
         return Task.CompletedTask;
     }
 
