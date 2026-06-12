@@ -13,7 +13,7 @@ public static class GiveawayEmbedBuilder
         var timeLeft = giveaway.EndsAt - DateTime.UtcNow;
         var timeStr = FormatTimeLeft(timeLeft);
 
-        return new EmbedBuilder()
+        var builder = new EmbedBuilder()
             .WithTitle("🎉 GIVEAWAY")
             .WithDescription(
                 $"**Prize:** {giveaway.Prize}\n" +
@@ -24,8 +24,14 @@ public static class GiveawayEmbedBuilder
             .AddField("🏆 Winners", giveaway.WinnerCount.ToString(), inline: true)
             .AddField("🎟️ Entries", entryCount.ToString(), inline: true)
             .WithFooter($"Ends at • Hosted by {giveaway.HostId}")
-            .WithTimestamp(giveaway.EndsAt)
-            .Build();
+            .WithTimestamp(giveaway.EndsAt);
+
+        // Hiện điều kiện tham gia ngay trên embed để member biết trước
+        if (giveaway.MinJoinDays > 0)
+            builder.AddField("📋 Requirement",
+                $"Must be in this server for **{giveaway.MinJoinDays}+ days**", inline: false);
+
+        return builder.Build();
     }
 
     public static Embed BuildEndedEmbed(Giveaway giveaway, List<string> winnerMentions)

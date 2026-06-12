@@ -12,4 +12,7 @@ public interface IRolePanelRepository : IRepository<RolePanel>
 
     // Lookup item cụ thể từ custom_id
     Task<RolePanelItem?> GetItemByIdAsync(Guid itemId, CancellationToken ct = default);
+
+    // Lookup panel (kèm toàn bộ Items) từ một itemId — dùng để enforce MaxRoles
+    Task<RolePanel?> GetPanelByItemIdAsync(Guid itemId, CancellationToken ct = default);
 }

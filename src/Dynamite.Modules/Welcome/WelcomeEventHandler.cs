@@ -57,30 +57,37 @@ public class WelcomeEventHandler
             return;
         }
 
-        // Resolve placeholder trong custom message
-        var message = ResolveMessage(
-            config.WelcomeMessage ?? DefaultMessage,
-            user.DisplayName,
-            user.Guild.Name);
-
         var memberCount = user.Guild.MemberCount;
         var avatarUrl = user.GetAvatarUrl(ImageFormat.Png, 256)
                        ?? user.GetDefaultAvatarUrl();
 
-        // Build embed
+        // Resolve placeholders trong message / title / footer tùy chỉnh
+        string Resolve(string template) => ResolveMessage(
+            template, user.DisplayName, user.Guild.Name, memberCount);
+
+        var message = Resolve(config.WelcomeMessage ?? DefaultMessage);
+
         var embed = WelcomeEmbeds.WelcomeMessage(
             user.ToString() ?? user.Username,
             user.Id,
             user.Guild.Name,
             memberCount,
-            message);
+            message,
+            avatarUrl,
+            config.WelcomeEmbedTitle is not null ? Resolve(config.WelcomeEmbedTitle) : null,
+            config.WelcomeEmbedColor,
+            config.WelcomeEmbedFooter is not null ? Resolve(config.WelcomeEmbedFooter) : null);
 
-        // Generate welcome image
-        var imageStream = await _imageGenerator.GenerateAsync(
-            user.DisplayName,
-            user.Guild.Name,
-            memberCount,
-            avatarUrl);
+        // Generate welcome image — chỉ khi được bật
+        Stream? imageStream = null;
+        if (config.WelcomeImageEnabled)
+        {
+            imageStream = await _imageGenerator.GenerateAsync(
+                user.DisplayName,
+                user.Guild.Name,
+                memberCount,
+                avatarUrl);
+        }
 
         try
         {
@@ -108,11 +115,12 @@ public class WelcomeEventHandler
     }
 
     // Hỗ trợ placeholders: {user}, {server}, {count}
-    private static string ResolveMessage(string template, string username, string guildName)
+    private static string ResolveMessage(
+        string template, string username, string guildName, int memberCount)
         => template
             .Replace("{user}", username)
             .Replace("{server}", guildName)
-            .Replace("{count}", "");
+            .Replace("{count}", memberCount.ToString());
 
     private Task SafeRun(Func<Task> handler)
     {

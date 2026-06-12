@@ -28,4 +28,10 @@ public class RolePanelRepository : BaseRepository<RolePanel>, IRolePanelReposito
         Guid itemId, CancellationToken ct = default)
         => await Context.Set<RolePanelItem>()
             .FirstOrDefaultAsync(i => i.Id == itemId, ct);
+
+    public async Task<RolePanel?> GetPanelByItemIdAsync(
+        Guid itemId, CancellationToken ct = default)
+        => await DbSet
+            .Include(p => p.Items)
+            .FirstOrDefaultAsync(p => p.Items.Any(i => i.Id == itemId), ct);
 }

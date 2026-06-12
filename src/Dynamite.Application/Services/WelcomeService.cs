@@ -81,6 +81,45 @@ public class WelcomeService : IWelcomeService
         return (config.VerifyRoleId, true);
     }
 
+    public async Task SetEmbedStyleAsync(
+        ulong guildId, string guildName,
+        string? title, string? colorHex, string? footer, CancellationToken ct = default)
+    {
+        var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
+        config.WelcomeEmbedTitle = string.IsNullOrWhiteSpace(title) ? null : title;
+        config.WelcomeEmbedColor = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex;
+        config.WelcomeEmbedFooter = string.IsNullOrWhiteSpace(footer) ? null : footer;
+        await SaveAsync(config, ct);
+        _logger.LogInformation("Welcome embed style updated for guild {GuildId}", guildId);
+    }
+
+    public async Task SetImageEnabledAsync(
+        ulong guildId, string guildName,
+        bool enabled, CancellationToken ct = default)
+    {
+        var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
+        config.WelcomeImageEnabled = enabled;
+        await SaveAsync(config, ct);
+    }
+
+    public async Task SetVerifyRemoveRoleAsync(
+        ulong guildId, string guildName,
+        ulong? roleId, CancellationToken ct = default)
+    {
+        var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
+        config.VerifyRemoveRoleId = roleId;
+        await SaveAsync(config, ct);
+        _logger.LogInformation("Verify remove-role set to {RoleId} for guild {GuildId}",
+            roleId?.ToString() ?? "none", guildId);
+    }
+
+    public async Task<ulong?> GetVerifyRemoveRoleAsync(
+        ulong guildId, CancellationToken ct = default)
+    {
+        var config = await _guildConfigRepo.GetByGuildIdAsync(guildId, ct);
+        return config?.VerifyRemoveRoleId;
+    }
+
     private async Task SaveAsync(GuildConfig config, CancellationToken ct)
     {
         config.UpdatedAt = DateTime.UtcNow;

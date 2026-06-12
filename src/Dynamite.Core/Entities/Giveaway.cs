@@ -15,6 +15,15 @@ public class Giveaway : BaseEntity
     public bool IsCancelled { get; set; } = false;
     // Comma-separated winner user IDs (sau khi end)
     public string? WinnerIds { get; set; }
+
+    // Role được tag khi đăng giveaway — chỉ ai có role này được thông báo. Null = không tag.
+    public ulong? PingRoleId { get; set; }
+
+    // Điều kiện tham gia: số ngày tối thiểu phải ở trong server. 0 = không yêu cầu.
+    public int MinJoinDays { get; set; } = 0;
+
+    // Nội dung DM gửi người trúng để hướng dẫn nhận thưởng. Null = dùng mẫu mặc định.
+    public string? ClaimMessage { get; set; }
     // Pre-selection — Server Owner có thể chỉ định winner trước khi hết giờ
     // Nếu được set, timer sẽ announce người này thay vì random
     public ulong? PreSelectedWinnerId { get; set; }

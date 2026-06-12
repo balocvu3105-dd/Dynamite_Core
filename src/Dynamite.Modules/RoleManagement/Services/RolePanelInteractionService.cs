@@ -65,11 +65,28 @@ public class RolePanelInteractionService
         var guildUser = interaction.User as IGuildUser;
         if (guildUser is null) return;
 
+        // Load panel MỘT lần (kèm toàn bộ items) — vừa đỡ query lặp,
+        // vừa cần để enforce MaxRoles trên tổng role của panel
+        var panel = selectedIds.Count > 0
+            ? await panelService.GetPanelByItemAsync(selectedIds[0])
+            : null;
+        if (panel is null)
+        {
+            await interaction.FollowupAsync(
+                embed: RoleManagementEmbeds.Error("Not Found",
+                    "This panel no longer exists. Please ask an admin to recreate it."),
+                ephemeral: true);
+            return;
+        }
+
+        // Đếm số role thuộc panel này mà user ĐANG giữ — cập nhật dần trong vòng lặp
+        var heldCount = panel.Items.Count(i => guildUser.RoleIds.Contains(i.RoleId));
+
         var results = new List<string>();
 
         foreach (var itemId in selectedIds)
         {
-            var item = await panelService.GetItemAsync(itemId);
+            var item = panel.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is null) continue;
 
             var hasRole = guildUser.RoleIds.Contains(item.RoleId);
@@ -78,11 +95,17 @@ public class RolePanelInteractionService
                 if (hasRole)
                 {
                     await guildUser.RemoveRoleAsync(item.RoleId);
+                    heldCount--;
                     results.Add($"✖ Removed **{item.Label}**");
+                }
+                else if (panel.MaxRoles > 0 && heldCount >= panel.MaxRoles)
+                {
+                    results.Add($"⚠ **{item.Label}** skipped — limit is {panel.MaxRoles} role(s) from this panel. Remove one first.");
                 }
                 else
                 {
                     await guildUser.AddRoleAsync(item.RoleId);
+                    heldCount++;
                     results.Add($"✔ Added **{item.Label}**");
                 }
             }
@@ -110,8 +133,10 @@ public class RolePanelInteractionService
         using var scope = _scopeFactory.CreateScope();
         var panelService = scope.ServiceProvider.GetRequiredService<IRolePanelService>();
 
-        var item = await panelService.GetItemAsync(itemId);
-        if (item is null)
+        // Load panel kèm items — cần để enforce MaxRoles
+        var panel = await panelService.GetPanelByItemAsync(itemId);
+        var item = panel?.Items.FirstOrDefault(i => i.Id == itemId);
+        if (panel is null || item is null)
         {
             await interaction.FollowupAsync(
                 embed: RoleManagementEmbeds.Error("Not Found",
@@ -136,6 +161,21 @@ public class RolePanelInteractionService
             }
             else
             {
+                // Enforce MaxRoles: đang giữ đủ số role từ panel này → từ chối
+                if (panel.MaxRoles > 0)
+                {
+                    var heldCount = panel.Items.Count(i => guildUser.RoleIds.Contains(i.RoleId));
+                    if (heldCount >= panel.MaxRoles)
+                    {
+                        await interaction.FollowupAsync(
+                            embed: RoleManagementEmbeds.Warn("Limit Reached",
+                                $"You can only hold **{panel.MaxRoles}** role(s) from this panel. " +
+                                "Remove one first by clicking its button."),
+                            ephemeral: true);
+                        return;
+                    }
+                }
+
                 await guildUser.AddRoleAsync(item.RoleId);
                 await interaction.FollowupAsync(
                     embed: RoleManagementEmbeds.Success("Role Added", $"**{item.Label}** has been assigned."),

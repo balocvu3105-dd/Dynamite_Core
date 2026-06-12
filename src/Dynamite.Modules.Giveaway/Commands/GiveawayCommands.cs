@@ -25,7 +25,12 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
         [Summary("duration", "Duration (e.g. 1h, 30m, 1d)")] string duration,
         [Summary("winners", "Number of winners")] int winners = 1,
         [Summary("channel", "Channel to host giveaway (default: current)")] ITextChannel? channel = null,
-        [Summary("description", "Optional description")] string? description = null)
+        [Summary("description", "Optional description")] string? description = null,
+        [Summary("ping_role", "Role to ping when the giveaway is posted")] IRole? pingRole = null,
+        [Summary("min_days", "Require members to be in the server at least N days (0 = anyone)")]
+        [MinValue(0)] [MaxValue(3650)] int minDays = 0,
+        [Summary("claim_message", "Custom DM sent to winners with claim instructions")]
+        [MaxLength(1024)] string? claimMessage = null)
     {
         await DeferAsync(ephemeral: true);
 
@@ -53,7 +58,8 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
         {
             var giveaway = await _service.CreateAsync(
                 Context.Guild.Id, targetChannel.Id, Context.User.Id,
-                prize, description, winners, span);
+                prize, description, winners, span,
+                pingRole?.Id, minDays, claimMessage);
 
             await FollowupAsync(
                 $"✅ Giveaway started in {targetChannel.Mention}! Ends <t:{new DateTimeOffset(giveaway.EndsAt).ToUnixTimeSeconds()}:R>",

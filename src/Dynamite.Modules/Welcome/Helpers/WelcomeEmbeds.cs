@@ -13,18 +13,39 @@ public static class WelcomeEmbeds
     public static Embed WelcomeMessage(
         string username, ulong userId,
         string guildName, int memberCount,
-        string customMessage)
+        string customMessage,
+        string? avatarUrl = null,
+        string? customTitle = null,
+        string? customColorHex = null,
+        string? customFooter = null)
     {
-        return new EmbedBuilder()
-            .WithTitle($"Welcome to {guildName}!")
+        var builder = new EmbedBuilder()
+            .WithTitle(customTitle ?? $"Welcome to {guildName}!")
             .WithDescription(customMessage)
-            .WithColor(WelcomeColor)
-            .WithThumbnailUrl($"https://cdn.discordapp.com/avatars/{userId}/")
+            .WithColor(ParseColor(customColorHex) ?? WelcomeColor)
             .AddField("Member", $"<@{userId}>", inline: true)
             .AddField("Member Count", $"#{memberCount}", inline: true)
-            .WithFooter($"User ID: {userId}")
-            .WithTimestamp(DateTimeOffset.UtcNow)
-            .Build();
+            .WithFooter(customFooter ?? $"User ID: {userId}")
+            .WithTimestamp(DateTimeOffset.UtcNow);
+
+        if (avatarUrl is not null)
+            builder.WithThumbnailUrl(avatarUrl);
+
+        return builder.Build();
+    }
+
+    // Parse "#57F287" hoặc "57F287" → Color. Sai format → null (dùng mặc định).
+    public static Color? ParseColor(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return null;
+
+        var cleaned = hex.TrimStart('#');
+        if (cleaned.Length != 6) return null;
+
+        return uint.TryParse(cleaned,
+            System.Globalization.NumberStyles.HexNumber, null, out var value)
+            ? new Color(value)
+            : null;
     }
 
     public static Embed VerifyPanel(string guildName)

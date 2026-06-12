@@ -34,6 +34,12 @@ public class GiveawayConfiguration : IEntityTypeConfiguration<Giveaway>
         builder.Property(g => g.WinnerIds)
             .HasMaxLength(512);
 
+        builder.Property(g => g.PingRoleId)
+            .HasConversion<long?>();
+
+        builder.Property(g => g.ClaimMessage)
+            .HasMaxLength(1024);
+
         builder.HasMany(g => g.Entries)
             .WithOne(e => e.Giveaway)
             .HasForeignKey(e => e.GiveawayId)

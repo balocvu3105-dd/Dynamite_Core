@@ -25,6 +25,7 @@ public class RolePanelService : IRolePanelService
         string title, string? description,
         RolePanelType panelType,
         IEnumerable<RolePanelItemDto> items,
+        int maxRoles = 0,
         CancellationToken ct = default)
     {
         var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
@@ -36,6 +37,7 @@ public class RolePanelService : IRolePanelService
             Title = title,
             Description = description,
             PanelType = panelType,
+            MaxRoles = maxRoles < 0 ? 0 : maxRoles,
             GuildConfigId = config.Id,
             Items = items.Select(dto => new RolePanelItem
             {
@@ -74,4 +76,8 @@ public class RolePanelService : IRolePanelService
     public async Task<RolePanelItem?> GetItemAsync(
         Guid itemId, CancellationToken ct = default)
         => await _panelRepo.GetItemByIdAsync(itemId, ct);
+
+    public async Task<RolePanel?> GetPanelByItemAsync(
+        Guid itemId, CancellationToken ct = default)
+        => await _panelRepo.GetPanelByItemIdAsync(itemId, ct);
 }

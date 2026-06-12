@@ -34,7 +34,8 @@ public class GiveawayService
 
     public async Task<Giveaway> CreateAsync(
         ulong guildId, ulong channelId, ulong hostId,
-        string prize, string? description, int winnerCount, TimeSpan duration)
+        string prize, string? description, int winnerCount, TimeSpan duration,
+        ulong? pingRoleId = null, int minJoinDays = 0, string? claimMessage = null)
     {
         var channel = _client.GetGuild(guildId)?.GetTextChannel(channelId)
             ?? throw new InvalidOperationException("Channel not found.");
@@ -49,12 +50,27 @@ public class GiveawayService
             WinnerCount = winnerCount,
             StartsAt = DateTime.UtcNow,
             EndsAt = DateTime.UtcNow.Add(duration),
-            MessageId = 0
+            MessageId = 0,
+            PingRoleId = pingRoleId,
+            MinJoinDays = minJoinDays < 0 ? 0 : minJoinDays,
+            ClaimMessage = string.IsNullOrWhiteSpace(claimMessage) ? null : claimMessage
         };
 
         var embed = GiveawayEmbedBuilder.BuildActiveEmbed(giveaway, 0);
         var components = GiveawayEmbedBuilder.BuildEnterButton().Build();
-        var message = await channel.SendMessageAsync(embed: embed, components: components);
+
+        // Tag role trong CONTENT (mention trong embed không ping được).
+        // AllowedMentions chỉ định đúng role này — tránh ping lố.
+        string? content = null;
+        AllowedMentions? mentions = null;
+        if (pingRoleId is not null)
+        {
+            content = $"<@&{pingRoleId.Value}>";
+            mentions = new AllowedMentions { RoleIds = [pingRoleId.Value] };
+        }
+
+        var message = await channel.SendMessageAsync(
+            text: content, embed: embed, components: components, allowedMentions: mentions);
 
         giveaway.MessageId = message.Id;
         await _repo.AddAsync(giveaway);
@@ -77,6 +93,36 @@ public class GiveawayService
 
         if (await _repo.HasEnteredAsync(giveaway.Id, userId))
             return (false, "You have already entered this giveaway!");
+
+        // Điều kiện tham gia: phải ở trong server đủ MinJoinDays ngày
+        if (giveaway.MinJoinDays > 0)
+        {
+            var member = _client.GetGuild(guildId)?.GetUser(userId);
+            var joinedAt = member?.JoinedAt;
+
+            // Cache miss — thử REST trước khi kết luận
+            if (joinedAt is null)
+            {
+                try
+                {
+                    var restMember = await _client.Rest.GetGuildUserAsync(guildId, userId);
+                    joinedAt = restMember?.JoinedAt;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not fetch JoinedAt for user {UserId}", userId);
+                }
+            }
+
+            if (joinedAt is null)
+                return (false, "Could not verify your join date. Please try again later.");
+
+            var daysInServer = (DateTimeOffset.UtcNow - joinedAt.Value).TotalDays;
+            if (daysInServer < giveaway.MinJoinDays)
+                return (false,
+                    $"❌ You don't meet the requirement: you must be in this server for " +
+                    $"**{giveaway.MinJoinDays} days** to enter. You've been here **{(int)daysInServer} day(s)**.");
+        }
 
         var entry = new GiveawayEntry
         {
@@ -211,6 +257,16 @@ public class GiveawayService
             var announce = $"🎉 Congratulations {string.Join(", ", winnerMentions)}! " +
                            $"You won **{giveaway.Prize}**!";
             await channel.SendMessageAsync(announce);
+
+            // DM riêng từng người trúng — hướng dẫn nhận thưởng
+            var failedDms = await DmWinnersAsync(guild!, giveaway, winners);
+            if (failedDms.Count > 0)
+            {
+                await channel.SendMessageAsync(
+                    $"⚠️ Could not DM {string.Join(", ", failedDms.Select(id => $"<@{id}>"))} " +
+                    "— please open your DMs and contact the staff to claim your reward.",
+                    allowedMentions: AllowedMentions.None);
+            }
         }
         else
         {
@@ -315,6 +371,48 @@ public class GiveawayService
         }
 
         return true;
+    }
+
+    // DM từng winner: chúc mừng + hướng dẫn nhận thưởng (ClaimMessage tùy chỉnh).
+    // Trả về danh sách userId DM thất bại (đóng DM / chặn bot) để announce nhắc.
+    private async Task<List<ulong>> DmWinnersAsync(
+        SocketGuild guild, Giveaway giveaway, List<ulong> winners)
+    {
+        var failed = new List<ulong>();
+
+        var claimText = giveaway.ClaimMessage
+            ?? "Please contact the server staff to claim your reward.";
+
+        var embed = new EmbedBuilder()
+            .WithTitle("🎉 You won a giveaway!")
+            .WithDescription(
+                $"Congratulations! You won **{giveaway.Prize}** in **{guild.Name}**!\n\n" +
+                $"**How to claim your reward:**\n{claimText}")
+            .WithColor(new Color(0xF5A623))
+            .WithFooter(guild.Name)
+            .WithTimestamp(DateTimeOffset.UtcNow)
+            .Build();
+
+        foreach (var winnerId in winners)
+        {
+            try
+            {
+                var user = guild.GetUser(winnerId)
+                    ?? (IUser?)await _client.Rest.GetUserAsync(winnerId);
+                if (user is null) { failed.Add(winnerId); continue; }
+
+                var dm = await user.CreateDMChannelAsync();
+                await dm.SendMessageAsync(embed: embed);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation(ex,
+                    "Could not DM giveaway winner {UserId} for giveaway {Id}", winnerId, giveaway.Id);
+                failed.Add(winnerId);
+            }
+        }
+
+        return failed;
     }
 
     private async Task UpdateEmbedAsync(Giveaway giveaway, int entryCount)

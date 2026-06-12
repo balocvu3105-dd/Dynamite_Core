@@ -31,6 +31,10 @@ public class RolePanelBuilder
         if (panel.Description is not null)
             builder.WithDescription(panel.Description);
 
+        // Cho member biết giới hạn ngay trên panel
+        if (panel.MaxRoles > 0)
+            builder.WithFooter($"Tối đa {panel.MaxRoles} role từ panel này");
+
         return builder.Build();
     }
 

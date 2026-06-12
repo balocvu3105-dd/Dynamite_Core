@@ -10,11 +10,13 @@ public interface IRolePanelService
         string title, string? description,
         RolePanelType panelType,
         IEnumerable<RolePanelItemDto> items,
+        int maxRoles = 0,
         CancellationToken ct = default);
     Task UpdateMessageIdAsync(Guid panelId, ulong messageId, CancellationToken ct = default);
     Task DeletePanelAsync(Guid panelId, CancellationToken ct = default);
     Task<IEnumerable<RolePanel>> GetPanelsAsync(ulong guildId, CancellationToken ct = default);
     Task<RolePanelItem?> GetItemAsync(Guid itemId, CancellationToken ct = default);
+    Task<RolePanel?> GetPanelByItemAsync(Guid itemId, CancellationToken ct = default);
 }
 // DTO để truyền item data từ module xuống service
 // Không expose Discord types vào Application layer

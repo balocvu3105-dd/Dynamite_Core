@@ -46,8 +46,25 @@ public class GuildConfigConfiguration : IEntityTypeConfiguration<GuildConfig>
         builder.Property(g => g.VerifyRoleId)
             .HasConversion<long?>();
 
+        builder.Property(g => g.VerifyRemoveRoleId)
+            .HasConversion<long?>();
+
         builder.Property(g => g.WelcomeMessage)
             .HasMaxLength(500);
+
+        builder.Property(g => g.WelcomeEmbedTitle)
+            .HasMaxLength(256);
+
+        builder.Property(g => g.WelcomeEmbedColor)
+            .HasMaxLength(16);
+
+        builder.Property(g => g.WelcomeEmbedFooter)
+            .HasMaxLength(256);
+
+        // Default TRUE ở DB level — nếu không, migration sẽ set false
+        // cho mọi guild hiện có → ảnh welcome đột nhiên biến mất
+        builder.Property(g => g.WelcomeImageEnabled)
+            .HasDefaultValue(true);
 
         builder.HasMany(g => g.Warnings)
             .WithOne(w => w.GuildConfig)

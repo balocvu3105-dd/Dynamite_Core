@@ -59,6 +59,25 @@ public class VerifyInteractionService
         {
             await guildUser.AddRoleAsync(roleId.Value);
 
+            // Thu hồi role cũ (vd: role "khách") nếu được cấu hình.
+            // Gỡ SAU khi gán role mới để user không bao giờ rơi vào trạng thái
+            // không có role nào → mất quyền xem channel giữa chừng.
+            // Lỗi ở bước gỡ không được làm hỏng verify — chỉ log warning.
+            var removeRoleId = await welcomeService.GetVerifyRemoveRoleAsync(guildUser.Guild.Id);
+            if (removeRoleId is not null && guildUser.Roles.Any(r => r.Id == removeRoleId.Value))
+            {
+                try
+                {
+                    await guildUser.RemoveRoleAsync(removeRoleId.Value);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "Verified user {UserId} but failed to remove role {RoleId} in guild {GuildId}",
+                        guildUser.Id, removeRoleId.Value, guildUser.Guild.Id);
+                }
+            }
+
             await interaction.FollowupAsync(
                 embed: WelcomeEmbeds.Success(
                     "✅ Verified!",

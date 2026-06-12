@@ -91,4 +91,46 @@ public class VerifyConfigModule : InteractionModuleBase<SocketInteractionContext
             "Verify Role Set",
             $"{role.Mention} will be given to members after they verify."), ephemeral: true);
     }
+
+    [SlashCommand("set-remove-role", "Set a role to be REMOVED after a member verifies (e.g. guest role)")]
+    public async Task SetRemoveRoleAsync(
+        [Summary("role", "Role to remove after verify — leave empty to disable")] IRole? role = null)
+    {
+        await DeferAsync(ephemeral: true);
+
+        if (role is null)
+        {
+            await _welcomeService.SetVerifyRemoveRoleAsync(
+                Context.Guild.Id, Context.Guild.Name, null);
+
+            await FollowupAsync(embed: WelcomeEmbeds.Success(
+                "Remove-Role Disabled",
+                "No role will be removed after verification."), ephemeral: true);
+            return;
+        }
+
+        var botUser = Context.Guild.CurrentUser;
+        if (botUser.Hierarchy <= role.Position)
+        {
+            await FollowupAsync(embed: WelcomeEmbeds.Error(
+                "Role Too High",
+                $"My highest role must be above {role.Mention} to remove it."), ephemeral: true);
+            return;
+        }
+
+        if (role.Id == Context.Guild.EveryoneRole.Id)
+        {
+            await FollowupAsync(embed: WelcomeEmbeds.Error(
+                "Invalid Role",
+                "Cannot use @everyone as the remove role."), ephemeral: true);
+            return;
+        }
+
+        await _welcomeService.SetVerifyRemoveRoleAsync(
+            Context.Guild.Id, Context.Guild.Name, role.Id);
+
+        await FollowupAsync(embed: WelcomeEmbeds.Success(
+            "Remove-Role Set",
+            $"{role.Mention} will be removed from members after they verify."), ephemeral: true);
+    }
 }

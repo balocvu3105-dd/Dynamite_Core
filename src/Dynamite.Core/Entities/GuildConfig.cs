@@ -19,8 +19,15 @@ public class GuildConfig : BaseEntity
     // Welcome + Verify (Phase 7)
     public ulong? WelcomeChannelId { get; set; }
     public string? WelcomeMessage { get; set; }
+    // Welcome embed tùy biến — null = dùng mặc định
+    public string? WelcomeEmbedTitle { get; set; }   // hỗ trợ {user} {server} {count}
+    public string? WelcomeEmbedColor { get; set; }   // hex, vd "#57F287"
+    public string? WelcomeEmbedFooter { get; set; }  // hỗ trợ {user} {server} {count}
+    public bool WelcomeImageEnabled { get; set; } = true;
     public ulong? VerifyChannelId { get; set; }
     public ulong? VerifyRoleId { get; set; }
+    // Role bị THU HỒI sau khi verify thành công (vd: role "khách" tạm). Null = không gỡ.
+    public ulong? VerifyRemoveRoleId { get; set; }
     public ICollection<Warning> Warnings { get; set; } = [];
     public ICollection<ModerationAction> ModerationActions { get; set; } = [];
     public ICollection<AutoRoleConfig> AutoRoles { get; set; } = [];

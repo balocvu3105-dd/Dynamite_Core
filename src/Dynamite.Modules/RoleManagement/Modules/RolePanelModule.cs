@@ -32,9 +32,12 @@ public class RolePanelModule : InteractionModuleBase<SocketInteractionContext>
     [SlashCommand("create", "Create a new role selection panel")]
     public async Task CreateAsync(
         [Summary("type", "Button or Select Menu")] RolePanelType panelType,
-        [Summary("channel", "Channel to post the panel in")] ITextChannel channel)
+        [Summary("channel", "Channel to post the panel in")] ITextChannel channel,
+        [Summary("max_roles", "Max roles a member can hold from this panel (0 = unlimited)")]
+        [MinValue(0)] [MaxValue(25)] int maxRoles = 0)
     {
-        var customId = $"rolepanel_create_{(int)panelType}_{channel.Id}";
+        // maxRoles truyền qua custom_id vì modal không có chỗ chứa state
+        var customId = $"rolepanel_create_{(int)panelType}_{channel.Id}_{maxRoles}";
         await RespondWithModalAsync<RolePanelCreateModal>(customId);
     }
 
@@ -120,10 +123,14 @@ public class RolePanelModalModule : InteractionModuleBase<SocketInteractionConte
         _logger = logger;
     }
 
-    [ModalInteraction("rolepanel_create_*_*")]
-    public async Task OnRolePanelModalAsync(string panelTypeStr, string channelIdStr, RolePanelCreateModal modal)
+    [ModalInteraction("rolepanel_create_*_*_*")]
+    public async Task OnRolePanelModalAsync(
+        string panelTypeStr, string channelIdStr, string maxRolesStr, RolePanelCreateModal modal)
     {
         await DeferAsync(ephemeral: true);
+
+        if (!int.TryParse(maxRolesStr, out var maxRoles) || maxRoles < 0)
+            maxRoles = 0;
 
         if (!int.TryParse(panelTypeStr, out var panelTypeInt)
             || !Enum.IsDefined(typeof(RolePanelType), panelTypeInt))
@@ -201,7 +208,8 @@ public class RolePanelModalModule : InteractionModuleBase<SocketInteractionConte
             modal.PanelTitle,
             string.IsNullOrWhiteSpace(modal.Description) ? null : modal.Description,
             panelType,
-            rolePanelItems);
+            rolePanelItems,
+            maxRoles);
 
         // Build component từ savedPanel — Guid của items khớp với DB
         var (embed, component) = _panelBuilder.Build(savedPanel);
@@ -249,14 +257,37 @@ public class RolePanelModalModule : InteractionModuleBase<SocketInteractionConte
 
             if (!ulong.TryParse(idToken, out var roleId)) continue;
 
-            // Label optional — nếu thiếu sẽ được thay bằng tên role thật ở bước validate
-            var label = parts.Length >= 2 ? parts[1] : string.Empty;
-            var emoji = parts.Length >= 3 ? parts[2] : null;
+            // Format: `ID [Label có thể nhiều từ] [Emoji ở cuối]`
+            // Token cuối là emoji nếu nó là custom emote <:n:id> hoặc unicode emoji ngắn;
+            // phần còn lại sau ID là label (hỗ trợ khoảng trắng).
+            string? emoji = null;
+            var labelEnd = parts.Length;
+
+            if (parts.Length >= 2 && IsEmojiToken(parts[^1]))
+            {
+                emoji = parts[^1];
+                labelEnd = parts.Length - 1;
+            }
+
+            var label = labelEnd > 1
+                ? string.Join(' ', parts[1..labelEnd])
+                : string.Empty; // trống → bước validate sẽ thay bằng tên role thật
 
             result.Add((roleId, label, emoji));
         }
 
         return result;
+    }
+
+    // Token được coi là emoji nếu: custom emote `<:name:id>` / `<a:name:id>`,
+    // hoặc chuỗi ngắn không chứa chữ/số (unicode emoji thuộc nhóm Symbol).
+    // Label tiếng Việt ("Hưởng"...) chứa chữ cái unicode nên không bị nhận nhầm.
+    private static bool IsEmojiToken(string token)
+    {
+        if (token.StartsWith("<:") || token.StartsWith("<a:"))
+            return token.EndsWith(">");
+
+        return token.Length <= 8 && !token.Any(char.IsLetterOrDigit);
     }
 }
 
