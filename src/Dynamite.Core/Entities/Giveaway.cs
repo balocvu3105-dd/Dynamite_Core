@@ -22,6 +22,9 @@ public class Giveaway : BaseEntity
     // Điều kiện tham gia: số ngày tối thiểu phải ở trong server. 0 = không yêu cầu.
     public int MinJoinDays { get; set; } = 0;
 
+    // Điều kiện tham gia: phải join server TRƯỚC mốc ngày cố định này (UTC). Null = không yêu cầu.
+    public DateTime? JoinedBefore { get; set; }
+
     // Nội dung DM gửi người trúng để hướng dẫn nhận thưởng. Null = dùng mẫu mặc định.
     public string? ClaimMessage { get; set; }
     // Pre-selection — Server Owner có thể chỉ định winner trước khi hết giờ

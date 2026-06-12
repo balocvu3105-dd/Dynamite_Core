@@ -30,7 +30,9 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
         [Summary("min_days", "Require members to be in the server at least N days (0 = anyone)")]
         [MinValue(0)] [MaxValue(3650)] int minDays = 0,
         [Summary("claim_message", "Custom DM sent to winners with claim instructions")]
-        [MaxLength(1024)] string? claimMessage = null)
+        [MaxLength(1024)] string? claimMessage = null,
+        [Summary("joined_before", "Only members who joined BEFORE this date (dd/MM/yyyy)")]
+        string? joinedBefore = null)
     {
         await DeferAsync(ephemeral: true);
 
@@ -52,6 +54,24 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
+        // Parse mốc ngày join (hỗ trợ dd/MM/yyyy và yyyy-MM-dd)
+        DateTime? joinedBeforeDate = null;
+        if (!string.IsNullOrWhiteSpace(joinedBefore))
+        {
+            string[] formats = ["dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd"];
+            if (!DateTime.TryParseExact(joinedBefore.Trim(), formats,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var parsed))
+            {
+                await FollowupAsync(
+                    "❌ Invalid `joined_before` date. Use format `dd/MM/yyyy` (e.g. `07/06/2026`).",
+                    ephemeral: true);
+                return;
+            }
+            // Npgsql yêu cầu DateTime Kind=Utc cho cột timestamptz
+            joinedBeforeDate = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
+        }
+
         var targetChannel = channel ?? (ITextChannel)Context.Channel;
 
         try
@@ -59,7 +79,7 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
             var giveaway = await _service.CreateAsync(
                 Context.Guild.Id, targetChannel.Id, Context.User.Id,
                 prize, description, winners, span,
-                pingRole?.Id, minDays, claimMessage);
+                pingRole?.Id, minDays, claimMessage, joinedBeforeDate);
 
             await FollowupAsync(
                 $"✅ Giveaway started in {targetChannel.Mention}! Ends <t:{new DateTimeOffset(giveaway.EndsAt).ToUnixTimeSeconds()}:R>",

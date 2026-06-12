@@ -35,7 +35,8 @@ public class GiveawayService
     public async Task<Giveaway> CreateAsync(
         ulong guildId, ulong channelId, ulong hostId,
         string prize, string? description, int winnerCount, TimeSpan duration,
-        ulong? pingRoleId = null, int minJoinDays = 0, string? claimMessage = null)
+        ulong? pingRoleId = null, int minJoinDays = 0, string? claimMessage = null,
+        DateTime? joinedBefore = null)
     {
         var channel = _client.GetGuild(guildId)?.GetTextChannel(channelId)
             ?? throw new InvalidOperationException("Channel not found.");
@@ -53,7 +54,8 @@ public class GiveawayService
             MessageId = 0,
             PingRoleId = pingRoleId,
             MinJoinDays = minJoinDays < 0 ? 0 : minJoinDays,
-            ClaimMessage = string.IsNullOrWhiteSpace(claimMessage) ? null : claimMessage
+            ClaimMessage = string.IsNullOrWhiteSpace(claimMessage) ? null : claimMessage,
+            JoinedBefore = joinedBefore
         };
 
         var embed = GiveawayEmbedBuilder.BuildActiveEmbed(giveaway, 0);
@@ -94,8 +96,8 @@ public class GiveawayService
         if (await _repo.HasEnteredAsync(giveaway.Id, userId))
             return (false, "You have already entered this giveaway!");
 
-        // Điều kiện tham gia: phải ở trong server đủ MinJoinDays ngày
-        if (giveaway.MinJoinDays > 0)
+        // Điều kiện tham gia — cần ngày join nếu có bất kỳ requirement nào
+        if (giveaway.MinJoinDays > 0 || giveaway.JoinedBefore is not null)
         {
             var member = _client.GetGuild(guildId)?.GetUser(userId);
             var joinedAt = member?.JoinedAt;
@@ -117,11 +119,21 @@ public class GiveawayService
             if (joinedAt is null)
                 return (false, "Could not verify your join date. Please try again later.");
 
-            var daysInServer = (DateTimeOffset.UtcNow - joinedAt.Value).TotalDays;
-            if (daysInServer < giveaway.MinJoinDays)
+            if (giveaway.MinJoinDays > 0)
+            {
+                var daysInServer = (DateTimeOffset.UtcNow - joinedAt.Value).TotalDays;
+                if (daysInServer < giveaway.MinJoinDays)
+                    return (false,
+                        $"❌ You don't meet the requirement: you must be in this server for " +
+                        $"**{giveaway.MinJoinDays} days** to enter. You've been here **{(int)daysInServer} day(s)**.");
+            }
+
+            // Mốc ngày cố định: phải join TRƯỚC ngày này
+            if (giveaway.JoinedBefore is not null
+                && joinedAt.Value.UtcDateTime >= giveaway.JoinedBefore.Value)
                 return (false,
-                    $"❌ You don't meet the requirement: you must be in this server for " +
-                    $"**{giveaway.MinJoinDays} days** to enter. You've been here **{(int)daysInServer} day(s)**.");
+                    $"❌ This giveaway requires you to have joined the server before " +
+                    $"**{giveaway.JoinedBefore.Value:dd/MM/yyyy}**. You joined on **{joinedAt.Value:dd/MM/yyyy}**.");
         }
 
         var entry = new GiveawayEntry

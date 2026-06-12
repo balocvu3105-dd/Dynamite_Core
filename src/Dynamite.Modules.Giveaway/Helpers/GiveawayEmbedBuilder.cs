@@ -27,9 +27,14 @@ public static class GiveawayEmbedBuilder
             .WithTimestamp(giveaway.EndsAt);
 
         // Hiện điều kiện tham gia ngay trên embed để member biết trước
+        var requirements = new List<string>();
         if (giveaway.MinJoinDays > 0)
-            builder.AddField("📋 Requirement",
-                $"Must be in this server for **{giveaway.MinJoinDays}+ days**", inline: false);
+            requirements.Add($"Must be in this server for **{giveaway.MinJoinDays}+ days**");
+        if (giveaway.JoinedBefore is not null)
+            requirements.Add($"Must have joined before **{giveaway.JoinedBefore.Value:dd/MM/yyyy}**");
+
+        if (requirements.Count > 0)
+            builder.AddField("📋 Requirement", string.Join("\n", requirements), inline: false);
 
         return builder.Build();
     }
