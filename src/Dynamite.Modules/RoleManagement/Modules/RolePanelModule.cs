@@ -147,7 +147,7 @@ public class RolePanelModalModule : InteractionModuleBase<SocketInteractionConte
         {
             await FollowupAsync(embed: RoleManagementEmbeds.Error(
                 "No Roles",
-                "Could not parse any roles.\nFormat: `RoleID Label` (one per line)\nExample:\n```\n1234567890 Gaming 🎮\n```"),
+                "Could not parse any roles.\nFormat (one per line): `RoleID` hoặc `RoleID Label Emoji`\nRole mention `<@&id>` cũng được chấp nhận.\nExample:\n```\n1234567890\n1234567890 Gaming 🎮\n```"),
                 ephemeral: true);
             return;
         }
@@ -160,10 +160,39 @@ public class RolePanelModalModule : InteractionModuleBase<SocketInteractionConte
             return;
         }
 
+        // Validate role IDs NGAY khi tạo panel — tránh lưu ID rác vào DB
+        // rồi user bấm nút mới phát hiện role không tồn tại
+        var botTopRole = Context.Guild.CurrentUser.Roles.Max(r => r.Position);
+        var invalid = new List<string>();
+        var validItems = new List<(ulong RoleId, string Label, string? Emoji)>();
+        foreach (var (roleId, label, emoji) in items)
+        {
+            var role = Context.Guild.GetRole(roleId);
+            if (role is null)
+                invalid.Add($"`{roleId}` ({label}) — role not found on this server");
+            else if (role.Position >= botTopRole)
+                invalid.Add($"`{roleId}` ({label}) — role is higher than the bot's top role, cannot be assigned");
+            else if (role.IsManaged)
+                invalid.Add($"`{roleId}` ({label}) — managed role (bot/integration), cannot be assigned");
+            else
+                // Label trống → dùng tên role thật
+                validItems.Add((roleId, string.IsNullOrWhiteSpace(label) ? role.Name : label, emoji));
+        }
+
+        if (invalid.Count > 0)
+        {
+            await FollowupAsync(embed: RoleManagementEmbeds.Error(
+                "Invalid Roles",
+                "These roles cannot be used:\n" + string.Join("\n", invalid) +
+                "\n\nTip: enable Developer Mode → right-click the role → Copy Role ID."),
+                ephemeral: true);
+            return;
+        }
+
         // FIX: Persist vào DB trước để lấy Guid thật của items,
         // sau đó dùng Guid đó để build button custom_id.
         // Nếu build trước → Guid trong button khác Guid trong DB → lookup fail.
-        var rolePanelItems = items.Select(i => new RolePanelItemDto(i.RoleId, i.Label, i.Emoji, null));
+        var rolePanelItems = validItems.Select(i => new RolePanelItemDto(i.RoleId, i.Label, i.Emoji, null));
         var savedPanel = await _panelService.CreatePanelAsync(
             Context.Guild.Id,
             Context.Guild.Name,
@@ -198,7 +227,7 @@ public class RolePanelModalModule : InteractionModuleBase<SocketInteractionConte
 
         await FollowupAsync(embed: RoleManagementEmbeds.Success(
             "Panel Created",
-            $"Role panel **{modal.PanelTitle}** posted in {channel.Mention} with {items.Count} role(s)."),
+            $"Role panel **{modal.PanelTitle}** posted in {channel.Mention} with {validItems.Count} role(s)."),
             ephemeral: true);
     }
 
@@ -212,10 +241,16 @@ public class RolePanelModalModule : InteractionModuleBase<SocketInteractionConte
             if (string.IsNullOrWhiteSpace(line)) continue;
 
             var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2) continue;
-            if (!ulong.TryParse(parts[0], out var roleId)) continue;
 
-            var label = parts[1];
+            // Chấp nhận cả role mention `<@&123>` lẫn ID thuần `123`
+            var idToken = parts[0];
+            if (idToken.StartsWith("<@&") && idToken.EndsWith(">"))
+                idToken = idToken[3..^1];
+
+            if (!ulong.TryParse(idToken, out var roleId)) continue;
+
+            // Label optional — nếu thiếu sẽ được thay bằng tên role thật ở bước validate
+            var label = parts.Length >= 2 ? parts[1] : string.Empty;
             var emoji = parts.Length >= 3 ? parts[2] : null;
 
             result.Add((roleId, label, emoji));

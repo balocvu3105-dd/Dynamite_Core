@@ -309,8 +309,13 @@ public class BotHostedService : IHostedService
     {
         if (result.IsSuccess) return Task.CompletedTask;
 
-        _logger.LogError("Interaction failed — Error: {Error} | Reason: {Reason} | Command: {Command}",
-            result.Error, result.ErrorReason, command?.Name ?? "unknown");
+        // UnmetPrecondition = user thiếu quyền — hành vi bình thường, không phải lỗi bot
+        if (result.Error == InteractionCommandError.UnmetPrecondition)
+            _logger.LogInformation("Precondition blocked: {Reason} | Command: {Command}",
+                result.ErrorReason, command?.Name ?? "unknown");
+        else
+            _logger.LogError("Interaction failed — Error: {Error} | Reason: {Reason} | Command: {Command}",
+                result.Error, result.ErrorReason, command?.Name ?? "unknown");
 
         // Respond to user với error message — bắt buộc để tránh "Ứng dụng không phản hồi"
         _ = Task.Run(async () =>
