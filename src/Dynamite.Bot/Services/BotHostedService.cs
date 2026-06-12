@@ -75,6 +75,7 @@ public class BotHostedService : IHostedService
         _client.SelectMenuExecuted += OnSelectMenuExecutedAsync;
         _client.ModalSubmitted += OnModalSubmittedAsync;
 
+        _interactions.Log += LogAsync; // InteractionService có Log event RIÊNG — không hook là mất hết exception nội bộ
         _interactions.InteractionExecuted += OnInteractionExecutedAsync;
 
         _client.JoinedGuild += guild => _presenceSync.OnGuildJoinedAsync(guild);
@@ -150,37 +151,69 @@ public class BotHostedService : IHostedService
 
     private async Task OnReadyAsync()
     {
-        if (!_modulesLoaded)
+        try
         {
-            var distinct = ModuleAssemblies.Distinct();
-            foreach (var assembly in distinct)
+            // ── 1. One-time init: load modules + subscribe event handlers ──
+            // Ready có thể fire lại khi reconnect — không được subscribe trùng
+            if (!_modulesLoaded)
             {
-                await _interactions.AddModulesAsync(assembly, _services);
-                _logger.LogDebug("Loaded interaction modules from {Assembly}", assembly.GetName().Name);
+                var distinct = ModuleAssemblies.Distinct();
+                foreach (var assembly in distinct)
+                {
+                    await _interactions.AddModulesAsync(assembly, _services);
+                    _logger.LogDebug("Loaded interaction modules from {Assembly}", assembly.GetName().Name);
+                }
+
+                _services.GetRequiredService<LoggingEventHandler>().Subscribe();
+                _services.GetRequiredService<WelcomeEventHandler>().Subscribe();
+                _services.GetRequiredService<SecurityEventHandler>().Subscribe();
+
+                _modulesLoaded = true;
             }
-            _modulesLoaded = true;
-        }
 
-        _services.GetRequiredService<LoggingEventHandler>().Subscribe();
-        _services.GetRequiredService<WelcomeEventHandler>().Subscribe();
-        _services.GetRequiredService<SecurityEventHandler>().Subscribe();
-
-        await _presenceSync.SyncOnReadyAsync(_client);
-
+            // ── 2. Register slash commands FIRST — không phụ thuộc DB ──
+            // RegisterCommandsToGuildAsync(deleteMissing: true) đã overwrite toàn bộ
+            // command set — KHÔNG cần DeleteApplicationCommandsAsync trước đó
+            // (delete trước tạo ra window không có lệnh nào + thêm 1 REST call có thể fail)
 #if DEBUG
-        var guild = _client.GetGuild(_settings.TestGuildId);
-        await guild.DeleteApplicationCommandsAsync();
-        _logger.LogInformation("Cleared all guild commands for {GuildId}", _settings.TestGuildId);
-
-        await _interactions.RegisterCommandsToGuildAsync(_settings.TestGuildId, true);
-        _logger.LogInformation("Commands registered to test guild {GuildId}", _settings.TestGuildId);
+            var guild = _client.GetGuild(_settings.TestGuildId);
+            if (guild is null)
+            {
+                _logger.LogError(
+                    "Test guild {GuildId} not found — kiểm tra TestGuildId hoặc bot chưa được invite",
+                    _settings.TestGuildId);
+            }
+            else
+            {
+                await _interactions.RegisterCommandsToGuildAsync(_settings.TestGuildId, true);
+                _logger.LogInformation(
+                    "Commands registered to test guild {GuildId} — {Count} slash commands, app {AppId}",
+                    _settings.TestGuildId, _interactions.SlashCommands.Count, _client.CurrentUser?.Id);
+            }
 #else
-        await _interactions.RegisterCommandsGloballyAsync(true);
-        _logger.LogInformation("Commands registered globally");
+            await _interactions.RegisterCommandsGloballyAsync(true);
+            _logger.LogInformation("Commands registered globally");
 #endif
 
-        _statusProvider.SetReady();
-        _logger.LogInformation("Bot is ready!");
+            // ── 3. DB-dependent work — cô lập để DB lỗi không giết command registration ──
+            try
+            {
+                await _presenceSync.SyncOnReadyAsync(_client);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Guild presence sync failed — bot vẫn hoạt động nhưng cần kiểm tra database connection");
+            }
+
+            _statusProvider.SetReady();
+            _logger.LogInformation("Bot is ready!");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCritical(ex,
+                "OnReadyAsync failed — slash commands có thể không được đăng ký");
+        }
     }
 
     private async Task OnUserJoinedAsync(SocketGuildUser user)
@@ -243,9 +276,9 @@ public class BotHostedService : IHostedService
 
     private async Task OnModalSubmittedAsync(SocketModal modal)
     {
-        using var scope = _services.CreateScope();
+        // Cùng lý do: không dispose scope sớm — để InteractionService tự quản lý
         var ctx = new SocketInteractionContext(_client, modal);
-        await _interactions.ExecuteCommandAsync(ctx, scope.ServiceProvider);
+        await _interactions.ExecuteCommandAsync(ctx, _services);
     }
 
     private async Task OnInteractionCreatedAsync(SocketInteraction interaction)
@@ -256,9 +289,12 @@ public class BotHostedService : IHostedService
 
         try
         {
-            using var scope = _services.CreateScope();
+            // QUAN TRỌNG: pass root provider — InteractionService (AutoServiceScopes = true)
+            // tự tạo scope theo vòng đời command. KHÔNG dùng `using var scope` ở đây:
+            // RunMode.Async trả về ngay → scope bị dispose trong khi command còn đang chạy
+            // → ObjectDisposedException bị nuốt → bot im lặng ("Ứng dụng không phản hồi")
             var ctx = new SocketInteractionContext(_client, interaction);
-            var result = await _interactions.ExecuteCommandAsync(ctx, scope.ServiceProvider);
+            var result = await _interactions.ExecuteCommandAsync(ctx, _services);
             if (!result.IsSuccess)
                 _logger.LogError("ExecuteCommandAsync failed: {Error} — {Reason}", result.Error, result.ErrorReason);
         }

@@ -35,6 +35,9 @@ var host = Host.CreateDefaultBuilder(args)
     {
         config
             .MinimumLevel.Information()
+            // Giữ override: EF Core log mọi query ở Information — quá ồn
+            .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
+            .MinimumLevel.Override("Microsoft.EntityFrameworkCore", Serilog.Events.LogEventLevel.Warning)
             .WriteTo.Console()
             .WriteTo.File("logs/dynamite-.txt", rollingInterval: RollingInterval.Day);
     })
