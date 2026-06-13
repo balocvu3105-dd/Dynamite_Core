@@ -159,8 +159,9 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Property<decimal?>("PreSelectedBy")
                         .HasColumnType("numeric(20,0)");
 
-                    b.Property<decimal?>("PreSelectedWinnerId")
-                        .HasColumnType("numeric(20,0)");
+                    b.Property<string>("PreSelectedWinnerIds")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
 
                     b.Property<string>("Prize")
                         .IsRequired()

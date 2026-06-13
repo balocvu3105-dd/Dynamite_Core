@@ -25,6 +25,12 @@ public class GiveawayRepository : IGiveawayRepository
             .Where(g => !g.IsEnded && !g.IsCancelled)
             .ToListAsync();
 
+    public Task<List<Giveaway>> GetActiveByGuildAsync(ulong guildId)
+        => _db.Giveaways
+            .Where(g => g.GuildId == guildId && !g.IsEnded && !g.IsCancelled)
+            .OrderBy(g => g.EndsAt)
+            .ToListAsync();
+
     public Task<List<Giveaway>> GetExpiredUnendedAsync()
         => _db.Giveaways
             .Where(g => !g.IsEnded && !g.IsCancelled && g.EndsAt <= DateTime.UtcNow)

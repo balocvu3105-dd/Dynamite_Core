@@ -92,16 +92,19 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
         }
     }
 
-    // Server Owner only — pre-select winner trước khi hết giờ
+    // Server Owner only — pick tối đa 5 người cùng lúc
     // Giveaway vẫn chạy bình thường, người tham gia không biết
-    [SlashCommand("pick", "Pre-select a winner (Server Owner only — announced when giveaway ends)")]
+    [SlashCommand("pick", "Pre-select up to 5 winners at once (Server Owner only)")]
     public async Task PickAsync(
         [Summary("giveaway-id", "Giveaway ID (from /giveaway list)")] string giveawayIdStr,
-        [Summary("user", "User to pre-select as winner")] IGuildUser user)
+        [Summary("user1", "Winner #1")] IGuildUser user1,
+        [Summary("user2", "Winner #2")] IGuildUser? user2 = null,
+        [Summary("user3", "Winner #3")] IGuildUser? user3 = null,
+        [Summary("user4", "Winner #4")] IGuildUser? user4 = null,
+        [Summary("user5", "Winner #5")] IGuildUser? user5 = null)
     {
         await DeferAsync(ephemeral: true);
 
-        // Chỉ Server Owner mới dùng được
         if (Context.Guild.OwnerId != Context.User.Id)
         {
             await FollowupAsync("❌ Only the Server Owner can pre-select giveaway winners.", ephemeral: true);
@@ -114,16 +117,28 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
-        var (success, message) = await _service.PreSelectWinnerAsync(
-            giveawayId, user.Id, Context.User.Id, Context.Guild.Id);
+        var users = new[] { user1, user2, user3, user4, user5 }
+            .Where(u => u is not null)
+            .Select(u => u!.Id)
+            .Distinct()
+            .ToList();
 
-        await FollowupAsync(success ? $"✅ {message}" : $"❌ {message}", ephemeral: true);
+        var results = new List<string>();
+        foreach (var uid in users)
+        {
+            var (success, message) = await _service.PreSelectWinnerAsync(
+                giveawayId, uid, Context.User.Id, Context.Guild.Id);
+            results.Add(success ? $"✅ {message}" : $"❌ {message}");
+        }
+
+        await FollowupAsync(string.Join("\n", results), ephemeral: true);
     }
 
-    // Server Owner only — xóa pre-selection, trở về random
-    [SlashCommand("unpick", "Clear pre-selected winner — giveaway will pick randomly")]
+    // Server Owner only — remove 1 người hoặc clear toàn bộ
+    [SlashCommand("unpick", "Remove a pre-selected winner (omit user to clear all)")]
     public async Task UnpickAsync(
-        [Summary("giveaway-id", "Giveaway ID")] string giveawayIdStr)
+        [Summary("giveaway-id", "Giveaway ID")] string giveawayIdStr,
+        [Summary("user", "User to remove (omit to clear all pre-selections)")] IGuildUser? user = null)
     {
         await DeferAsync(ephemeral: true);
 
@@ -140,8 +155,58 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
         }
 
         var (success, message) = await _service.ClearPreSelectionAsync(
-            giveawayId, Context.User.Id, Context.Guild.Id);
+            giveawayId, Context.User.Id, Context.Guild.Id, user?.Id);
 
+        await FollowupAsync(success ? $"✅ {message}" : $"❌ {message}", ephemeral: true);
+    }
+
+    [SlashCommand("list", "List all active giveaways in this server")]
+    public async Task ListAsync()
+    {
+        await DeferAsync(ephemeral: true);
+
+        var giveaways = await _service.ListActiveAsync(Context.Guild.Id);
+
+        if (giveaways.Count == 0)
+        {
+            await FollowupAsync("📭 No active giveaways in this server.", ephemeral: true);
+            return;
+        }
+
+        var embed = new EmbedBuilder()
+            .WithTitle("🎉 Active Giveaways")
+            .WithColor(Color.Gold)
+            .WithFooter($"{giveaways.Count} giveaway(s) active");
+
+        foreach (var g in giveaways)
+        {
+            var endsAt = new DateTimeOffset(g.EndsAt).ToUnixTimeSeconds();
+            var entryCount = g.Entries?.Count ?? 0;
+            embed.AddField(
+                $"🏆 {g.Prize}",
+                $"**ID:** `{g.Id}`\n" +
+                $"**Ends:** <t:{endsAt}:R>\n" +
+                $"**Winners:** {g.WinnerCount} | **Entries:** {entryCount}\n" +
+                $"**Channel:** <#{g.ChannelId}>",
+                inline: false);
+        }
+
+        await FollowupAsync(embed: embed.Build(), ephemeral: true);
+    }
+
+    [SlashCommand("end", "End a giveaway early and announce winners now")]
+    public async Task EndEarlyAsync(
+        [Summary("giveaway-id", "Giveaway ID (from /giveaway list)")] string giveawayIdStr)
+    {
+        await DeferAsync(ephemeral: true);
+
+        if (!Guid.TryParse(giveawayIdStr, out var giveawayId))
+        {
+            await FollowupAsync("❌ Invalid giveaway ID.", ephemeral: true);
+            return;
+        }
+
+        var (success, message) = await _service.EndEarlyAsync(giveawayId, Context.User.Id, Context.Guild.Id);
         await FollowupAsync(success ? $"✅ {message}" : $"❌ {message}", ephemeral: true);
     }
 
@@ -175,6 +240,50 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
 
         var (success, message) = await _service.RerollAsync(giveawayId, Context.User.Id);
         await FollowupAsync(success ? $"✅ {message}" : $"❌ {message}", ephemeral: true);
+    }
+
+    [SlashCommand("entries", "List all participants of a giveaway")]
+    public async Task EntriesAsync(
+        [Summary("giveaway-id", "Giveaway ID (from /giveaway list)")] string giveawayIdStr)
+    {
+        await DeferAsync(ephemeral: true);
+
+        if (!Guid.TryParse(giveawayIdStr, out var giveawayId))
+        {
+            await FollowupAsync("❌ Invalid giveaway ID.", ephemeral: true);
+            return;
+        }
+
+        var giveaway = await _service.GetByIdAsync(giveawayId);
+        if (giveaway is null || giveaway.GuildId != Context.Guild.Id)
+        {
+            await FollowupAsync("❌ Giveaway not found.", ephemeral: true);
+            return;
+        }
+
+        var entries = await _service.GetEntriesAsync(giveawayId);
+
+        if (entries.Count == 0)
+        {
+            await FollowupAsync("📭 No participants yet.", ephemeral: true);
+            return;
+        }
+
+        // Discord embed field max 1024 chars — chunk nếu nhiều người
+        const int chunkSize = 30;
+        var mentions = entries.Select(e => $"<@{e.UserId}>").ToList();
+        var pages = mentions.Chunk(chunkSize).ToList();
+
+        var embed = new EmbedBuilder()
+            .WithTitle($"👥 Participants — {giveaway.Prize}")
+            .WithColor(Color.Blue)
+            .WithFooter($"{entries.Count} participant(s)");
+
+        for (int i = 0; i < pages.Count; i++)
+            embed.AddField(pages.Count > 1 ? $"Page {i + 1}" : "Participants",
+                string.Join(" ", pages[i]), inline: false);
+
+        await FollowupAsync(embed: embed.Build(), ephemeral: true);
     }
 
     // ── Duration parser ───────────────────────────────────────────────────────

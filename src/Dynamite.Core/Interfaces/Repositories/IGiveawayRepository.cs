@@ -8,6 +8,7 @@ public interface IGiveawayRepository
     Task<Giveaway?> GetByIdAsync(Guid id);
     Task<Giveaway?> GetByMessageIdAsync(ulong messageId);
     Task<List<Giveaway>> GetActiveGiveawaysAsync();
+    Task<List<Giveaway>> GetActiveByGuildAsync(ulong guildId);
     Task<List<Giveaway>> GetExpiredUnendedAsync();
     Task AddAsync(Giveaway giveaway);
     Task AddEntryAsync(GiveawayEntry entry);

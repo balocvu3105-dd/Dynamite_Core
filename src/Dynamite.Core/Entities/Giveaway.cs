@@ -27,10 +27,19 @@ public class Giveaway : BaseEntity
 
     // Nội dung DM gửi người trúng để hướng dẫn nhận thưởng. Null = dùng mẫu mặc định.
     public string? ClaimMessage { get; set; }
-    // Pre-selection — Server Owner có thể chỉ định winner trước khi hết giờ
-    // Nếu được set, timer sẽ announce người này thay vì random
-    public ulong? PreSelectedWinnerId { get; set; }
+    // Pre-selection — Server Owner có thể chỉ định nhiều winner trước khi hết giờ
+    // Comma-separated user IDs, max = WinnerCount. Nếu được set, timer dùng list này thay vì random.
+    public string? PreSelectedWinnerIds { get; set; }
     public DateTime? PreSelectedAt { get; set; }
     public ulong? PreSelectedBy { get; set; }
+
+    // Helper — parse PreSelectedWinnerIds thành List<ulong>
+    public List<ulong> GetPreSelectedWinners()
+        => string.IsNullOrWhiteSpace(PreSelectedWinnerIds)
+            ? []
+            : PreSelectedWinnerIds.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => ulong.TryParse(s, out var id) ? id : 0UL)
+                .Where(id => id != 0)
+                .ToList();
     public ICollection<GiveawayEntry> Entries { get; set; } = [];
 }
