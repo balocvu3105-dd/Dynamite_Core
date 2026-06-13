@@ -6,6 +6,7 @@ Designed as a production-ready foundation comparable to Dyno, Carl-bot, and MEE6
 > **Nền tảng quản lý Discord** tự host, xây dựng bằng .NET 8 theo Clean Architecture.  
 > Tương đương Dyno, Carl-bot, MEE6 — có REST API và web dashboard *(đang phát triển)*.
 
+![CI](https://github.com/balocvu3105-dd/Dynamite_Core/actions/workflows/dotnet.yml/badge.svg)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)
 ![Discord.Net](https://img.shields.io/badge/Discord.Net-3.19.1-5865F2?logo=discord)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)
