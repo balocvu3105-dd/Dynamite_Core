@@ -257,14 +257,31 @@ public class GiveawayService
 
         if (wasPreSelected)
         {
-            // Pre-selected winners — bỏ qua random
+            // Bắt đầu với danh sách pre-selected
             winners = preSelected;
             _logger.LogInformation("Giveaway {Id} ended with pre-selected winners [{Winners}]",
                 giveaway.Id, giveaway.PreSelectedWinnerIds);
+
+            // Nếu pre-selected ít hơn WinnerCount → random thêm cho đủ slot còn lại
+            var remaining = giveaway.WinnerCount - winners.Count;
+            if (remaining > 0)
+            {
+                var entries = await _repo.GetEntriesAsync(giveaway.Id);
+
+                // Loại những người đã pre-selected khỏi pool để tránh trùng
+                var pool = entries.Where(e => !winners.Contains(e.UserId)).ToList();
+                var extra = PickWinners(pool, remaining);
+                winners = [.. winners, .. extra];
+
+                _logger.LogInformation(
+                    "Giveaway {Id} filled {Count} remaining slot(s) with random winner(s) " +
+                    "(pool size: {PoolSize})",
+                    giveaway.Id, extra.Count, pool.Count);
+            }
         }
         else
         {
-            // Random như bình thường
+            // Không có pre-selection → random hoàn toàn
             var entries = await _repo.GetEntriesAsync(giveaway.Id);
             winners = PickWinners(entries, giveaway.WinnerCount);
         }
@@ -334,17 +351,29 @@ public class GiveawayService
             await channel.SendMessageAsync($"😔 No one entered the giveaway for **{giveaway.Prize}**.");
         }
 
-        // Audit log khi end — ghi rõ nếu winner được pre-selected
+        // Audit log khi end
+        // Phân biệt 3 trường hợp: pure pre-selected, mixed (pre + random), pure random
         var entryCount = await _repo.GetEntryCountAsync(giveaway.Id);
         if (wasPreSelected)
         {
+            var preSelectedCount = preSelected.Count;
+            var randomCount = winners.Count - preSelectedCount;
+
+            var auditDesc = randomCount > 0
+                ? $"**Winners ({winners.Count} total):** {string.Join(", ", winnerMentions)}\n" +
+                  $"• {preSelectedCount} pre-selected by <@{giveaway.PreSelectedBy}>\n" +
+                  $"• {randomCount} randomly drawn to fill remaining slot(s)\n" +
+                  $"⚠️ *Mix of manual pre-selection and random draw.*"
+                : $"**Winner(s):** {string.Join(", ", winnerMentions)}\n" +
+                  $"**Pre-selected by:** <@{giveaway.PreSelectedBy}> " +
+                  $"at <t:{new DateTimeOffset(giveaway.PreSelectedAt!.Value).ToUnixTimeSeconds()}:F>\n" +
+                  $"⚠️ *All winners were manually pre-selected, not randomly drawn.*";
+
             await SendGiveawayAuditAsync(giveaway.GuildId,
                 $"✅ **[AUDIT] Giveaway Ended — Pre-Selected Winner**\n" +
                 $"**Giveaway:** {giveaway.Prize} (`{giveaway.Id}`)\n" +
-                $"**Winner:** {string.Join(", ", winnerMentions)}\n" +
-                $"**Pre-selected by:** <@{giveaway.PreSelectedBy}> at <t:{new DateTimeOffset(giveaway.PreSelectedAt!.Value).ToUnixTimeSeconds()}:F>\n" +
-                $"**Total entries:** {entryCount}\n" +
-                $"⚠️ *Winner was manually pre-selected, not randomly drawn.*");
+                auditDesc + "\n" +
+                $"**Total entries:** {entryCount}");
         }
         else
         {
