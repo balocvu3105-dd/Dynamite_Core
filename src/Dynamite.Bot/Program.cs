@@ -27,6 +27,8 @@ using Dynamite.Modules.Welcome;
 using Dynamite.Modules.Welcome.Helpers;
 using Dynamite.Modules.Economy.Commands;
 using Dynamite.Modules.Economy.Services;
+using Dynamite.Modules.Voice;
+using Dynamite.Modules.Voice.Services;
 using Dynamite.Shared;
 using Serilog;
 
@@ -139,6 +141,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<FishingService>();
         services.AddScoped<ShopService>();
         services.AddMemoryCache();
+
+        // Phase 5 — Temp Voice
+        services.AddSingleton<TempVoiceService>();
+        services.AddSingleton<TempVoiceEventHandler>();
 
         // ─── Phase E3 — Scheduled Restart ────────────────────────────────────
         services.AddHostedService<ScheduledRestartService>();

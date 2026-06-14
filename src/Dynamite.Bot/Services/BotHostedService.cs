@@ -14,6 +14,7 @@ using Dynamite.Modules.Logging.Helpers;
 using Dynamite.Modules.RoleManagement.Services;
 using Dynamite.Modules.Security;
 using Dynamite.Modules.Ticket.Interactions;
+using Dynamite.Modules.Voice;
 using Dynamite.Modules.Welcome;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -45,6 +46,7 @@ public class BotHostedService : IHostedService
         typeof(Dynamite.Modules.Giveaway.Commands.GiveawayCommands).Assembly,
         typeof(Dynamite.Modules.Ticket.Commands.TicketCommands).Assembly,
         typeof(Dynamite.Modules.Economy.Commands.EconomyCommands).Assembly,
+        typeof(Dynamite.Modules.Voice.Commands.TempVoiceModule).Assembly,
     ];
 
     public BotHostedService(
@@ -167,6 +169,7 @@ public class BotHostedService : IHostedService
                 _services.GetRequiredService<LoggingEventHandler>().Subscribe();
                 _services.GetRequiredService<WelcomeEventHandler>().Subscribe();
                 _services.GetRequiredService<SecurityEventHandler>().Subscribe();
+                _services.GetRequiredService<TempVoiceEventHandler>().Subscribe();
 
                 _modulesLoaded = true;
             }

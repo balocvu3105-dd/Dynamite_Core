@@ -36,6 +36,9 @@ public class AppDbContext : DbContext
     public DbSet<UserInventory> UserInventories => Set<UserInventory>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
 
+    // Phase 5 — Temp Voice
+    public DbSet<TempVoiceConfig> TempVoiceConfigs => Set<TempVoiceConfig>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

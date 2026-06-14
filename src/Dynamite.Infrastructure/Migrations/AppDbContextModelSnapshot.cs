@@ -22,6 +22,44 @@ namespace Dynamite.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Dynamite.Core.Entities.TempVoiceConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("CategoryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DefaultUserLimit")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("GuildConfigId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("GuildId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TriggerChannelId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildConfigId")
+                        .IsUnique();
+
+                    b.HasIndex("GuildId")
+                        .IsUnique();
+
+                    b.ToTable("TempVoiceConfigs");
+                });
+
             modelBuilder.Entity("Dynamite.Core.Entities.AntiSpamConfig", b =>
                 {
                     b.Property<Guid>("Id")
@@ -950,6 +988,17 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Navigation("Entries");
                 });
 
+            modelBuilder.Entity("Dynamite.Core.Entities.TempVoiceConfig", b =>
+                {
+                    b.HasOne("Dynamite.Core.Entities.GuildConfig", "GuildConfig")
+                        .WithOne("TempVoiceConfig")
+                        .HasForeignKey("Dynamite.Core.Entities.TempVoiceConfig", "GuildConfigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GuildConfig");
+                });
+
             modelBuilder.Entity("Dynamite.Core.Entities.GuildConfig", b =>
                 {
                     b.Navigation("AntiSpamConfig");
@@ -959,6 +1008,8 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Navigation("ModerationActions");
 
                     b.Navigation("RolePanels");
+
+                    b.Navigation("TempVoiceConfig");
 
                     b.Navigation("Warnings");
                 });

@@ -25,6 +25,9 @@ public static class DependencyInjection
         // Phase 9b
         services.AddScoped<IGuildPresenceRepository, GuildPresenceRepository>();
 
+        // Phase 5 — Temp Voice
+        services.AddScoped<ITempVoiceRepository, TempVoiceRepository>();
+
         return services;
     }
 }
