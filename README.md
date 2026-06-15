@@ -60,6 +60,33 @@ React 19 + Vite dashboard with Discord OAuth2 login. Server configuration pages 
 
 ---
 
+## Preview
+
+<table>
+  <tr>
+    <td align="center"><b>👋 Welcome</b></td>
+    <td align="center"><b>🎉 Giveaway</b></td>
+    <td align="center"><b>🎭 Role Panel</b></td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/welcome.png" width="280"/></td>
+    <td><img src="assets/screenshots/giveaway.png" width="280"/></td>
+    <td><img src="assets/screenshots/role.png" width="280"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>📬 Giveaway DM</b></td>
+    <td align="center"><b>🎣 Fishing</b></td>
+    <td align="center"><b>🪙 Economy</b></td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/giveaway-dm.png" width="280"/></td>
+    <td><img src="assets/screenshots/fish.png" width="280"/></td>
+    <td><img src="assets/screenshots/daily.png" width="280"/></td>
+  </tr>
+</table>
+
+---
+
 ## Architecture
 
 ```
