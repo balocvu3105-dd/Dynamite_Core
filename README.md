@@ -1,86 +1,74 @@
-# Dynamite Core
+<div align="center">
 
-A feature-rich, modular Discord bot platform built with **.NET 8** and **Clean Architecture**.  
-Designed as a production-ready foundation comparable to Dyno, Carl-bot, and MEE6 — with a full REST API and web dashboard *(in progress)*.
+# ⚡ Dynamite Core
 
-> **Nền tảng quản lý Discord** tự host, xây dựng bằng .NET 8 theo Clean Architecture.  
-> Tương đương Dyno, Carl-bot, MEE6 — có REST API và web dashboard *(đang phát triển)*.
+**A self-hosted Discord management platform built with .NET 8 and Clean Architecture.**
 
-![CI](https://github.com/balocvu3105-dd/Dynamite_Core/actions/workflows/dotnet.yml/badge.svg)
-![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)
-![Discord.Net](https://img.shields.io/badge/Discord.Net-3.19.1-5865F2?logo=discord)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
-![Tests](https://img.shields.io/badge/Tests-32%20passing-57F287?logo=xunit)
+[![CI](https://github.com/balocvu3105-dd/Dynamite_Core/actions/workflows/dotnet.yml/badge.svg)](https://github.com/balocvu3105-dd/Dynamite_Core/actions)
+[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com)
+[![Discord.Net](https://img.shields.io/badge/Discord.Net-3.19.1-5865F2?logo=discord)](https://github.com/discord-net/Discord.Net)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)](https://www.postgresql.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+</div>
 
 ---
 
-## Features / Tính năng
+## What is this?
+
+Dynamite Core is a **production-grade Discord bot platform** combining the best features of Dyno, Carl-bot, and MEE6 into a single self-hosted solution. It's built as a serious portfolio project to demonstrate real-world architectural thinking — not just a hello-world bot.
+
+The codebase uses **Clean Architecture** with a modular system, a full **REST API**, a **React dashboard**, and is fully containerized with Docker. Every architectural decision was made with maintainability and scalability in mind.
+
+---
+
+## Features
 
 ### 🛡️ Moderation
-`/ban` `/kick` `/timeout` `/untimeout` `/warn` `/warnings` `/purge` `/slowmode`  
-Role hierarchy validation, permission checks, mod log channel.
+`/ban` `/kick` `/timeout` `/untimeout` `/warn` `/warnings` `/purge` `/slowmode`
+
+Role hierarchy validation, permission checks, and a configurable mod log channel. Punishment history is persisted to the database.
 
 ### 🎭 Role Management
-Auto role on join, button roles, select menu role panels, multi-panel support with persistent config.
+Auto role on join, button roles, select menu role panels — multi-panel support with persistent configuration. Dynamic component handling via Discord interaction IDs.
 
 ### ⚙️ Server Setup
-`/setup gaming` `/setup community` `/setup streamer`  
-Auto-generates categories, channels, and roles from templates.
+`/setup gaming` `/setup community` `/setup streamer`
+
+Generates categories, channels, roles, and permission overwrites from reusable templates in a single command.
 
 ### 📋 Logging
-Message edit/delete, member join/leave, role changes, voice state changes — configurable per-channel.
+Tracks message edits/deletes, member joins/leaves, role changes, and voice state changes — each configurable to its own channel.
 
 ### 👋 Welcome & Verification
-Welcome embeds with generated images (SkiaSharp), one-click verification with role assignment, account age filtering.
+Welcome embeds with dynamically generated banner images (SkiaSharp), one-click verification with role assignment, and account age filtering against bot accounts.
 
-### 🔒 Security
-Anti-spam, anti-mention spam, anti-invite, anti-scam link detection.  
-Anti-raid engine with escalation: **warn → timeout → ban**.
+### 🔒 Anti-Spam & Security
+Anti-spam, anti-mention spam, anti-invite, anti-scam link detection. Anti-raid engine with escalating response: **warn → timeout → ban**.
 
 ### 🎉 Giveaway
-`/giveaway start` with duration parser (`1d2h30m`), button-based entry with deduplication,  
-background timer service (survives bot restarts), `/giveaway reroll`, `/giveaway cancel`.
+`/giveaway start` with human-readable duration parser (`1d2h30m`), button-based entry with deduplication, background timer service that **survives bot restarts**, `/giveaway reroll`, `/giveaway cancel`.
 
 ### 🎫 Ticket System
-Panel-based ticket creation, auto channel with permission overwrites,  
-full lifecycle: **Open → Close → Delete**.
+Panel-based ticket creation, auto-channel with scoped permission overwrites, full lifecycle: **Open → Close → Delete**.
 
 ### 🪙 Economy
-`/daily` with streak bonuses, `/fish` minigame (Common → Mythic drop table, cooldown),  
-shop, inventory, fishing rod upgrades, `/transfer`, `/leaderboard`, `/balance`.
+`/daily` with streak bonuses, `/fish` minigame (Common → Mythic drop table with configurable cooldown), shop, inventory, fishing rod upgrades, `/transfer`, `/leaderboard`, `/balance`.
 
-### 🖥️ Web Dashboard *(In Progress)*
-React 19 + Vite dashboard for server admins. Discord OAuth2 login and several configuration pages are functional — remaining modules under active development.
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Bot Framework | Discord.Net 3.19.1 |
-| Backend | .NET 8, ASP.NET Core |
-| ORM | Entity Framework Core + Npgsql |
-| Database | PostgreSQL 16 |
-| Auth | JWT Bearer + Discord OAuth2 |
-| Frontend | React 19, Vite, TailwindCSS *(in progress)* |
-| Image Generation | SkiaSharp |
-| Logging | Serilog |
-| Testing | xUnit + Moq — 32 tests |
-| Containerization | Docker + Docker Compose |
+### 🖥️ Web Dashboard
+React 19 + Vite dashboard with Discord OAuth2 login. Server configuration pages are functional — remaining modules are in active development.
 
 ---
 
-## Architecture / Kiến trúc
+## Architecture
 
 ```
 src/
-├── Dynamite.Core                  # Entities, interfaces (no dependencies)
-├── Dynamite.Application           # Service interfaces, DI extensions
-├── Dynamite.Infrastructure        # EF Core, repositories, PostgreSQL
-├── Dynamite.Shared                # Shared utilities
-├── Dynamite.Bot                   # Discord bot host, event handlers
+├── Dynamite.Core                  # Entities, interfaces — zero external dependencies
+├── Dynamite.Application           # Service interfaces, use-case orchestration
+├── Dynamite.Infrastructure        # EF Core, repositories, PostgreSQL, external services
+├── Dynamite.Shared                # Cross-cutting utilities
+├── Dynamite.Bot                   # Discord bot host, event handlers, slash commands
 ├── Dynamite.API                   # ASP.NET Core REST API
 ├── Dynamite.Tests                 # xUnit unit tests
 ├── Dynamite.Modules/
@@ -93,57 +81,78 @@ src/
 ├── Dynamite.Modules.Giveaway
 ├── Dynamite.Modules.Ticket
 ├── Dynamite.Modules.Economy
-└── dynamite-dashboard             # React + Vite dashboard (in progress)
+└── dynamite-dashboard             # React 19 + Vite dashboard
 ```
 
-**Clean Architecture layers:**
+**Dependency direction:**
 ```
 Core  ←  Application  ←  Infrastructure  ←  Bot / API
 ```
-Each module is an independent class library — zero coupling between modules, communication only through shared service interfaces.
 
-**Key architectural decisions:**
-- Discord.Net types kept out of the Application layer — service interfaces use primitive `ulong` IDs
-- `IServiceScopeFactory` for DB access within Singleton event handlers
-- `SafeRun` fire-and-forget pattern isolates handler crashes from the Discord.Net event loop
-- Background polling (not `Task.Delay`) for giveaway timers — survives bot restarts
-- `IMemoryCache` for fishing cooldowns — no DB round-trips per command
+Each module is an independent class library. Zero coupling between modules — communication only through service interfaces defined in `Dynamite.Application`.
+
+### Key design decisions
+
+| Decision | Why |
+|---|---|
+| Discord.Net types excluded from Application layer | Service interfaces use primitive `ulong` IDs — keeps the domain portable and independently testable |
+| `IServiceScopeFactory` in Singleton event handlers | Discord.Net registers handlers as singletons; scoped DbContext requires explicit scope creation |
+| `SafeRun` fire-and-forget pattern | Isolates handler crashes from the Discord.Net event loop — one bad handler can't take down the bot |
+| Background polling for giveaway timers | Timer survives bot restarts; `Task.Delay`-based timers are lost on shutdown |
+| `IMemoryCache` for fishing cooldowns | Avoids a DB round-trip on every command; acceptable data loss on restart given the use-case |
 
 ---
 
-## Getting Started / Cài đặt
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Bot Framework | Discord.Net 3.19.1 |
+| Backend | .NET 8, ASP.NET Core |
+| ORM | Entity Framework Core + Npgsql |
+| Database | PostgreSQL 16 |
+| Auth | JWT Bearer + Discord OAuth2 |
+| Frontend | React 19, Vite, TailwindCSS |
+| Image Generation | SkiaSharp |
+| Logging | Serilog |
+| Testing | xUnit + Moq |
+| Containerization | Docker + Docker Compose |
+
+---
+
+## Getting Started
 
 ### Prerequisites
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- Discord Bot Token ([Discord Developer Portal](https://discord.com/developers/applications))
+- A Discord bot token from the [Discord Developer Portal](https://discord.com/developers/applications)
 
 ### Run with Docker Compose
 
 ```bash
-# 1. Clone
+# 1. Clone the repo
 git clone https://github.com/balocvu3105-dd/Dynamite_Core.git
 cd Dynamite_Core
 
-# 2. Create env file
+# 2. Set up environment variables
 cp .env.example .env
-# Edit .env — fill in your Discord token, client ID/secret, DB password, JWT secret
+# Edit .env — fill in your Discord token, client ID/secret, DB password, and JWT secret
 
 # 3. Start everything
 docker compose up --build
 ```
-
-| Service | URL |
-|---|---|
-| API | http://localhost:5000 |
-| Swagger Docs | http://localhost:5000/swagger |
-| Dashboard *(in progress)* | http://localhost:3000 |
 
 Docker Compose will automatically:
 1. Start PostgreSQL and wait for it to be healthy
 2. Run database migrations via `Dynamite.Migrator`
 3. Start the Bot and API once migrations complete
 
-### Run Tests / Chạy test
+| Service | URL |
+|---|---|
+| REST API | http://localhost:5000 |
+| Swagger UI | http://localhost:5000/swagger |
+| Dashboard | http://localhost:3000 |
+
+### Run Tests
 
 ```bash
 dotnet test src/Dynamite.Tests --verbosity normal
@@ -157,7 +166,7 @@ Copy `.env.example` to `.env` and fill in your values:
 
 | Variable | Description |
 |---|---|
-| `DISCORD_TOKEN` | Bot token from Discord Developer Portal |
+| `DISCORD_TOKEN` | Bot token from the Discord Developer Portal |
 | `DISCORD_CLIENT_ID` | OAuth2 application client ID |
 | `DISCORD_CLIENT_SECRET` | OAuth2 application client secret |
 | `DISCORD_TEST_GUILD_ID` | Guild ID for debug slash command registration |
@@ -169,7 +178,17 @@ Copy `.env.example` to `.env` and fill in your values:
 | `JWT_AUDIENCE` | JWT audience (e.g. `dynamite-dashboard`) |
 | `API_PORT` | API port (default: `5000`) |
 | `DASHBOARD_PORT` | Dashboard port (default: `3000`) |
-| `VITE_API_URL` | API URL for the dashboard to connect to |
+| `VITE_API_URL` | API base URL for the React dashboard |
+
+---
+
+## Roadmap
+
+- [ ] Full dashboard coverage for all modules (Moderation, Economy, Tickets)
+- [ ] Temp Voice system (auto voice rooms, ownership transfer, cleanup)
+- [ ] Alt detection and trust scoring system
+- [ ] Plugin system for community-contributed modules
+- [ ] Prometheus metrics + Grafana dashboard
 
 ---
 
