@@ -29,16 +29,24 @@ public class ShopService
 
     // ── Bag upgrade pricing ───────────────────────────────────────────────────
 
-    private const int DefaultBagCapacity = 20;
+    private const int DefaultBagCapacity = 10;
     private const int BagSlotStep        = 10;
     private const int MaxBagCap          = 100;
 
     /// <summary>
-    /// Giá nâng +10 slot tại mỗi tier (index = (currentCap - 20) / 10).
-    /// Tier 0: 20→30, Tier 1: 30→40, ... Tier 7: 90→100.
+    /// Giá nâng +10 slot tại mỗi tier (index = (currentCap - 10) / 10).
+    /// Tier 0: 10→20 =  10,000 xu
+    /// Tier 1: 20→30 =  20,000 xu
+    /// Tier 2: 30→40 =  35,000 xu
+    /// Tier 3: 40→50 =  55,000 xu
+    /// Tier 4: 50→60 =  80,000 xu
+    /// Tier 5: 60→70 = 110,000 xu
+    /// Tier 6: 70→80 = 145,000 xu
+    /// Tier 7: 80→90 = 185,000 xu
+    /// Tier 8: 90→100 = 230,000 xu
     /// </summary>
     private static readonly long[] BagPriceTiers =
-        [10_000, 20_000, 35_000, 55_000, 80_000, 110_000, 145_000, 185_000];
+        [10_000, 20_000, 35_000, 55_000, 80_000, 110_000, 145_000, 185_000, 230_000];
 
     public static long GetBagUpgradePrice(int currentCapacity)
     {
@@ -321,7 +329,7 @@ public class ShopService
             Name            = "Nâng Túi Cá +10",
             Emoji           = "🎒",
             Price           = 1,   // placeholder — giá thực tính động theo BagPriceTiers
-            Description     = "Mở rộng túi cá thêm +10 slot. Giá tăng dần: 10k → 20k → 35k → 55k → 80k → 110k → 145k → 185k (tối đa 100 slot).",
+            Description     = "Mở rộng túi cá thêm +10 slot. Túi mặc định 10 slot, nâng dần đến tối đa 100 slot. Giá tăng theo tier: 10k → 20k → 35k → 55k → 80k → 110k → 145k → 185k → 230k.",
             Type            = ItemType.BagUpgrade,
             IsAvailable     = true,
             UsageCount      = 10,

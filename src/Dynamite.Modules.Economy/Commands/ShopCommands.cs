@@ -17,19 +17,22 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
     private readonly InvoiceService         _invoice;
     private readonly WeatherForecastService _weatherForecast;
     private readonly IGuildConfigRepository _configRepo;
+    private readonly FishBagService         _bagService;
 
     public ShopCommands(
         ShopService            shop,
         ShopShowcaseService    showcase,
         InvoiceService         invoice,
         WeatherForecastService weatherForecast,
-        IGuildConfigRepository configRepo)
+        IGuildConfigRepository configRepo,
+        FishBagService         bagService)
     {
         _shop            = shop;
         _showcase        = showcase;
         _invoice         = invoice;
         _weatherForecast = weatherForecast;
         _configRepo      = configRepo;
+        _bagService      = bagService;
     }
 
     // ── /shop view ─────────────────────────────────────────────────────────────
@@ -39,7 +42,9 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
         var items = await _shop.GetShopItemsAsync(Context.Guild.Id);
-        var embed = EconomyEmbedBuilder.BuildShopEmbed(items);
+        var bag   = await _bagService.GetBagAsync(Context.Guild.Id, Context.User.Id);
+        var bagUpgradePrice = ShopService.GetBagUpgradePrice(bag.BagCapacity);
+        var embed = EconomyEmbedBuilder.BuildShopEmbed(items, bagUpgradePrice);
         await FollowupAsync(embed: embed, ephemeral: true);
     }
 

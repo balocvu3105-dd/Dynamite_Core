@@ -275,11 +275,11 @@ public static class EconomyEmbedBuilder
 
     // ── Shop ──────────────────────────────────────────────────────────────────
 
-    public static Embed BuildShopEmbed(List<InventoryItem> items)
+    public static Embed BuildShopEmbed(List<InventoryItem> items, long bagUpgradePrice = 0)
     {
         var desc = items.Count == 0
             ? "Cửa hàng đang trống."
-            : string.Join("\n\n", items.Select(BuildShopItemLine));
+            : string.Join("\n\n", items.Select(i => BuildShopItemLine(i, bagUpgradePrice)));
 
         return new EmbedBuilder()
             .WithTitle("🛒 Cửa Hàng")
@@ -289,16 +289,24 @@ public static class EconomyEmbedBuilder
             .Build();
     }
 
-    private static string BuildShopItemLine(InventoryItem i)
+    private static string BuildShopItemLine(InventoryItem i, long bagUpgradePrice)
     {
-        var line = $"{i.Emoji} **{i.Name}** — {i.Price:N0} coins\n_{i.Description ?? "Không có mô tả."}_";
+        // BagUpgrade dùng giá động theo túi hiện tại của user
+        var displayPrice = (i.Type == ItemType.BagUpgrade && bagUpgradePrice > 0)
+            ? bagUpgradePrice
+            : i.Price;
+
+        var priceText = displayPrice == 0 ? "Đã đầy" : $"{displayPrice:N0} coins";
+        var line = $"{i.Emoji} **{i.Name}** — {priceText}\n_{i.Description ?? "Không có mô tả."}_";
+
         return i.Type switch
         {
-            ItemType.FishingRod  => line + $"\n🎣 Cooldown: {i.CooldownSeconds}s | Nhân: x{i.DropMultiplier:F1}",
+            ItemType.FishingRod  => line + $"\n🎣 Cooldown: {i.CooldownSeconds}s | Nhân: ×{i.DropMultiplier:F1}",
             ItemType.Bait        => line + $"\n🪱 +10% Rare | {i.UsageCount} lần dùng",
-            ItemType.AutoFish    => line + $"\n🤖 Auto câu {i.DurationMinutes} phút (10s/lần)",
+            ItemType.AutoFish    => line + $"\n🤖 Auto câu {i.DurationMinutes} phút",
             ItemType.WeatherItem => line + $"\n☔ Force Rainy {i.DurationMinutes} phút",
-            ItemType.PoolTicket  => line + $"\n🎟️ Vào Special Pool 1 lần | Yêu cầu Level 20+",
+            ItemType.PoolTicket  => line + $"\n🎟️ 2 tiếng câu pool đặc biệt | Yêu cầu Level 20+",
+            ItemType.BagUpgrade  => line + $"\n🎒 +10 slot | Túi đầy: hiển thị Đã đầy",
             _                    => line
         };
     }
