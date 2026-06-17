@@ -107,6 +107,9 @@ public sealed class AutoFishScheduler : BackgroundService
         var sellAll = profile.AutoFishSellAll;
 
         // Lấy display name từ Discord cache (nickname > username > userId)
+        // Bỏ qua nếu đang pause
+        if (profile.AutoFishPaused) return;
+
         var username = _discord.GetGuild(guildId)?.GetUser(userId)?.DisplayName
                     ?? _discord.GetUser(userId)?.Username
                     ?? userId.ToString();

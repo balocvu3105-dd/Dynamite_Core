@@ -1326,6 +1326,9 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Property<int>("AutoFishPurchaseCount")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("AutoFishPaused")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("AutoFishSellAll")
                         .HasColumnType("boolean");
 

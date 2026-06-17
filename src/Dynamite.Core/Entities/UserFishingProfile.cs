@@ -48,6 +48,12 @@ public class UserFishingProfile : BaseEntity
     /// </summary>
     public ulong AutoFishChannelId { get; set; } = 0;
 
+    /// <summary>
+    /// Tạm dừng session — bot không câu nhưng timer vẫn chạy.
+    /// User dùng /fish-auto pause để bật, /fish-auto resume để tắt.
+    /// </summary>
+    public bool AutoFishPaused { get; set; } = false;
+
     // ── Trade throttle ───────────────────────────────────────────────────────
     public int TradesThisWeek { get; set; } = 0;
     public DateTime? TradeWeekResetAt { get; set; }

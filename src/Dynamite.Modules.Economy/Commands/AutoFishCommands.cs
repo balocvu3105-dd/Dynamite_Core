@@ -174,6 +174,47 @@ public class AutoFishCommands : InteractionModuleBase<SocketInteractionContext>
         await FollowupAsync(embed: embed.Build(), ephemeral: true);
     }
 
+    // ── /auto-fish stop-user ─────────────────────────────────────────────────
+
+    [SlashCommand("stop-user", "Dừng session auto câu cá của một user bất kỳ (Admin)")]
+    public async Task StopUserAsync(
+        [Summary("user", "User cần dừng session")] IUser target)
+    {
+        if (!IsAdminOrOwner(Context))
+        {
+            await RespondAsync(
+                "❌ Lệnh này chỉ dành cho **Admin** hoặc **Owner** server.",
+                ephemeral: true);
+            return;
+        }
+
+        await DeferAsync(ephemeral: true);
+
+        var profile = await _profileRepo.GetOrCreateFishingAsync(Context.Guild.Id, target.Id);
+        var now     = DateTime.UtcNow;
+
+        if (profile.AutoFishExpiresAt is null || profile.AutoFishExpiresAt <= now)
+        {
+            await FollowupAsync(
+                $"ℹ️ **{target.Username}** không có session auto-fish nào đang chạy.",
+                ephemeral: true);
+            return;
+        }
+
+        profile.AutoFishExpiresAt = null;
+        profile.AutoFishSellAll   = false;
+        profile.AutoFishPaused    = false;
+        await _profileRepo.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "[AutoFish] Admin {AdminId} force-stopped session of {UserId} in guild {GuildId}",
+            Context.User.Id, target.Id, Context.Guild.Id);
+
+        await FollowupAsync(
+            $"⛔ Đã dừng session auto-fish của **{target.Username}**.",
+            ephemeral: true);
+    }
+
     // ── Helper ───────────────────────────────────────────────────────────────
 
     private static bool IsAdminOrOwner(SocketInteractionContext ctx)

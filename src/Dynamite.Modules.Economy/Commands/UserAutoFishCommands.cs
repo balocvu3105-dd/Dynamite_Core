@@ -160,6 +160,66 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
         await FollowupAsync(embed: embed, ephemeral: true);
     }
 
+    // ── /fish-auto pause ─────────────────────────────────────────────────────
+
+    [SlashCommand("pause", "Tạm dừng auto câu cá (timer vẫn chạy, không mất thời gian)")]
+    public async Task PauseAsync()
+    {
+        await DeferAsync(ephemeral: true);
+
+        var profile = await _profileRepo.GetOrCreateFishingAsync(
+            Context.Guild.Id, Context.User.Id);
+
+        var now = DateTime.UtcNow;
+
+        if (profile.AutoFishExpiresAt is null || profile.AutoFishExpiresAt <= now || !profile.AutoFishSellAll)
+        {
+            await FollowupAsync("ℹ️ Bạn không có session auto-fish nào đang chạy.", ephemeral: true);
+            return;
+        }
+
+        if (profile.AutoFishPaused)
+        {
+            await FollowupAsync("⏸️ Session đang đã tạm dừng rồi. Dùng `/fish-auto resume` để tiếp tục.", ephemeral: true);
+            return;
+        }
+
+        profile.AutoFishPaused = true;
+        await _profileRepo.SaveChangesAsync();
+
+        await FollowupAsync("⏸️ Đã tạm dừng auto câu cá. Dùng `/fish-auto resume` để tiếp tục.", ephemeral: true);
+    }
+
+    // ── /fish-auto resume ─────────────────────────────────────────────────────
+
+    [SlashCommand("resume", "Tiếp tục auto câu cá sau khi tạm dừng")]
+    public async Task ResumeAsync()
+    {
+        await DeferAsync(ephemeral: true);
+
+        var profile = await _profileRepo.GetOrCreateFishingAsync(
+            Context.Guild.Id, Context.User.Id);
+
+        var now = DateTime.UtcNow;
+
+        if (profile.AutoFishExpiresAt is null || profile.AutoFishExpiresAt <= now || !profile.AutoFishSellAll)
+        {
+            await FollowupAsync("ℹ️ Bạn không có session auto-fish nào đang chạy.", ephemeral: true);
+            return;
+        }
+
+        if (!profile.AutoFishPaused)
+        {
+            await FollowupAsync("▶️ Session đang hoạt động bình thường rồi!", ephemeral: true);
+            return;
+        }
+
+        profile.AutoFishPaused = false;
+        await _profileRepo.SaveChangesAsync();
+
+        await FollowupAsync("▶️ Đã tiếp tục auto câu cá!", ephemeral: true);
+    }
+
     // ── /fish-auto stop ──────────────────────────────────────────────────────
 
     [SlashCommand("stop", "Dừng session auto câu cá sớm (không hoàn tiền)")]
