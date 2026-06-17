@@ -162,7 +162,7 @@ public class WeatherForecastService
             .AddField("Đổi thời tiết lúc", $"<t:{expiresUnix}:F>  (<t:{expiresUnix}:R>)", inline: false)
             .AddField("Thời tiết tiếp theo", nextWeather, inline: true)
             .AddField("Cá còn trong bể", $"🐟 **{pond.CurrentFish:N0}** / {pond.MaxFish:N0}", inline: true)
-            .WithFooter("Dùng 🌧️ Phép Triệu Mưa để thay đổi thời tiết • /item use <tên>")
+            .WithFooter("Dùng 🌧️ Phép Triệu Mưa để thay đổi thời tiết • /shop use Phép Triệu Mưa")
             .WithCurrentTimestamp()
             .Build();
     }

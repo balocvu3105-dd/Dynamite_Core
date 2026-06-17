@@ -27,6 +27,7 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
     private readonly IGuildConfigRepository   _configRepo;
     private readonly PondService              _pond;
     private readonly WeatherService           _weather;
+    private readonly WeatherForecastService   _weatherForecast;
     private readonly ILogger<AdminFishingCommands> _logger;
 
     public AdminFishingCommands(
@@ -37,16 +38,18 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
         IGuildConfigRepository        configRepo,
         PondService                   pond,
         WeatherService                weather,
+        WeatherForecastService        weatherForecast,
         ILogger<AdminFishingCommands> logger)
     {
-        _snapshot    = snapshot;
-        _profileRepo = profileRepo;
-        _bagRepo     = bagRepo;
-        _fishLog     = fishLog;
-        _configRepo  = configRepo;
-        _pond        = pond;
-        _weather     = weather;
-        _logger      = logger;
+        _snapshot        = snapshot;
+        _profileRepo     = profileRepo;
+        _bagRepo         = bagRepo;
+        _fishLog         = fishLog;
+        _configRepo      = configRepo;
+        _pond            = pond;
+        _weather         = weather;
+        _weatherForecast = weatherForecast;
+        _logger          = logger;
     }
 
     // ── /admin-fishing set-channel ────────────────────────────────────────────
@@ -187,6 +190,9 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
             .Build();
 
         await FollowupAsync(embed: embed, ephemeral: true);
+
+        // Refresh embed dự báo thời tiết sau khi force
+        await _weatherForecast.RefreshAsync(Context.Guild.Id);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
