@@ -80,4 +80,28 @@ public class RolePanelService : IRolePanelService
     public async Task<RolePanel?> GetPanelByItemAsync(
         Guid itemId, CancellationToken ct = default)
         => await _panelRepo.GetPanelByItemIdAsync(itemId, ct);
+
+    public async Task<(bool success, string message, RolePanel? panel)> AddItemAsync(
+        Guid panelId, RolePanelItemDto dto, CancellationToken ct = default)
+    {
+        var panel = await _panelRepo.GetByIdAsync(panelId, ct);
+        if (panel is null)
+            return (false, "Panel not found.", null);
+
+        if (panel.Items.Any(i => i.RoleId == dto.RoleId))
+            return (false, "Role đã có trong panel này rồi.", panel);
+
+        panel.Items.Add(new RolePanelItem
+        {
+            RoleId      = dto.RoleId,
+            Label       = dto.Label,
+            Emoji       = dto.Emoji,
+            Description = dto.Description
+        });
+        panel.UpdatedAt = DateTime.UtcNow;
+
+        await _panelRepo.SaveChangesAsync(ct);
+        _logger.LogInformation("Added role {RoleId} to panel {PanelId}", dto.RoleId, panelId);
+        return (true, string.Empty, panel);
+    }
 }

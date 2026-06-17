@@ -81,6 +81,71 @@ public class RolePanelModule : InteractionModuleBase<SocketInteractionContext>
             "Panel Deleted", "The role panel has been removed."), ephemeral: true);
     }
 
+    [SlashCommand("add-role", "Thêm một role vào panel đã tồn tại")]
+    public async Task AddRoleAsync(
+        [Summary("panel_id", "ID của panel (lấy từ /rolepanel list)")] string panelIdStr,
+        [Summary("role",     "Role muốn thêm")]                          IRole role,
+        [Summary("label",    "Nhãn hiển thị trên nút (để trống = tên role)")] string? label = null,
+        [Summary("emoji",    "Emoji hiển thị trên nút")]                  string? emoji = null)
+    {
+        await DeferAsync(ephemeral: true);
+
+        if (!Guid.TryParse(panelIdStr, out var panelId))
+        {
+            await FollowupAsync(embed: RoleManagementEmbeds.Error(
+                "Invalid ID", "Panel ID không hợp lệ."), ephemeral: true);
+            return;
+        }
+
+        // Validate role
+        var botTopRole = Context.Guild.CurrentUser.Roles.Max(r => r.Position);
+        if (role.Position >= botTopRole)
+        {
+            await FollowupAsync(embed: RoleManagementEmbeds.Error(
+                "Invalid Role", "Role này cao hơn role của bot — không thể assign."), ephemeral: true);
+            return;
+        }
+        if (role.IsManaged)
+        {
+            await FollowupAsync(embed: RoleManagementEmbeds.Error(
+                "Invalid Role", "Managed role (bot/integration) không thể assign."), ephemeral: true);
+            return;
+        }
+
+        var finalLabel = string.IsNullOrWhiteSpace(label) ? role.Name : label;
+        var dto = new RolePanelItemDto(role.Id, finalLabel, emoji, null);
+
+        var (success, message, updatedPanel) = await _panelService.AddItemAsync(panelId, dto);
+        if (!success || updatedPanel is null)
+        {
+            await FollowupAsync(embed: RoleManagementEmbeds.Error("Failed", message), ephemeral: true);
+            return;
+        }
+
+        // Edit message Discord để cập nhật component
+        var channel = Context.Guild.GetTextChannel(updatedPanel.ChannelId);
+        if (channel is not null)
+        {
+            try
+            {
+                var (embed, component) = _panelBuilder.Build(updatedPanel);
+                await channel.ModifyMessageAsync(updatedPanel.MessageId, m =>
+                {
+                    m.Embed      = embed;
+                    m.Components = component;
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not edit panel message {MessageId}", updatedPanel.MessageId);
+            }
+        }
+
+        await FollowupAsync(embed: RoleManagementEmbeds.Success(
+            "Role Added",
+            $"Đã thêm {role.Mention} vào panel **{updatedPanel.Title}**."), ephemeral: true);
+    }
+
     [SlashCommand("list", "List all role panels in this server")]
     public async Task ListAsync()
     {

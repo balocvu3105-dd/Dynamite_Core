@@ -17,6 +17,8 @@ public interface IRolePanelService
     Task<IEnumerable<RolePanel>> GetPanelsAsync(ulong guildId, CancellationToken ct = default);
     Task<RolePanelItem?> GetItemAsync(Guid itemId, CancellationToken ct = default);
     Task<RolePanel?> GetPanelByItemAsync(Guid itemId, CancellationToken ct = default);
+    Task<(bool success, string message, RolePanel? panel)> AddItemAsync(
+        Guid panelId, RolePanelItemDto item, CancellationToken ct = default);
 }
 // DTO để truyền item data từ module xuống service
 // Không expose Discord types vào Application layer
