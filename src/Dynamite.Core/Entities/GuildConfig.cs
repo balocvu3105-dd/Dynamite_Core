@@ -38,7 +38,41 @@ public class GuildConfig : BaseEntity
     // Phase 5 — Temp Voice
     public TempVoiceConfig? TempVoiceConfig { get; set; }
 
-    // Phase Economy v2 — channel riêng cho daily + fishing
+    // Phase Economy v2 — channel riêng cho daily + fishing (lưu trong GuildPond, copy ở đây để query nhanh)
+    /// <summary>Channel dùng lệnh /daily. Null = mọi channel đều dùng được.</summary>
     public ulong? DailyChannelId { get; set; }
+    /// <summary>Channel câu cá. Null = mọi channel đều dùng được.</summary>
     public ulong? FishingChannelId { get; set; }
+
+    // ── Phase A Channel System ────────────────────────────────────────────────
+
+    // Leaderboard auto-post channels
+    /// <summary>Channel post bảng xếp hạng ngư dân (Fishing + Collector) mỗi Chủ Nhật.</summary>
+    public ulong? FishingLeaderboardChannelId { get; set; }
+    /// <summary>Channel post bảng xếp hạng server (Chat + Voice) mỗi Chủ Nhật.</summary>
+    public ulong? ServerLeaderboardChannelId { get; set; }
+
+    // Special Pool announcement
+    /// <summary>Channel thông báo khi pool đặc biệt xuất hiện (20:00–05:00 VN).</summary>
+    public ulong? SpecialPoolChannelId { get; set; }
+
+    // Shop showcase — embed danh sách item cho toàn server xem
+    /// <summary>Channel trưng bày cửa hàng (bot post/edit embed khi item thay đổi).</summary>
+    public ulong? ShopChannelId { get; set; }
+    /// <summary>Message ID của embed trưng bày cửa hàng (để bot edit thay vì post mới).</summary>
+    public ulong? ShopShowcaseMessageId { get; set; }
+
+    // Invoice channel — receipt giao dịch
+    /// <summary>Channel nhận hóa đơn mua bán. Null = không gửi hóa đơn public.</summary>
+    public ulong? InvoiceChannelId { get; set; }
+
+    // Weather forecast
+    /// <summary>Channel dự báo thời tiết bể cá (bot edit embed khi thời tiết đổi).</summary>
+    public ulong? WeatherChannelId { get; set; }
+    /// <summary>Message ID của embed dự báo thời tiết.</summary>
+    public ulong? WeatherForecastMessageId { get; set; }
+
+    // Guide / Cẩm nang
+    /// <summary>Channel cẩm nang hướng dẫn (bot post các embed preset).</summary>
+    public ulong? GuideChannelId { get; set; }
 }

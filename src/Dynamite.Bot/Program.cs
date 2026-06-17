@@ -168,6 +168,12 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<IFishTrophyRepository, FishTrophyRepository>();
         services.AddHostedService<AutoFishScheduler>();
 
+        // Phase A — Channel System (Shop showcase, Invoice, Weather forecast, Guide)
+        services.AddScoped<ShopShowcaseService>();
+        services.AddScoped<InvoiceService>();
+        services.AddScoped<WeatherForecastService>();
+        services.AddScoped<GuideService>();
+
         // Phase 5 — Temp Voice
         services.AddSingleton<TempVoiceService>();
         services.AddSingleton<TempVoiceEventHandler>();

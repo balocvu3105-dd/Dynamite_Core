@@ -1,9 +1,11 @@
 // src/Dynamite.Modules.Economy/Services/LeaderboardHostedService.cs
 namespace Dynamite.Modules.Economy.Services;
 
+using Discord;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Discord.WebSocket;
+using Dynamite.Modules.Economy.Helpers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -165,60 +167,85 @@ public class LeaderboardHostedService : BackgroundService
         ILeaderboardRepository lbRepo)
     {
         var guild = _discord.GetGuild(guildId);
-        if (guild?.SystemChannel is null) return;
+        if (guild is null) return;
 
-        var snapshots = new List<LeaderboardSnapshot>();
-        foreach (var lbType in Enum.GetValues<LeaderboardType>())
+        // Load guild config để lấy channel IDs
+        using var scope     = _scopeFactory.CreateScope();
+        var configRepo      = scope.ServiceProvider.GetRequiredService<IGuildConfigRepository>();
+        var config          = await configRepo.GetByGuildIdAsync(guildId);
+
+        var weekLabel = weekDate.ToString("dd/MM/yyyy");
+
+        // ── Bảng Ngư Dân → FishingLeaderboardChannelId ──────────────────────
+        var fishingSnap = await lbRepo.GetLatestSnapshotAsync(guildId, LeaderboardType.Fishing);
+        if (fishingSnap is not null)
         {
-            var snap = await lbRepo.GetLatestSnapshotAsync(guildId, lbType);
-            if (snap is not null) snapshots.Add(snap);
+            var fishingChannelId = config?.FishingLeaderboardChannelId;
+            var fishingChannel   = fishingChannelId.HasValue
+                ? guild.GetTextChannel(fishingChannelId.Value)
+                : guild.SystemChannel as ITextChannel;
+
+            if (fishingChannel is not null)
+            {
+                var excluded = GetPrivilegedIds(guild);
+                var embed = EconomyEmbedBuilder.BuildLeaderboardEmbed(
+                    fishingSnap, guild, weekLabel, excluded);
+                await TrySendAsync(fishingChannel, embed, guildId, "Fishing");
+            }
         }
 
-        if (snapshots.Count == 0) return;
-
-        var embed = new Discord.EmbedBuilder()
-            .WithTitle($"🏆 Bảng Xếp Hạng Tuần — {weekDate:dd/MM/yyyy}")
-            .WithColor(Discord.Color.Gold)
-            .WithFooter("Cập nhật mỗi Chủ Nhật 12:00 UTC")
-            .WithCurrentTimestamp();
-
-        foreach (var snap in snapshots)
+        // ── Bảng Server (Chat + Voice) → ServerLeaderboardChannelId ─────────
+        var serverSnaps = new List<LeaderboardSnapshot>();
+        foreach (var t in new[] { LeaderboardType.Chat, LeaderboardType.Voice })
         {
-            var icon = snap.Type switch
-            {
-                LeaderboardType.Fishing => "🎣",
-                LeaderboardType.Chat    => "💬",
-                LeaderboardType.Voice   => "🎙️",
-                _ => "📊"
-            };
-            var unit = snap.Type switch
-            {
-                LeaderboardType.Fishing => "cá",
-                LeaderboardType.Chat    => "tin nhắn",
-                LeaderboardType.Voice   => "phút",
-                _ => ""
-            };
-
-            var lines = snap.Entries.OrderBy(e => e.Rank).Take(3).Select(e =>
-            {
-                var user  = guild.GetUser(e.UserId);
-                var name  = user?.DisplayName ?? $"<@{e.UserId}>";
-                var delta = e.DeltaRank > 0 ? $"↑{e.DeltaRank}" : e.DeltaRank < 0 ? $"↓{Math.Abs(e.DeltaRank)}" : "─";
-                return $"{MedalEmoji(e.Rank)} {name} — **{e.Value:N0}** {unit} `{delta}`";
-            });
-
-            embed.AddField($"{icon} Top {snap.Type}", string.Join("\n", lines));
+            var snap = await lbRepo.GetLatestSnapshotAsync(guildId, t);
+            if (snap is not null) serverSnaps.Add(snap);
         }
 
+        if (serverSnaps.Count > 0)
+        {
+            var serverChannelId = config?.ServerLeaderboardChannelId;
+            var serverChannel   = serverChannelId.HasValue
+                ? guild.GetTextChannel(serverChannelId.Value)
+                : guild.SystemChannel as ITextChannel;
+
+            if (serverChannel is not null)
+            {
+                var excluded = GetPrivilegedIds(guild);
+                foreach (var snap in serverSnaps)
+                {
+                    var embed = EconomyEmbedBuilder.BuildLeaderboardEmbed(
+                        snap, guild, weekLabel, excluded);
+                    await TrySendAsync(serverChannel, embed, guildId, snap.Type.ToString());
+                }
+            }
+        }
+    }
+
+    private async Task TrySendAsync(
+        ITextChannel channel, Embed embed, ulong guildId, string label)
+    {
         try
         {
-            await guild.SystemChannel.SendMessageAsync(embed: embed.Build());
+            await channel.SendMessageAsync(embed: embed);
+            _logger.LogInformation(
+                "[Leaderboard] Posted {Label} to channel #{Channel} in guild {GuildId}",
+                label, channel.Name, guildId);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
-                "Failed to post leaderboard announcement for guild {GuildId}", guildId);
+                "[Leaderboard] Failed to post {Label} for guild {GuildId}", label, guildId);
         }
+    }
+
+    private static HashSet<ulong> GetPrivilegedIds(SocketGuild guild)
+    {
+        var ids = new HashSet<ulong> { guild.OwnerId };
+        foreach (var member in guild.Users)
+            if (member.GuildPermissions.Administrator)
+                ids.Add(member.Id);
+        return ids;
     }
 
     private static string MedalEmoji(int rank) => rank switch

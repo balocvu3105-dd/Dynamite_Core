@@ -31,6 +31,7 @@ public class SpecialPoolService
     private readonly ISpecialPoolRepository _poolRepo;
     private readonly IUserProfileRepository _profileRepo;
     private readonly IWalletRepository      _walletRepo;
+    private readonly IShopRepository        _shopRepo;
     private readonly IFishBagRepository     _bagRepo;
     private readonly ILeaderboardRepository _lbRepo;
     private readonly XpService              _xp;
@@ -40,6 +41,7 @@ public class SpecialPoolService
         ISpecialPoolRepository poolRepo,
         IUserProfileRepository profileRepo,
         IWalletRepository      walletRepo,
+        IShopRepository        shopRepo,
         IFishBagRepository     bagRepo,
         ILeaderboardRepository lbRepo,
         XpService              xp,
@@ -48,6 +50,7 @@ public class SpecialPoolService
         _poolRepo    = poolRepo;
         _profileRepo = profileRepo;
         _walletRepo  = walletRepo;
+        _shopRepo    = shopRepo;
         _bagRepo     = bagRepo;
         _lbRepo      = lbRepo;
         _xp          = xp;
@@ -76,7 +79,21 @@ public class SpecialPoolService
                 $"Cần **Fishing Level {pool.MinLevel}** để câu tại pool này. " +
                 $"Bạn đang ở Level **{profile.FishingLevel}**.", null);
 
-        // 3. Roll drop table
+        // 3. Ticket check — cần sở hữu ít nhất 1 Vé Pool Đặc Biệt
+        var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
+        var inventory = await _shopRepo.GetUserInventoryAsync(wallet.Id);
+        var ticket = inventory.FirstOrDefault(i => i.Item.Type == ItemType.PoolTicket && i.Quantity > 0);
+        if (ticket is null)
+            return (false,
+                "🎟️ Bạn cần có **Vé Pool Đặc Biệt** để vào pool này!\n" +
+                "Mua tại `/shop buy Vé Pool Đặc Biệt`.", null);
+
+        // Tiêu thụ 1 vé
+        ticket.Quantity--;
+        if (ticket.Quantity <= 0)
+            await _shopRepo.RemoveUserInventoryAsync(ticket);
+
+        // 4. Roll drop table
         var catch_ = SpecialFishingDropTable.Roll(pool.DropTable);
 
         // 4. Pearl cap enforcement
@@ -114,7 +131,6 @@ public class SpecialPoolService
         pool.RemainingFish--;
 
         // 6. Coins
-        var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
         wallet.Coins += catch_.Coins;
         await _walletRepo.AddTransactionAsync(new Transaction
         {
@@ -162,6 +178,7 @@ public class SpecialPoolService
         await _poolRepo.SaveChangesAsync();
         await _bagRepo.SaveChangesAsync();
         await _lbRepo.SaveChangesAsync();
+        await _shopRepo.SaveChangesAsync();
 
         // Profile được XpService save nội bộ (hoặc save cùng profileRepo)
         // Gọi thêm để chắc chắn cooldown / stats được lưu nếu có

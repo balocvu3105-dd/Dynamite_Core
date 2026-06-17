@@ -10,18 +10,21 @@ public class ShopService
     private readonly IWalletRepository _walletRepo;
     private readonly IShopRepository _shopRepo;
     private readonly FishBagService _bagService;
+    private readonly WeatherService _weatherService;
     private readonly ILogger<ShopService> _logger;
 
     public ShopService(
         IWalletRepository walletRepo,
         IShopRepository shopRepo,
         FishBagService bagService,
+        WeatherService weatherService,
         ILogger<ShopService> logger)
     {
-        _walletRepo = walletRepo;
-        _shopRepo   = shopRepo;
-        _bagService = bagService;
-        _logger     = logger;
+        _walletRepo     = walletRepo;
+        _shopRepo       = shopRepo;
+        _bagService     = bagService;
+        _weatherService = weatherService;
+        _logger         = logger;
     }
 
     public Task<List<InventoryItem>> GetShopItemsAsync(ulong guildId)
@@ -97,6 +100,35 @@ public class ShopService
 
         _logger.LogInformation("User {UserId} bought {Item} for {Price} coins", userId, item.Name, item.Price);
         return (true, $"✅ {item.Emoji} **{item.Name}** — **{item.Price:N0}** coins!");
+    }
+
+    /// <summary>
+    /// Mua item và trả về thêm thông tin cho InvoiceService.
+    /// Signature: (success, message, item, coinsPaid, coinsRemaining)
+    /// </summary>
+    public async Task<(bool success, string message, InventoryItem? item, long coinsPaid, long coinsRemaining)>
+        BuyWithDetailsAsync(ulong guildId, ulong userId, string itemName)
+    {
+        var item = await _shopRepo.GetItemByNameAsync(guildId, itemName);
+        if (item is null)
+            return (false, $"Không tìm thấy **{itemName}** trong cửa hàng.", null, 0, 0);
+
+        if (item.Price <= 0)
+            return (false, "Vật phẩm này không thể mua.", null, 0, 0);
+
+        var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
+        if (wallet.Coins < item.Price)
+            return (false,
+                $"Không đủ coins. Cần **{item.Price:N0}** nhưng bạn chỉ có **{wallet.Coins:N0}**.",
+                null, 0, 0);
+
+        // Delegate to core BuyAsync logic, then compute remaining
+        var (success, message) = await BuyAsync(guildId, userId, itemName);
+        if (!success) return (false, message, null, 0, 0);
+
+        // Re-read wallet for remaining coins
+        var updatedWallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
+        return (true, message, item, item.Price, updatedWallet.Coins);
     }
 
     public async Task<List<UserInventory>> GetInventoryAsync(ulong guildId, ulong userId)
@@ -250,7 +282,68 @@ public class ShopService
             IsAvailable     = true,
             DurationMinutes = 60,
         },
+
+        // ── Vé Pool Đặc Biệt ─────────────────────────────────────────────────
+        new InventoryItem
+        {
+            GuildId     = guildId,
+            Name        = "Vé Pool Đặc Biệt",
+            Emoji       = "🎟️",
+            Price       = 3_000,
+            Description = "Cho phép câu 1 lần tại Special Pool (Level 20+ yêu cầu). Dùng 1 vé/lần câu.",
+            Type        = ItemType.PoolTicket,
+            IsAvailable = true,
+            UsageCount  = 1,
+        },
     ];
+
+    /// <summary>
+    /// Sử dụng vật phẩm tiêu thụ từ túi đồ.
+    /// Trả về (success, message, coinsPaid=0, item) cho InvoiceService.
+    /// </summary>
+    public async Task<(bool success, string message, InventoryItem? item)> UseItemAsync(
+        ulong guildId, ulong userId, string itemName)
+    {
+        var wallet    = await _walletRepo.GetOrCreateAsync(guildId, userId);
+        var inventory = await _shopRepo.GetUserInventoryAsync(wallet.Id);
+
+        var userItem = inventory.FirstOrDefault(i =>
+            string.Equals(i.Item.Name, itemName, StringComparison.OrdinalIgnoreCase)
+            && i.Quantity > 0);
+
+        if (userItem is null)
+            return (false, $"❌ Bạn không có **{itemName}** trong túi đồ.", null);
+
+        var item = userItem.Item;
+
+        switch (item.Type)
+        {
+            case ItemType.WeatherItem:
+            {
+                var duration = item.DurationMinutes ?? 60;
+                await _weatherService.ForceWeatherAsync(guildId, PondWeather.Rainy, duration);
+
+                userItem.Quantity--;
+                if (userItem.Quantity <= 0)
+                    await _shopRepo.RemoveUserInventoryAsync(userItem);
+                await _shopRepo.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "User {UserId} used [{Item}] → Rainy {Min}min in guild {GuildId}",
+                    userId, item.Name, duration, guildId);
+
+                return (true,
+                    $"🌧️ **{item.Name}** kích hoạt! Thời tiết **Mưa** trong **{duration} phút**.\n" +
+                    $"Drop rate Rare +15% | Legendary +5%",
+                    item);
+            }
+
+            default:
+                return (false,
+                    $"❌ **{item.Name}** không thể dùng trực tiếp bằng lệnh này.",
+                    null);
+        }
+    }
 
     public async Task<(bool success, string message)> AddShopItemAsync(
         ulong guildId, string name, string emoji, long price,

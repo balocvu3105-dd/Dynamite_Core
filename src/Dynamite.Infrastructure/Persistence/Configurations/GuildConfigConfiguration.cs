@@ -66,6 +66,38 @@ public class GuildConfigConfiguration : IEntityTypeConfiguration<GuildConfig>
         builder.Property(g => g.WelcomeImageEnabled)
             .HasDefaultValue(true);
 
+        // ulong? fields — Npgsql cần explicit mapping sang numeric(20,0)
+        builder.Property(g => g.AuditLogChannelId)
+            .HasColumnType("numeric(20,0)");
+
+        builder.Property(g => g.DailyChannelId)
+            .HasColumnType("numeric(20,0)");
+
+        builder.Property(g => g.FishingChannelId)
+            .HasColumnType("numeric(20,0)");
+
+        // Leaderboard channels
+        builder.Property(g => g.FishingLeaderboardChannelId)
+            .HasColumnType("numeric(20,0)");
+        builder.Property(g => g.ServerLeaderboardChannelId)
+            .HasColumnType("numeric(20,0)");
+
+        // Phase A channel system
+        builder.Property(g => g.SpecialPoolChannelId)
+            .HasColumnType("numeric(20,0)");
+        builder.Property(g => g.ShopChannelId)
+            .HasColumnType("numeric(20,0)");
+        builder.Property(g => g.ShopShowcaseMessageId)
+            .HasColumnType("numeric(20,0)");
+        builder.Property(g => g.InvoiceChannelId)
+            .HasColumnType("numeric(20,0)");
+        builder.Property(g => g.WeatherChannelId)
+            .HasColumnType("numeric(20,0)");
+        builder.Property(g => g.WeatherForecastMessageId)
+            .HasColumnType("numeric(20,0)");
+        builder.Property(g => g.GuideChannelId)
+            .HasColumnType("numeric(20,0)");
+
         builder.HasMany(g => g.Warnings)
             .WithOne(w => w.GuildConfig)
             .HasForeignKey(w => w.GuildConfigId)

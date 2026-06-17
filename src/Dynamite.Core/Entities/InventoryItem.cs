@@ -9,7 +9,8 @@ public enum ItemType
     Bait,        // Lucky Bait: +10% Rare trong N lần câu tiếp theo
     AutoFish,    // Gói auto-câu X phút (Y lần, 10s/lần)
     WeatherItem, // Rain Charm: force weather Rainy N phút
-    BagUpgrade   // Mở rộng túi cá: UsageCount = dung lượng mới (20 hoặc 50)
+    BagUpgrade,  // Mở rộng túi cá: UsageCount = dung lượng mới (20 hoặc 50)
+    PoolTicket   // Vé vào pool đặc biệt: 1 vé = 1 lần câu trong Special Pool
 }
 
 public class InventoryItem : BaseEntity

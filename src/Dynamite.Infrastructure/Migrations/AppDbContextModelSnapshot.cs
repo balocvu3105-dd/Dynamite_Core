@@ -435,6 +435,9 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Property<decimal?>("FishingChannelId")
                         .HasColumnType("numeric(20,0)");
 
+                    b.Property<decimal?>("FishingLeaderboardChannelId")
+                        .HasColumnType("numeric(20,0)");
+
                     b.Property<long>("GuildId")
                         .HasColumnType("bigint");
 
@@ -498,6 +501,30 @@ namespace Dynamite.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
+
+                    b.Property<decimal?>("GuideChannelId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<decimal?>("InvoiceChannelId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<decimal?>("ServerLeaderboardChannelId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<decimal?>("ShopChannelId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<decimal?>("ShopShowcaseMessageId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<decimal?>("SpecialPoolChannelId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<decimal?>("WeatherChannelId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<decimal?>("WeatherForecastMessageId")
+                        .HasColumnType("numeric(20,0)");
 
                     b.Property<string>("WelcomeMessage")
                         .HasMaxLength(500)

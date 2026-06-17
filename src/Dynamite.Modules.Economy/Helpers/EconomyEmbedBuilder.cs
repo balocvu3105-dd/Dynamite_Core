@@ -194,6 +194,7 @@ public static class EconomyEmbedBuilder
             ItemType.Bait        => line + $"\n🪱 +10% Rare | {i.UsageCount} lần dùng",
             ItemType.AutoFish    => line + $"\n🤖 Auto câu {i.DurationMinutes} phút (10s/lần)",
             ItemType.WeatherItem => line + $"\n☔ Force Rainy {i.DurationMinutes} phút",
+            ItemType.PoolTicket  => line + $"\n🎟️ Vào Special Pool 1 lần | Yêu cầu Level 20+",
             _                    => line
         };
     }
