@@ -165,7 +165,6 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
     [SlashCommand("stop", "Dừng session auto câu cá sớm (không hoàn tiền)")]
     public async Task StopAsync()
     {
-        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
         await DeferAsync(ephemeral: true);
 
         var profile = await _profileRepo.GetOrCreateFishingAsync(
@@ -202,7 +201,6 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
     [SlashCommand("status", "Xem trạng thái gói auto câu cá")]
     public async Task StatusAsync()
     {
-        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
         await DeferAsync(ephemeral: true);
 
         var profile = await _profileRepo.GetOrCreateFishingAsync(
