@@ -22,6 +22,7 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
     private readonly IUserProfileRepository   _profileRepo;
     private readonly IFishBagRepository       _bagRepo;
     private readonly IFishingLogRepository    _fishLog;
+    private readonly IGuildConfigRepository   _configRepo;
     private readonly ILogger<AdminFishingCommands> _logger;
 
     public AdminFishingCommands(
@@ -29,13 +30,33 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
         IUserProfileRepository        profileRepo,
         IFishBagRepository            bagRepo,
         IFishingLogRepository         fishLog,
+        IGuildConfigRepository        configRepo,
         ILogger<AdminFishingCommands> logger)
     {
         _snapshot    = snapshot;
         _profileRepo = profileRepo;
         _bagRepo     = bagRepo;
         _fishLog     = fishLog;
+        _configRepo  = configRepo;
         _logger      = logger;
+    }
+
+    // ── /admin-fishing set-channel ────────────────────────────────────────────
+
+    [SlashCommand("set-channel", "Đặt channel câu cá — chỉ channel này mới dùng được lệnh câu cá")]
+    public async Task SetFishingChannelAsync(
+        [Summary("channel", "Channel câu cá dành riêng")] ITextChannel channel)
+    {
+        await DeferAsync(ephemeral: true);
+
+        var config = await _configRepo.GetOrCreateAsync(Context.Guild.Id, Context.Guild.Name);
+        config.FishingChannelId = channel.Id;
+        await _configRepo.SaveChangesAsync();
+
+        await FollowupAsync(
+            $"✅ Đã set {channel.Mention} làm channel câu cá.\n" +
+            $"Tất cả lệnh `/fishing`, `/bag`, `/fish-auto` chỉ hoạt động trong channel đó.",
+            ephemeral: true);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
