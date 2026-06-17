@@ -94,11 +94,15 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var added = await _shop.SeedDefaultItemsAsync(Context.Guild.Id);
+        var (added, updated) = await _shop.SeedDefaultItemsAsync(Context.Guild.Id);
 
-        var reply = added == 0
-            ? "ℹ️ Tất cả vật phẩm mặc định đã tồn tại trong cửa hàng rồi."
-            : $"✅ Đã thêm **{added}** vật phẩm mặc định! Dùng `/shop view` để xem.";
+        var reply = (added, updated) switch
+        {
+            (0, 0) => "ℹ️ Tất cả vật phẩm đã up-to-date.",
+            (0, _) => $"✅ Đã sync **{updated}** vật phẩm — giá và stats đã được cập nhật.",
+            (_, 0) => $"✅ Đã thêm **{added}** vật phẩm mới.",
+            _      => $"✅ Thêm **{added}** mới · Cập nhật **{updated}** vật phẩm."
+        };
 
         await FollowupAsync(reply, ephemeral: true);
 

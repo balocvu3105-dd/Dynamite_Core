@@ -189,24 +189,45 @@ public class ShopService
     /// Bỏ qua item đã tồn tại (idempotent).
     /// Trả về số lượng item được thêm mới.
     /// </summary>
-    public async Task<int> SeedDefaultItemsAsync(ulong guildId)
+    /// <summary>
+    /// Seed items mặc định: thêm mới nếu chưa tồn tại, update stats/giá nếu đã có.
+    /// Trả về (added, updated).
+    /// </summary>
+    public async Task<(int added, int updated)> SeedDefaultItemsAsync(ulong guildId)
     {
         var defaults = BuildDefaultItems(guildId);
-        int added = 0;
+        int added = 0, updated = 0;
 
         foreach (var item in defaults)
         {
             var existing = await _shopRepo.GetItemByNameAsync(guildId, item.Name);
-            if (existing is not null) continue;
 
-            await _shopRepo.AddItemAsync(item);
-            added++;
+            if (existing is null)
+            {
+                await _shopRepo.AddItemAsync(item);
+                added++;
+            }
+            else
+            {
+                // Sync tất cả stats từ defaults → DB (giá, cooldown, rates, v.v.)
+                existing.Emoji           = item.Emoji;
+                existing.Price           = item.Price;
+                existing.Description     = item.Description;
+                existing.IsAvailable     = item.IsAvailable;
+                existing.CooldownSeconds = item.CooldownSeconds;
+                existing.DropMultiplier  = item.DropMultiplier;
+                existing.MissRate        = item.MissRate;
+                existing.EscapeRate      = item.EscapeRate;
+                existing.UsageCount      = item.UsageCount;
+                existing.DurationMinutes = item.DurationMinutes;
+                updated++;
+            }
         }
 
-        if (added > 0)
+        if (added > 0 || updated > 0)
             await _shopRepo.SaveChangesAsync();
 
-        return added;
+        return (added, updated);
     }
 
     private static List<InventoryItem> BuildDefaultItems(ulong guildId) =>
