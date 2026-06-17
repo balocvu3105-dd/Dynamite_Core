@@ -75,4 +75,8 @@ public class GuildConfig : BaseEntity
     // Guide / Cẩm nang
     /// <summary>Channel cẩm nang hướng dẫn (bot post các embed preset).</summary>
     public ulong? GuideChannelId { get; set; }
+
+    // Fishing notification role
+    /// <summary>Role được mention khi thời tiết bể cá thay đổi (vd: role Ngư Dân).</summary>
+    public ulong? FishingRoleId { get; set; }
 }

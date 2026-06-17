@@ -171,8 +171,11 @@ var host = Host.CreateDefaultBuilder(args)
         // Phase A — Channel System (Shop showcase, Invoice, Weather forecast, Guide)
         services.AddScoped<ShopShowcaseService>();
         services.AddScoped<InvoiceService>();
-        services.AddScoped<WeatherForecastService>();
+        services.AddSingleton<WeatherForecastService>(); // Singleton vì WeatherChangeNotifier inject trực tiếp
         services.AddScoped<GuideService>();
+
+        // Phase A — Weather Change Notifier (mention role Ngư Dân khi thời tiết đổi)
+        services.AddHostedService<WeatherChangeNotifier>();
 
         // Phase 5 — Temp Voice
         services.AddSingleton<TempVoiceService>();

@@ -121,6 +121,29 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // /admin-fishing set-fishing-role <role>
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [SlashCommand("set-fishing-role", "Đặt role được mention khi thời tiết bể cá thay đổi")]
+    public async Task SetFishingRoleAsync(
+        [Summary("role", "Role muốn mention (vd: @Ngư Dân)")] IRole role)
+    {
+        await DeferAsync(ephemeral: true);
+
+        var config = await _configRepo.GetOrCreateAsync(Context.Guild.Id, Context.Guild.Name);
+        config.FishingRoleId = role.Id;
+        await _configRepo.SaveChangesAsync();
+
+        await FollowupAsync(
+            embed: new EmbedBuilder()
+                .WithColor(new Color(0x2ECC71))
+                .WithTitle("✅ Đã Đặt Role Thông Báo")
+                .WithDescription($"Role {role.Mention} sẽ được mention mỗi khi thời tiết bể cá thay đổi.")
+                .Build(),
+            ephemeral: true);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // /admin-fishing set-weather <weather> [minutes]
     // ─────────────────────────────────────────────────────────────────────────
 
