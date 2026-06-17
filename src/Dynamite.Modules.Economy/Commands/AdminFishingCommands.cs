@@ -430,6 +430,50 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
         await FollowupAsync(embed: embedBuilder.Build(), ephemeral: true);
     }
 
+    // ── /admin-fishing stop-all-auto ────────────────────────────────────────
+
+    [SlashCommand("stop-all-auto", "Dừng toàn bộ session auto-fish của tất cả user trong guild")]
+    public async Task StopAllAutoAsync()
+    {
+        await DeferAsync(ephemeral: true);
+
+        var profiles = await _profileRepo.GetAllActiveAutoFishProfilesAsync();
+        var guildProfiles = profiles.Where(p => p.GuildId == Context.Guild.Id).ToList();
+
+        if (guildProfiles.Count == 0)
+        {
+            await FollowupAsync("ℹ️ Không có session auto-fish nào đang chạy.", ephemeral: true);
+            return;
+        }
+
+        foreach (var p in guildProfiles)
+        {
+            p.AutoFishExpiresAt              = DateTime.UtcNow;
+            p.AutoFishSellAll                = false;
+            p.AutoFishPaused                 = false;
+            p.AutoFishSpecialPoolId          = null;
+            p.AutoFishSpecialPoolExpiresAt   = null;
+        }
+
+        await _profileRepo.SaveChangesAsync();
+
+        _logger.LogWarning(
+            "[AdminFishing] Admin {AdminId} force-stopped {Count} auto-fish session(s) in guild {GuildId}",
+            Context.User.Id, guildProfiles.Count, Context.Guild.Id);
+
+        await FollowupAsync(
+            embed: new EmbedBuilder()
+                .WithColor(new Color(0xE74C3C))
+                .WithTitle("⛔ Đã Dừng Toàn Bộ Auto-Fish")
+                .WithDescription(
+                    $"**{guildProfiles.Count}** session auto-fish đã bị dừng.\n\n" +
+                    string.Join("\n", guildProfiles.Select(p => $"• <@{p.UserId}>")))
+                .WithFooter($"Thực hiện bởi {Context.User.Username}")
+                .WithCurrentTimestamp()
+                .Build(),
+            ephemeral: true);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Private helpers
     // ─────────────────────────────────────────────────────────────────────────

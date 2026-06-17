@@ -51,7 +51,7 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
     /// Bảng giá theo lần mua (index = purchaseCount, index cuối là giá trần).
     /// Lần mua 5 trở đi đều trả giá tiers[^1].
     /// </summary>
-    private static readonly long[] PriceTiers = [5_000, 12_000, 25_000, 45_000, 70_000];
+    private static readonly long[] PriceTiers = [10_000, 24_000, 50_000, 90_000, 140_000];
 
     // ─────────────────────────────────────────────────────────────────────────
 
