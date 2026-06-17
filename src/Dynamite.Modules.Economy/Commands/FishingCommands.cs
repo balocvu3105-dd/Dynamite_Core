@@ -29,26 +29,10 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
         _configRepo  = configRepo;
     }
 
-    /// <summary>
-    /// Kiểm tra channel. Trả về true nếu được phép câu ở đây.
-    /// Nếu GuildConfig.FishingChannelId chưa set → cho phép mọi channel.
-    /// </summary>
-    private async Task<bool> CheckFishingChannelAsync()
-    {
-        var config = await _configRepo.GetByGuildIdAsync(Context.Guild.Id);
-        if (config?.FishingChannelId is null) return true;          // chưa cấu hình → thoải mái
-        if (Context.Channel.Id == config.FishingChannelId) return true;
-
-        await RespondAsync(
-            $"❌ Chỉ câu cá được trong <#{config.FishingChannelId}>!",
-            ephemeral: true);
-        return false;
-    }
-
     [SlashCommand("cast", "Thả cần câu cá!")]
     public async Task FishAsync()
     {
-        if (!await CheckFishingChannelAsync()) return;
+        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
 
         await DeferAsync();
 
@@ -68,6 +52,7 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
     [SlashCommand("pond", "Xem trạng thái bể cá và thời tiết hiện tại")]
     public async Task PondAsync()
     {
+        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
         await DeferAsync(ephemeral: true);
         var status = await _pond.GetStatusAsync(Context.Guild.Id);
         var embed  = EconomyEmbedBuilder.BuildPondStatusEmbed(status);
@@ -77,6 +62,7 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
     [SlashCommand("profile", "Xem hồ sơ câu cá và XP của bạn")]
     public async Task ProfileAsync()
     {
+        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
         await DeferAsync(ephemeral: true);
 
         var guildId = Context.Guild.Id;
@@ -102,6 +88,7 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
     [SlashCommand("achievements", "Xem danh sách thành tựu câu cá")]
     public async Task AchievementsAsync()
     {
+        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
         await DeferAsync(ephemeral: true);
 
         var profile = await _profileRepo.GetOrCreateFishingAsync(
@@ -119,6 +106,7 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
     [SlashCommand("pools", "Xem các pool đặc biệt đang hoạt động (Level 20+)")]
     public async Task SpecialPoolsAsync()
     {
+        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
         await DeferAsync(ephemeral: true);
         var pools = await _specialPool.GetActivePoolsAsync(Context.Guild.Id);
         var embed = EconomyEmbedBuilder.BuildSpecialPoolListEmbed(pools);
@@ -129,7 +117,7 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
     public async Task PoolCastAsync(
         [Summary("pool-id", "ID của pool (dùng /fishing pools để xem)")] string poolId)
     {
-        if (!await CheckFishingChannelAsync()) return;
+        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
 
         await DeferAsync();
 

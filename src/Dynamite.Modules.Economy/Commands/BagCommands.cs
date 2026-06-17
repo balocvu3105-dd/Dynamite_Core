@@ -4,22 +4,28 @@ namespace Dynamite.Modules.Economy.Commands;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
+using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Economy.Helpers;
 using Dynamite.Modules.Economy.Services;
 
 [Group("bag", "Quản lý túi cá của bạn")]
 public class BagCommands : InteractionModuleBase<SocketInteractionContext>
 {
-    private readonly FishBagService _bagService;
+    private readonly FishBagService        _bagService;
+    private readonly IGuildConfigRepository _configRepo;
 
-    public BagCommands(FishBagService bagService)
-        => _bagService = bagService;
+    public BagCommands(FishBagService bagService, IGuildConfigRepository configRepo)
+    {
+        _bagService = bagService;
+        _configRepo = configRepo;
+    }
 
     // ── /bag view ─────────────────────────────────────────────────────────────
 
     [SlashCommand("view", "Xem túi cá của bạn")]
     public async Task ViewAsync()
     {
+        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
         var bag   = await _bagService.GetBagAsync(Context.Guild.Id, Context.User.Id);
         var embed = EconomyEmbedBuilder.BuildBagEmbed(bag, Context.User.GlobalName ?? Context.User.Username);
         await RespondAsync(embed: embed);
@@ -30,6 +36,7 @@ public class BagCommands : InteractionModuleBase<SocketInteractionContext>
     [SlashCommand("sell-all", "Bán toàn bộ cá trong túi")]
     public async Task SellAllAsync()
     {
+        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
         await DeferAsync();
 
         var result = await _bagService.SellAllAsync(Context.Guild.Id, Context.User.Id);
@@ -58,6 +65,7 @@ public class BagCommands : InteractionModuleBase<SocketInteractionContext>
         [Choice("Thần (Mythic)",            "Mythic")]
         string rarity)
     {
+        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
         await DeferAsync();
 
         var result = await _bagService.SellByRarityAsync(Context.Guild.Id, Context.User.Id, rarity);

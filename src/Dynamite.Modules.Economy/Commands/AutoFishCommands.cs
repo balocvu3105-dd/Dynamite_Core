@@ -5,6 +5,7 @@ using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
 using Dynamite.Core.Interfaces.Repositories;
+using Dynamite.Modules.Economy.Helpers;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -51,6 +52,7 @@ public class AutoFishCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
+        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
         await DeferAsync(ephemeral: true);
 
         var profile = await _profileRepo.GetOrCreateFishingAsync(
@@ -103,6 +105,7 @@ public class AutoFishCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
+        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
         await DeferAsync(ephemeral: true);
 
         var profile = await _profileRepo.GetOrCreateFishingAsync(
@@ -138,6 +141,7 @@ public class AutoFishCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
+        if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
         await DeferAsync(ephemeral: true);
 
         var profile = await _profileRepo.GetOrCreateFishingAsync(
