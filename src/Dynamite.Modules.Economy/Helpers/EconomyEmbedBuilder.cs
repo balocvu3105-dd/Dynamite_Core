@@ -75,9 +75,9 @@ public static class EconomyEmbedBuilder
     }
 
     /// <summary>
-    /// Embed cho auto-fish (user mode) — giống BuildFishEmbed nhưng có 🤖 prefix và countdown.
+    /// Embed cho auto-fish (user mode) — có username và countdown.
     /// </summary>
-    public static Embed BuildAutoFishEmbed(FishResult result, DateTime expiresAt)
+    public static Embed BuildAutoFishEmbed(FishResult result, DateTime expiresAt, string username)
     {
         var c        = result.Catch;
         var weather  = WeatherService.GetWeatherEmoji(result.Weather);
@@ -103,7 +103,7 @@ public static class EconomyEmbedBuilder
         var chestLabel   = c.IsChest ? "Hòm Báu" : "Cá";
 
         return new EmbedBuilder()
-            .WithTitle($"🤖 [Auto] {c.Emoji} Bắt được {chestLabel}: {c.Name}!")
+            .WithTitle($"🤖 [Auto] {username} {c.Emoji} Bắt được {chestLabel}: {c.Name}!")
             .WithDescription(
                 $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
                 $"**Tiền:** +{c.Coins:N0} coins\n" +
@@ -112,6 +112,45 @@ public static class EconomyEmbedBuilder
                 levelUpText + achieveText)
             .WithColor(RarityColor(c.Rarity))
             .WithFooter($"⏱️ Auto-fish còn lại: {countdownStr}")
+            .Build();
+    }
+
+    /// <summary>
+    /// Embed cho auto-fish admin mode — có username, KHÔNG có countdown.
+    /// </summary>
+    public static Embed BuildAdminAutoFishEmbed(FishResult result, string username)
+    {
+        var c        = result.Catch;
+        var weather  = WeatherService.GetWeatherEmoji(result.Weather);
+        var rodInfo  = result.RodName != null ? $"🎣 Cần: {result.RodName}\n" : "";
+        var xpInfo   = $"✨ +{result.FishingXpGained} Fishing XP\n";
+        var pondInfo = $"🪣 Bể còn: **{result.PondRemaining:N0}** con";
+
+        var levelUpText = result.FishingLevelUp is { LeveledUp: true }
+            ? $"\n\n🎉 **Fishing Level Up! → Lv.{result.FishingLevelUp.NewLevel}**" +
+              (result.FishingLevelUp.RoleAwarded.HasValue
+                  ? $"\n🎖️ Nhận role: <@&{result.FishingLevelUp.RoleAwarded.Value}>!"
+                  : "")
+            : "";
+
+        var achieveText = result.NewAchievements.Count > 0
+            ? "\n\n🏆 **Thành tựu mới:**\n" +
+              string.Join("\n", result.NewAchievements.Select(a =>
+                  $"{a.Title} — +{a.CoinReward:N0} coins"))
+            : "";
+
+        var chestLabel = c.IsChest ? "Hòm Báu" : "Cá";
+
+        return new EmbedBuilder()
+            .WithTitle($"🛠️ [Admin Auto] {username} {c.Emoji} Bắt được {chestLabel}: {c.Name}!")
+            .WithDescription(
+                $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
+                $"**Tiền:** +{c.Coins:N0} coins\n" +
+                $"💰 Số dư: **{result.TotalCoins:N0} coins**\n\n" +
+                $"{rodInfo}{xpInfo}{pondInfo} {weather}" +
+                levelUpText + achieveText)
+            .WithColor(RarityColor(c.Rarity))
+            .WithFooter("🛠️ Admin Auto-Fish")
             .Build();
     }
 

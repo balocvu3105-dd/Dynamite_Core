@@ -58,8 +58,9 @@ public class AutoFishCommands : InteractionModuleBase<SocketInteractionContext>
         // Nếu đang có session chưa hết → gia hạn
         var isRenew = profile.AutoFishExpiresAt.HasValue && profile.AutoFishExpiresAt > now;
 
-        profile.AutoFishExpiresAt = now.AddHours(hours);
-        profile.AutoFishSellAll   = false; // admin mode: giữ Rare+
+        profile.AutoFishExpiresAt  = now.AddHours(hours);
+        profile.AutoFishSellAll    = false; // admin mode: giữ Rare+
+        profile.AutoFishChannelId  = Context.Channel.Id; // post kết quả vào channel này
         await _profileRepo.SaveChangesAsync();
 
         _logger.LogInformation(

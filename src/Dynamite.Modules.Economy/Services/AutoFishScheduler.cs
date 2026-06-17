@@ -106,9 +106,14 @@ public sealed class AutoFishScheduler : BackgroundService
         var userId  = profile.UserId;
         var sellAll = profile.AutoFishSellAll;
 
+        // Lấy display name từ Discord cache (nickname > username > userId)
+        var username = _discord.GetGuild(guildId)?.GetUser(userId)?.DisplayName
+                    ?? _discord.GetUser(userId)?.Username
+                    ?? userId.ToString();
+
         var (success, _, result) = await fishingService.FishAsync(guildId, userId);
 
-        // ── Admin mode: ẩn hoàn toàn ─────────────────────────────────────────
+        // ── Admin mode: bán Common/Uncommon + post embed (không có countdown) ─
         if (!sellAll)
         {
             if (success && result is not null
@@ -116,43 +121,52 @@ public sealed class AutoFishScheduler : BackgroundService
             {
                 await bagService.SellByRarityAsync(guildId, userId, result.Catch.Rarity);
             }
+
+            if (success && result is not null && profile.AutoFishChannelId != 0)
+                await PostAdminEmbedAsync(profile, result, username);
+
             return;
         }
 
         // ── User mode: bán tất + post embed ──────────────────────────────────
-        if (!success || result is null)
-        {
-            // Miss hoặc Escape — cooldown chưa hết hoặc hụt câu.
-            // Không post gì để tránh spam channel.
-            return;
-        }
+        if (!success || result is null) return;
 
         await bagService.SellByRarityAsync(guildId, userId, result.Catch.Rarity);
 
-        // Post embed vào channel (chỉ khi channel đã được lưu)
         if (profile.AutoFishChannelId != 0)
-        {
-            await PostEmbedAsync(profile, result);
-        }
+            await PostUserEmbedAsync(profile, result, username);
     }
 
-    private async Task PostEmbedAsync(UserFishingProfile profile, FishResult result)
+    private async Task PostUserEmbedAsync(UserFishingProfile profile, FishResult result, string username)
     {
         try
         {
             if (_discord.GetChannel(profile.AutoFishChannelId) is not IMessageChannel channel)
-            {
-                _logger.LogDebug("[AutoFish] Channel {Id} not found or not a text channel.", profile.AutoFishChannelId);
                 return;
-            }
 
-            var embed = EconomyEmbedBuilder.BuildAutoFishEmbed(result, profile.AutoFishExpiresAt!.Value);
+            var embed = EconomyEmbedBuilder.BuildAutoFishEmbed(result, profile.AutoFishExpiresAt!.Value, username);
             await channel.SendMessageAsync(embed: embed);
         }
         catch (Exception ex)
         {
-            // Bot thiếu quyền, channel bị xoá,... → bỏ qua
-            _logger.LogDebug("[AutoFish] Failed to post to channel {Id}: {Msg}",
+            _logger.LogDebug("[AutoFish] Failed to post user embed to channel {Id}: {Msg}",
+                profile.AutoFishChannelId, ex.Message);
+        }
+    }
+
+    private async Task PostAdminEmbedAsync(UserFishingProfile profile, FishResult result, string username)
+    {
+        try
+        {
+            if (_discord.GetChannel(profile.AutoFishChannelId) is not IMessageChannel channel)
+                return;
+
+            var embed = EconomyEmbedBuilder.BuildAdminAutoFishEmbed(result, username);
+            await channel.SendMessageAsync(embed: embed);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug("[AutoFish] Failed to post admin embed to channel {Id}: {Msg}",
                 profile.AutoFishChannelId, ex.Message);
         }
     }
