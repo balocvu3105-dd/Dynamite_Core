@@ -83,9 +83,9 @@ public class AutoFishCommands : InteractionModuleBase<SocketInteractionContext>
             .WithColor(Color.Green)
             .WithTitle(isRenew ? "🔄 Auto-Fish Gia Hạn" : "🎣 Auto-Fish Bắt Đầu!")
             .WithDescription(
-                $"Bot sẽ tự câu cho bạn mỗi **35 giây**.\n" +
-                $"**Common/Uncommon** sẽ tự bán.\n" +
-                $"**Rare+** sẽ được giữ vào túi cá.\n\n" +
+                $"Bot sẽ tự câu cho bạn mỗi **27 giây**.\n" +
+                $"Toàn bộ cá câu được sẽ **lưu vào túi cá** (không tự bán).\n" +
+                $"Khi túi đầy bot sẽ **tạm dừng** và báo vào kênh câu cá.\n\n" +
                 $"⏰ Hết hạn: <t:{expiresUnix}:R> (<t:{expiresUnix}:T>)")
             .WithFooter($"Session {hours}h | Dùng /auto-fish stop để dừng sớm")
             .Build();

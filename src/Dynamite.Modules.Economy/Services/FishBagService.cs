@@ -12,7 +12,7 @@ public record BagSellResult(int FishSold, long CoinsEarned, int RemainingFish);
 /// </summary>
 public class FishBagService
 {
-    private const int MaxBagCapacity = 50;
+    private const int MaxBagCapacity = 100;
 
     private readonly IFishBagRepository _bagRepo;
     private readonly IWalletRepository _walletRepo;

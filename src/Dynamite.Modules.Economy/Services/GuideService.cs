@@ -201,7 +201,9 @@ public class GuideService
                 "`/fish-auto status` — Xem còn bao nhiêu thời gian",
                 inline: false)
             .AddField("📌 Lưu ý",
-                "• Bot câu mỗi **27 giây**, bán toàn bộ cá vào ví\n" +
+                "• Bot câu mỗi **27 giây**, cá được **lưu vào túi** (không tự bán)\n" +
+                "• Khi túi đầy → bot tự **tạm dừng** và ping bạn — bán cá rồi `/fish-auto resume`\n" +
+                "• Túi tối đa **100 slot** — nâng cấp tại `/shop`\n" +
                 "• Tên bạn hiển thị trên mỗi kết quả câu\n" +
                 "• Chỉ dùng lệnh trong kênh câu cá được chỉ định",
                 inline: false)

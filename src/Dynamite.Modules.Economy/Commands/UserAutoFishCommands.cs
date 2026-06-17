@@ -16,7 +16,8 @@ using Microsoft.Extensions.Logging;
 /// - Mua trực tiếp bằng coins, KHÔNG cần item trong shop
 /// - Mỗi lần mua = 3 ngày auto câu, hết phải mua lại / gia hạn
 /// - Giá leo thang theo số lần mua (lần 1 rẻ, càng về sau càng đắt)
-/// - Bot câu mỗi 35 giây, bán toàn bộ cá câu được vào ví
+/// - Bot câu mỗi 27 giây, cá câu được lưu vào túi (KHÔNG tự bán)
+/// - Khi túi đầy → session tự pause, bot báo vào channel câu cá
 ///
 /// Bảng giá (PriceTiers):
 ///   Lần 1:  5,000 coins   ← khuyến mãi đầu tiên
@@ -143,7 +144,8 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
             .WithTitle(isRenew ? "🔄 Auto-Fish Gia Hạn!" : "🎣 Auto-Fish Kích Hoạt!")
             .WithDescription(
                 $"Bot sẽ tự câu cho bạn mỗi **27 giây**.\n" +
-                $"Cá câu được sẽ **tự bán toàn bộ** vào ví.\n\n" +
+                $"Cá câu được sẽ **lưu vào túi cá** (không tự bán).\n" +
+                $"Khi túi đầy bot sẽ **tạm dừng** và báo vào kênh câu cá.\n\n" +
                 $"⏰ Hết hạn: <t:{expiresUnix}:F>\n" +
                 $"_(Còn <t:{expiresUnix}:R>)_")
             .AddField("Đã thanh toán", $"💰 **{price:N0}** coins", inline: true)

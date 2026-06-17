@@ -14,8 +14,10 @@ using Microsoft.Extensions.Logging;
 /// BackgroundService chạy auto-câu cho tất cả user/admin đang có session hoạt động.
 ///
 /// Tick mỗi 27 giây (cooldown DB là 25s → buffer 2s):
-///   • User mode  (AutoFishSellAll = true):  bán tất cả, post embed kết quả vào channel.
-///   • Admin mode (AutoFishSellAll = false): giữ Rare+, ẩn hoàn toàn (không post gì).
+///   • Câu cá → lưu vào túi (KHÔNG tự bán).
+///   • Khi túi đầy → tự động pause session + ping user vào channel.
+///   • User mode (AutoFishSellAll = true):  post embed kết quả vào channel.
+///   • Admin mode (AutoFishSellAll = false): post embed kiểu admin (không có countdown).
 ///
 /// Channel được lưu trong AutoFishChannelId tại thời điểm user bấm /fish-auto buy.
 /// Nếu channel đã xoá hoặc bot không có quyền → bỏ qua lặng lẽ.
@@ -69,7 +71,6 @@ public sealed class AutoFishScheduler : BackgroundService
 
         var profileRepo    = scope.ServiceProvider.GetRequiredService<IUserProfileRepository>();
         var fishingService = scope.ServiceProvider.GetRequiredService<FishingService>();
-        var bagService     = scope.ServiceProvider.GetRequiredService<FishBagService>();
 
         var activeProfiles = await profileRepo.GetAllActiveAutoFishProfilesAsync();
 
@@ -83,7 +84,7 @@ public sealed class AutoFishScheduler : BackgroundService
 
             try
             {
-                await ProcessUserAsync(profile, fishingService, bagService);
+                await ProcessUserAsync(profile, fishingService, profileRepo);
             }
             catch (Exception ex)
             {
@@ -98,45 +99,48 @@ public sealed class AutoFishScheduler : BackgroundService
     }
 
     private async Task ProcessUserAsync(
-        UserFishingProfile profile,
-        FishingService     fishingService,
-        FishBagService     bagService)
+        UserFishingProfile     profile,
+        FishingService         fishingService,
+        IUserProfileRepository profileRepo)
     {
-        var guildId = profile.GuildId;
-        var userId  = profile.UserId;
-        var sellAll = profile.AutoFishSellAll;
-
-        // Lấy display name từ Discord cache (nickname > username > userId)
-        // Bỏ qua nếu đang pause
         if (profile.AutoFishPaused) return;
 
+        var guildId = profile.GuildId;
+        var userId  = profile.UserId;
+        var isAdmin = !profile.AutoFishSellAll;
+
+        // Lấy display name từ Discord cache (nickname > username > userId)
         var username = _discord.GetGuild(guildId)?.GetUser(userId)?.DisplayName
                     ?? _discord.GetUser(userId)?.Username
                     ?? userId.ToString();
 
         var (success, _, result) = await fishingService.FishAsync(guildId, userId);
+        if (!success || result is null) return;
 
-        // ── Admin mode: bán Common/Uncommon + post embed (không có countdown) ─
-        if (!sellAll)
+        // ── Túi đầy → auto-pause + notify ────────────────────────────────────
+        if (!result.SavedToBag)
         {
-            if (success && result is not null
-                && result.Catch.Rarity is "Common" or "Uncommon")
-            {
-                await bagService.SellByRarityAsync(guildId, userId, result.Catch.Rarity);
-            }
+            // Load fresh profile để tránh stale data
+            var freshProfile = await profileRepo.GetOrCreateFishingAsync(guildId, userId);
+            freshProfile.AutoFishPaused = true;
+            await profileRepo.SaveChangesAsync();
 
-            if (success && result is not null && profile.AutoFishChannelId != 0)
-                await PostAdminEmbedAsync(profile, result, username);
+            _logger.LogInformation(
+                "[AutoFish] Bag full — paused session for user {UserId} in guild {GuildId}",
+                userId, guildId);
+
+            if (profile.AutoFishChannelId != 0)
+                await PostBagFullNotificationAsync(profile, username);
 
             return;
         }
 
-        // ── User mode: bán tất + post embed ──────────────────────────────────
-        if (!success || result is null) return;
+        // ── Post embed kết quả ────────────────────────────────────────────────
+        if (profile.AutoFishChannelId == 0) return;
 
-        await bagService.SellByRarityAsync(guildId, userId, result.Catch.Rarity);
-
-        if (profile.AutoFishChannelId != 0)
+        if (isAdmin)
+            await PostAdminEmbedAsync(profile, result, username);
+        else
             await PostUserEmbedAsync(profile, result, username);
     }
 
@@ -170,6 +174,33 @@ public sealed class AutoFishScheduler : BackgroundService
         catch (Exception ex)
         {
             _logger.LogDebug("[AutoFish] Failed to post admin embed to channel {Id}: {Msg}",
+                profile.AutoFishChannelId, ex.Message);
+        }
+    }
+
+    private async Task PostBagFullNotificationAsync(UserFishingProfile profile, string username)
+    {
+        try
+        {
+            if (_discord.GetChannel(profile.AutoFishChannelId) is not IMessageChannel channel)
+                return;
+
+            var embed = new EmbedBuilder()
+                .WithColor(new Color(0xE67E22)) // cam
+                .WithTitle("🎒 Túi Cá Đầy — Auto-Fish Tạm Dừng!")
+                .WithDescription(
+                    $"**{username}** — Túi cá đã đầy!\n\n" +
+                    "Bot đã tự động **tạm dừng** session auto câu cá.\n" +
+                    "Hãy bán bớt cá bằng `/bag sell-all`, rồi dùng `/fish-auto resume` để tiếp tục.")
+                .WithFooter("Auto-Fish đã tạm dừng tự động • Timer vẫn đang chạy")
+                .WithCurrentTimestamp()
+                .Build();
+
+            await channel.SendMessageAsync($"<@{profile.UserId}>", embed: embed);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug("[AutoFish] Failed to post bag-full notification to channel {Id}: {Msg}",
                 profile.AutoFishChannelId, ex.Message);
         }
     }
