@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 /// Tách riêng thay vì nested dưới /admin vì Discord.Net không hỗ trợ nested groups.
 /// </summary>
 [RequireContext(ContextType.Guild)]
+[DefaultMemberPermissions(GuildPermission.Administrator)]
 [RequireUserPermission(GuildPermission.Administrator)]
 [Group("admin-fishing", "Admin: Quản lý dữ liệu câu cá")]
 public class AdminFishingCommands : InteractionModuleBase<SocketInteractionContext>

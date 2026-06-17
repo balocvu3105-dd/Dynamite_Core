@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 /// - Không tốn item hay coin — privilege cho Admin/Owner để flex bộ sưu tập
 /// </summary>
 [RequireContext(ContextType.Guild)]
+[DefaultMemberPermissions(GuildPermission.Administrator)]
 [Group("auto-fish", "Auto câu cá tự động (Admin/Owner only)")]
 public class AutoFishCommands : InteractionModuleBase<SocketInteractionContext>
 {
