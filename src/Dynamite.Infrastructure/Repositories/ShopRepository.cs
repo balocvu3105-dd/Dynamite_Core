@@ -51,6 +51,12 @@ public class ShopRepository : IShopRepository
             .OrderByDescending(u => u.Item.DropMultiplier)
             .FirstOrDefaultAsync();
 
+    public Task RemoveUserInventoryAsync(UserInventory inventory)
+    {
+        _db.UserInventories.Remove(inventory);
+        return Task.CompletedTask;
+    }
+
     public Task SaveChangesAsync()
         => _db.SaveChangesAsync();
 }

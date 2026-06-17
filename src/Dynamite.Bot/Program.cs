@@ -26,6 +26,7 @@ using Dynamite.Modules.Ticket.Services;
 using Dynamite.Modules.Welcome;
 using Dynamite.Modules.Welcome.Helpers;
 using Dynamite.Modules.Economy.Commands;
+using Dynamite.Modules.Economy.Handlers;
 using Dynamite.Modules.Economy.Services;
 using Dynamite.Modules.Voice;
 using Dynamite.Modules.Voice.Services;
@@ -49,6 +50,7 @@ var host = Host.CreateDefaultBuilder(args)
 
         services.AddApplication();
         services.AddInfrastructure(config);
+        services.AddMemoryCache(); // dùng cho WeatherService cache
         services.Configure<DiscordSettings>(config.GetSection("Discord"));
 
         // ─── Scheduled Restart ────────────────────────────────────────────────
@@ -134,13 +136,37 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<TicketService>();
         services.AddSingleton<TicketInteractionService>();
 
-        // Phase 10c — Economy
+        // Phase 10c — Economy v2
         services.AddScoped<IWalletRepository, WalletRepository>();
         services.AddScoped<IShopRepository, ShopRepository>();
+        services.AddScoped<IPondRepository, PondRepository>();
+        services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<WalletService>();
         services.AddScoped<FishingService>();
         services.AddScoped<ShopService>();
-        services.AddMemoryCache();
+        services.AddScoped<XpService>();
+        services.AddScoped<PondService>();
+        services.AddScoped<WeatherService>();
+        services.AddSingleton<EconomyEventHandler>();
+
+        // Economy v2.1 — Fish Bag, Special Pool, Leaderboard
+        services.AddScoped<IFishBagRepository, FishBagRepository>();
+        services.AddScoped<ISpecialPoolRepository, SpecialPoolRepository>();
+        services.AddScoped<ILeaderboardRepository, LeaderboardRepository>();
+        services.AddScoped<FishBagService>();
+        services.AddScoped<SpecialPoolService>();
+        services.AddHostedService<SpecialPoolScheduler>();
+        services.AddHostedService<LeaderboardHostedService>();
+
+        // Economy v2.2 — Activity Log, Snapshot/Backup, Miss/Escape
+        services.AddScoped<IFishingLogRepository, FishingLogRepository>();
+        services.AddScoped<IFishingSnapshotRepository, FishingSnapshotRepository>();
+        services.AddScoped<FishingSnapshotService>();
+        services.AddHostedService<FishingBackupScheduler>();
+
+        // Economy v2.3 — Trophy (Collector leaderboard) + Auto-Fish
+        services.AddScoped<IFishTrophyRepository, FishTrophyRepository>();
+        services.AddHostedService<AutoFishScheduler>();
 
         // Phase 5 — Temp Voice
         services.AddSingleton<TempVoiceService>();

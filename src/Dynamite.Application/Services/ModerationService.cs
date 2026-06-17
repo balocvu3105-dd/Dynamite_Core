@@ -131,7 +131,7 @@ public class ModerationService : IModerationService
 
     public async Task<IEnumerable<ModerationAction>> GetHistoryAsync(
         ulong guildId, ulong userId, CancellationToken ct = default)
-        => await _moderationRepo.GetUserHistoryAsync(guildId, userId, ct);
+        => await _moderationRepo.GetUserHistoryAsync(guildId, userId, ct: ct);
 
     /// <summary>
     /// Soft-delete a warning (IsActive = false) scoped to a guild.

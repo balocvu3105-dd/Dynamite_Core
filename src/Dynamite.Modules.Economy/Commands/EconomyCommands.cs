@@ -59,7 +59,7 @@ public class EconomyCommands : InteractionModuleBase<SocketInteractionContext>
         await FollowupAsync(success ? message : $"❌ {message}", ephemeral: true);
     }
 
-    [SlashCommand("leaderboard", "View the top coin holders")]
+    [SlashCommand("richest", "Top người giàu nhất server (coins)")]
     public async Task LeaderboardAsync()
     {
         await DeferAsync();

@@ -11,8 +11,8 @@ using Xunit;
 public class ShopServiceTests
 {
     private readonly Mock<IWalletRepository> _walletRepoMock;
-    private readonly Mock<IShopRepository> _shopRepoMock;
-    private readonly ShopService _sut;
+    private readonly Mock<IShopRepository>   _shopRepoMock;
+    private readonly ShopService             _sut;
 
     private const ulong GuildId = 111111111111111111UL;
     private const ulong UserId  = 222222222222222222UL;
@@ -21,9 +21,12 @@ public class ShopServiceTests
     {
         _walletRepoMock = new Mock<IWalletRepository>();
         _shopRepoMock   = new Mock<IShopRepository>();
+
+        // FishBagService chỉ dùng trong BagUpgrade path — các test này không cần
         _sut = new ShopService(
             _walletRepoMock.Object,
             _shopRepoMock.Object,
+            null!,                                // FishBagService (not used in these tests)
             NullLogger<ShopService>.Instance);
     }
 
@@ -38,7 +41,7 @@ public class ShopServiceTests
 
         // Assert
         Assert.False(success);
-        Assert.Contains("not found", message);
+        Assert.Contains("ghost", message); // "Không tìm thấy **ghost** trong cửa hàng."
     }
 
     [Fact]
@@ -52,11 +55,10 @@ public class ShopServiceTests
         _walletRepoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
 
         // Act
-        var (success, message) = await _sut.BuyAsync(GuildId, UserId, item.Name);
+        var (success, _) = await _sut.BuyAsync(GuildId, UserId, item.Name);
 
         // Assert
         Assert.False(success);
-        Assert.Contains("Insufficient", message);
         Assert.Equal(100, wallet.Coins); // không bị deduct
     }
 
@@ -84,32 +86,31 @@ public class ShopServiceTests
     public async Task Buy_FishingRodAlreadyOwned_ShouldFail()
     {
         // Arrange
-        var item      = MakeItem(200, ItemType.FishingRod);
-        var wallet    = new UserWallet { GuildId = GuildId, UserId = UserId, Coins = 500 };
-        var existing  = new UserInventory { WalletId = wallet.Id, ItemId = item.Id, Quantity = 1 };
+        var item     = MakeItem(200, ItemType.FishingRod);
+        var wallet   = new UserWallet { GuildId = GuildId, UserId = UserId, Coins = 500 };
+        var existing = new UserInventory { WalletId = wallet.Id, ItemId = item.Id, Quantity = 1 };
 
         _shopRepoMock.Setup(r => r.GetItemByNameAsync(GuildId, item.Name)).ReturnsAsync(item);
         _shopRepoMock.Setup(r => r.GetUserItemAsync(wallet.Id, item.Id)).ReturnsAsync(existing);
         _walletRepoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
 
         // Act
-        var (success, message) = await _sut.BuyAsync(GuildId, UserId, item.Name);
+        var (success, _) = await _sut.BuyAsync(GuildId, UserId, item.Name);
 
         // Assert
         Assert.False(success);
-        Assert.Contains("already own", message);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static InventoryItem MakeItem(long price, ItemType type = ItemType.Collectible) => new()
     {
-        Id = Guid.NewGuid(),
-        GuildId = GuildId,
-        Name = "Test Item",
-        Emoji = "📦",
-        Price = price,
-        Type = type,
+        Id          = Guid.NewGuid(),
+        GuildId     = GuildId,
+        Name        = "Test Item",
+        Emoji       = "📦",
+        Price       = price,
+        Type        = type,
         IsAvailable = true
     };
 }

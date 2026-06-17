@@ -5,7 +5,11 @@ public enum ItemType
 {
     Collectible,
     FishingRod,
-    Consumable
+    Consumable,
+    Bait,        // Lucky Bait: +10% Rare trong N lần câu tiếp theo
+    AutoFish,    // Gói auto-câu X phút (Y lần, 10s/lần)
+    WeatherItem, // Rain Charm: force weather Rainy N phút
+    BagUpgrade   // Mở rộng túi cá: UsageCount = dung lượng mới (20 hoặc 50)
 }
 
 public class InventoryItem : BaseEntity
@@ -18,9 +22,17 @@ public class InventoryItem : BaseEntity
     public ItemType Type { get; set; } = ItemType.Collectible;
     public bool IsAvailable { get; set; } = true;
 
-    // Chỉ dùng khi Type == FishingRod
+    // FishingRod
     public int? CooldownSeconds { get; set; }
     public double? DropMultiplier { get; set; }
+    /// <summary>Tỉ lệ hụt trước khi cá cắn (0.0–1.0). Default 0.15 nếu null.</summary>
+    public double? MissRate { get; set; }
+    /// <summary>Tỉ lệ cá cắn rồi thoát sau khi roll (0.0–1.0). Default 0.10 nếu null.</summary>
+    public double? EscapeRate { get; set; }
+
+    // Bait / AutoFish / WeatherItem — số lần hoặc số phút hiệu lực
+    public int? UsageCount { get; set; }
+    public int? DurationMinutes { get; set; }
 
     public ICollection<UserInventory> Owners { get; set; } = [];
 }

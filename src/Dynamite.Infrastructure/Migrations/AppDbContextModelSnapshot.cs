@@ -22,44 +22,6 @@ namespace Dynamite.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Dynamite.Core.Entities.TempVoiceConfig", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<long?>("CategoryId")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("DefaultUserLimit")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("GuildConfigId")
-                        .HasColumnType("uuid");
-
-                    b.Property<long>("GuildId")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("TriggerChannelId")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GuildConfigId")
-                        .IsUnique();
-
-                    b.HasIndex("GuildId")
-                        .IsUnique();
-
-                    b.ToTable("TempVoiceConfigs");
-                });
-
             modelBuilder.Entity("Dynamite.Core.Entities.AntiSpamConfig", b =>
                 {
                     b.Property<Guid>("Id")
@@ -142,6 +104,197 @@ namespace Dynamite.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("AutoRoleConfigs");
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.CaughtFish", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("CoinValue")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FishEmoji")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("FishName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<bool>("IsPearl")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsSpecialCreature")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Rarity")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SourcePool")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("UserId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BagId");
+
+                    b.HasIndex("GuildId", "UserId");
+
+                    b.ToTable("CaughtFish", (string)null);
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.FishingActivityLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("CoinsEarned")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Event")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("FishName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<int>("PondRemaining")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PoolName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Rarity")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("RodName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("UserId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<string>("Weather")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("XpEarned")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("GuildId", "CreatedAt");
+
+                    b.HasIndex("GuildId", "UserId", "CreatedAt");
+
+                    b.ToTable("FishingActivityLogs", (string)null);
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.FishingDataSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AchievementIds")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("BagCapacity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BagSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("ChestsOpened")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CommonCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FishingLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("FishingXp")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<int>("LegendaryCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MythicCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RareCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("TotalCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UncommonCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("UserId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<long>("WalletCoins")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "UserId", "CreatedAt");
+
+                    b.ToTable("FishingDataSnapshots", (string)null);
                 });
 
             modelBuilder.Entity("Dynamite.Core.Entities.Giveaway", b =>
@@ -276,6 +429,12 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal?>("DailyChannelId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<decimal?>("FishingChannelId")
+                        .HasColumnType("numeric(20,0)");
+
                     b.Property<long>("GuildId")
                         .HasColumnType("bigint");
 
@@ -352,6 +511,116 @@ namespace Dynamite.Infrastructure.Migrations
                     b.ToTable("GuildConfigs");
                 });
 
+            modelBuilder.Entity("Dynamite.Core.Entities.GuildLevelRole", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<string>("LevelType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("RequiredLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("RoleId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "LevelType", "RequiredLevel")
+                        .IsUnique();
+
+                    b.ToTable("GuildLevelRoles", (string)null);
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.GuildPearlLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<string>("PearlType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("UserId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "PearlType", "CreatedAt");
+
+                    b.ToTable("GuildPearlLogs", (string)null);
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.GuildPond", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CurrentFish")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CurrentWeather")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("DailyChannelId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<DateTime?>("DepletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("FishingChannelId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<int>("MaxFish")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ResetAvailableAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("WeatherExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId")
+                        .IsUnique();
+
+                    b.ToTable("GuildPonds", (string)null);
+                });
+
             modelBuilder.Entity("Dynamite.Core.Entities.GuildPresence", b =>
                 {
                     b.Property<Guid>("Id")
@@ -409,16 +678,25 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Property<double?>("DropMultiplier")
                         .HasColumnType("double precision");
 
+                    b.Property<int?>("DurationMinutes")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Emoji")
                         .IsRequired()
                         .HasMaxLength(8)
                         .HasColumnType("character varying(8)");
+
+                    b.Property<double?>("EscapeRate")
+                        .HasColumnType("double precision");
 
                     b.Property<long>("GuildId")
                         .HasColumnType("bigint");
 
                     b.Property<bool>("IsAvailable")
                         .HasColumnType("boolean");
+
+                    b.Property<double?>("MissRate")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -435,12 +713,81 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("UsageCount")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GuildId", "Name")
                         .IsUnique();
 
                     b.ToTable("InventoryItems", (string)null);
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.LeaderboardEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DeltaRank")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("UserId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<long>("Value")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SnapshotId", "Rank");
+
+                    b.ToTable("LeaderboardEntries", (string)null);
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.LeaderboardSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("WeekStartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "Type", "WeekStartDate");
+
+                    b.ToTable("LeaderboardSnapshots", (string)null);
                 });
 
             modelBuilder.Entity("Dynamite.Core.Entities.ModerationAction", b =>
@@ -614,6 +961,90 @@ namespace Dynamite.Infrastructure.Migrations
                     b.ToTable("RolePanelItems");
                 });
 
+            modelBuilder.Entity("Dynamite.Core.Entities.SpecialPool", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DropTable")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<int>("MinLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PoolName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("RemainingFish")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "StartsAt", "ExpiresAt");
+
+                    b.ToTable("SpecialPools", (string)null);
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.TempVoiceConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("CategoryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DefaultUserLimit")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("GuildConfigId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("GuildId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TriggerChannelId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildConfigId")
+                        .IsUnique();
+
+                    b.HasIndex("GuildId")
+                        .IsUnique();
+
+                    b.ToTable("TempVoiceConfigs");
+                });
+
             modelBuilder.Entity("Dynamite.Core.Entities.Ticket", b =>
                 {
                     b.Property<Guid>("Id")
@@ -749,6 +1180,184 @@ namespace Dynamite.Infrastructure.Migrations
                     b.ToTable("Transactions", (string)null);
                 });
 
+            modelBuilder.Entity("Dynamite.Core.Entities.UserFishBag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BagCapacity")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("UserId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("UserFishBags", (string)null);
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.UserFishTrophy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FishName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<bool>("IsPearl")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsSpecial")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Rarity")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("UserId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "UserId");
+
+                    b.HasIndex("GuildId", "UserId", "FishName")
+                        .IsUnique();
+
+                    b.ToTable("UserFishTrophies", (string)null);
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.UserFishingAchievement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AchievementId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("UserId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "UserId", "AchievementId")
+                        .IsUnique();
+
+                    b.ToTable("UserFishingAchievements", (string)null);
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.UserFishingProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AutoFishChannelId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<DateTime?>("AutoFishExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("AutoFishPurchaseCount")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("AutoFishSellAll")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("ChestsOpened")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CommonCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FishingLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("FishingXp")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<DateTime?>("LastFishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("LegendaryCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MythicCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RareCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TotalCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("TradeWeekResetAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("TradesThisWeek")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UncommonCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("UserId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("UserFishingProfiles", (string)null);
+                });
+
             modelBuilder.Entity("Dynamite.Core.Entities.UserInventory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -781,6 +1390,47 @@ namespace Dynamite.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("UserInventories", (string)null);
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.UserServerProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<DateTime?>("LastMessageXpAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ServerLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("ServerXp")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("TotalVoiceMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("UserId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<DateTime?>("VoiceJoinedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("UserServerProfiles", (string)null);
                 });
 
             modelBuilder.Entity("Dynamite.Core.Entities.UserWallet", b =>
@@ -859,6 +1509,44 @@ namespace Dynamite.Infrastructure.Migrations
                     b.ToTable("Warnings");
                 });
 
+            modelBuilder.Entity("Dynamite.Core.Entities.WeeklyActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("GuildId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("UserId")
+                        .HasColumnType("numeric(20,0)");
+
+                    b.Property<DateTime>("WeekResetAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("WeeklyFishCaught")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WeeklyMessages")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WeeklyVoiceMinutes")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("WeeklyActivities", (string)null);
+                });
+
             modelBuilder.Entity("Dynamite.Core.Entities.AntiSpamConfig", b =>
                 {
                     b.HasOne("Dynamite.Core.Entities.GuildConfig", "GuildConfig")
@@ -881,6 +1569,17 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Navigation("GuildConfig");
                 });
 
+            modelBuilder.Entity("Dynamite.Core.Entities.CaughtFish", b =>
+                {
+                    b.HasOne("Dynamite.Core.Entities.UserFishBag", "Bag")
+                        .WithMany("Fish")
+                        .HasForeignKey("BagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Bag");
+                });
+
             modelBuilder.Entity("Dynamite.Core.Entities.GiveawayEntry", b =>
                 {
                     b.HasOne("Dynamite.Core.Entities.Giveaway", "Giveaway")
@@ -890,6 +1589,17 @@ namespace Dynamite.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Giveaway");
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.LeaderboardEntry", b =>
+                {
+                    b.HasOne("Dynamite.Core.Entities.LeaderboardSnapshot", "Snapshot")
+                        .WithMany("Entries")
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Snapshot");
                 });
 
             modelBuilder.Entity("Dynamite.Core.Entities.ModerationAction", b =>
@@ -925,6 +1635,17 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Navigation("RolePanel");
                 });
 
+            modelBuilder.Entity("Dynamite.Core.Entities.TempVoiceConfig", b =>
+                {
+                    b.HasOne("Dynamite.Core.Entities.GuildConfig", "GuildConfig")
+                        .WithOne("TempVoiceConfig")
+                        .HasForeignKey("Dynamite.Core.Entities.TempVoiceConfig", "GuildConfigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GuildConfig");
+                });
+
             modelBuilder.Entity("Dynamite.Core.Entities.Ticket", b =>
                 {
                     b.HasOne("Dynamite.Core.Entities.TicketConfig", "TicketConfig")
@@ -951,6 +1672,18 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Navigation("FromWallet");
 
                     b.Navigation("ToWallet");
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.UserFishingAchievement", b =>
+                {
+                    b.HasOne("Dynamite.Core.Entities.UserFishingProfile", "Profile")
+                        .WithMany("Achievements")
+                        .HasForeignKey("GuildId", "UserId")
+                        .HasPrincipalKey("GuildId", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Profile");
                 });
 
             modelBuilder.Entity("Dynamite.Core.Entities.UserInventory", b =>
@@ -988,17 +1721,6 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Navigation("Entries");
                 });
 
-            modelBuilder.Entity("Dynamite.Core.Entities.TempVoiceConfig", b =>
-                {
-                    b.HasOne("Dynamite.Core.Entities.GuildConfig", "GuildConfig")
-                        .WithOne("TempVoiceConfig")
-                        .HasForeignKey("Dynamite.Core.Entities.TempVoiceConfig", "GuildConfigId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("GuildConfig");
-                });
-
             modelBuilder.Entity("Dynamite.Core.Entities.GuildConfig", b =>
                 {
                     b.Navigation("AntiSpamConfig");
@@ -1019,6 +1741,11 @@ namespace Dynamite.Infrastructure.Migrations
                     b.Navigation("Owners");
                 });
 
+            modelBuilder.Entity("Dynamite.Core.Entities.LeaderboardSnapshot", b =>
+                {
+                    b.Navigation("Entries");
+                });
+
             modelBuilder.Entity("Dynamite.Core.Entities.RolePanel", b =>
                 {
                     b.Navigation("Items");
@@ -1027,6 +1754,16 @@ namespace Dynamite.Infrastructure.Migrations
             modelBuilder.Entity("Dynamite.Core.Entities.TicketConfig", b =>
                 {
                     b.Navigation("Tickets");
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.UserFishBag", b =>
+                {
+                    b.Navigation("Fish");
+                });
+
+            modelBuilder.Entity("Dynamite.Core.Entities.UserFishingProfile", b =>
+                {
+                    b.Navigation("Achievements");
                 });
 
             modelBuilder.Entity("Dynamite.Core.Entities.UserWallet", b =>

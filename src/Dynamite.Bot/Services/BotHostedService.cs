@@ -14,6 +14,7 @@ using Dynamite.Modules.Logging.Helpers;
 using Dynamite.Modules.RoleManagement.Services;
 using Dynamite.Modules.Security;
 using Dynamite.Modules.Ticket.Interactions;
+using Dynamite.Modules.Economy.Handlers;
 using Dynamite.Modules.Voice;
 using Dynamite.Modules.Welcome;
 using Microsoft.Extensions.DependencyInjection;
@@ -170,6 +171,7 @@ public class BotHostedService : IHostedService
                 _services.GetRequiredService<WelcomeEventHandler>().Subscribe();
                 _services.GetRequiredService<SecurityEventHandler>().Subscribe();
                 _services.GetRequiredService<TempVoiceEventHandler>().Subscribe();
+                _services.GetRequiredService<EconomyEventHandler>().Subscribe();
 
                 _modulesLoaded = true;
             }

@@ -37,4 +37,8 @@ public class GuildConfig : BaseEntity
 
     // Phase 5 — Temp Voice
     public TempVoiceConfig? TempVoiceConfig { get; set; }
+
+    // Phase Economy v2 — channel riêng cho daily + fishing
+    public ulong? DailyChannelId { get; set; }
+    public ulong? FishingChannelId { get; set; }
 }

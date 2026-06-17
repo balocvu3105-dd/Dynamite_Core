@@ -47,6 +47,20 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
         await FollowupAsync(embed: embed, ephemeral: true);
     }
 
+    [SlashCommand("seed", "Seed vật phẩm mặc định vào cửa hàng (Admin only)")]
+    [DefaultMemberPermissions(GuildPermission.ManageGuild)]
+    public async Task SeedAsync()
+    {
+        await DeferAsync(ephemeral: true);
+
+        var added = await _shop.SeedDefaultItemsAsync(Context.Guild.Id);
+
+        if (added == 0)
+            await FollowupAsync("ℹ️ Tất cả vật phẩm mặc định đã tồn tại trong cửa hàng rồi.", ephemeral: true);
+        else
+            await FollowupAsync($"✅ Đã thêm **{added}** vật phẩm mặc định vào cửa hàng!\nDùng `/shop view` để xem.", ephemeral: true);
+    }
+
     [SlashCommand("additem", "Add an item to the shop (Admin only)")]
     [DefaultMemberPermissions(GuildPermission.ManageGuild)]
     public async Task AddItemAsync(
@@ -61,7 +75,8 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
         await DeferAsync(ephemeral: true);
 
         var (success, message) = await _shop.AddShopItemAsync(
-            Context.Guild.Id, name, emoji, price, description, type, cooldown, multiplier);
+            Context.Guild.Id, name, emoji, price, description, type,
+            cooldown, multiplier, usageCount: null, durationMinutes: null);
 
         await FollowupAsync(success ? message : $"❌ {message}", ephemeral: true);
     }
