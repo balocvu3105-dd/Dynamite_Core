@@ -43,15 +43,18 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
 
     private readonly IUserProfileRepository _profileRepo;
     private readonly IWalletRepository _walletRepo;
+    private readonly IGuildConfigRepository _configRepo;
     private readonly ILogger<UserAutoFishCommands> _logger;
 
     public UserAutoFishCommands(
         IUserProfileRepository profileRepo,
         IWalletRepository walletRepo,
+        IGuildConfigRepository configRepo,
         ILogger<UserAutoFishCommands> logger)
     {
         _profileRepo = profileRepo;
         _walletRepo  = walletRepo;
+        _configRepo  = configRepo;
         _logger      = logger;
     }
 
@@ -113,10 +116,14 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
         });
 
         // ── Cập nhật profile ─────────────────────────────────────────────────
+        // Kết quả luôn post vào FishingChannelId nếu đã set, fallback về channel hiện tại
+        var guildConfig = await _configRepo.GetByGuildIdAsync(Context.Guild.Id);
+        var fishChannel = guildConfig?.FishingChannelId ?? Context.Channel.Id;
+
         profile.AutoFishExpiresAt    = newExpires;
         profile.AutoFishSellAll      = true;
         profile.AutoFishPurchaseCount++;
-        profile.AutoFishChannelId    = Context.Channel.Id; // kết quả sẽ post vào đây
+        profile.AutoFishChannelId    = fishChannel;
 
         await _profileRepo.SaveChangesAsync();
         await _walletRepo.SaveChangesAsync();

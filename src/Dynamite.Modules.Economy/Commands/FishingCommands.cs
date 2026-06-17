@@ -13,22 +13,43 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
     private readonly PondService _pond;
     private readonly SpecialPoolService _specialPool;
     private readonly IUserProfileRepository _profileRepo;
+    private readonly IGuildConfigRepository _configRepo;
 
     public FishingCommands(
         FishingService fishing,
         PondService pond,
         SpecialPoolService specialPool,
-        IUserProfileRepository profileRepo)
+        IUserProfileRepository profileRepo,
+        IGuildConfigRepository configRepo)
     {
         _fishing     = fishing;
         _pond        = pond;
         _specialPool = specialPool;
         _profileRepo = profileRepo;
+        _configRepo  = configRepo;
+    }
+
+    /// <summary>
+    /// Kiểm tra channel. Trả về true nếu được phép câu ở đây.
+    /// Nếu GuildConfig.FishingChannelId chưa set → cho phép mọi channel.
+    /// </summary>
+    private async Task<bool> CheckFishingChannelAsync()
+    {
+        var config = await _configRepo.GetByGuildIdAsync(Context.Guild.Id);
+        if (config?.FishingChannelId is null) return true;          // chưa cấu hình → thoải mái
+        if (Context.Channel.Id == config.FishingChannelId) return true;
+
+        await RespondAsync(
+            $"❌ Chỉ câu cá được trong <#{config.FishingChannelId}>!",
+            ephemeral: true);
+        return false;
     }
 
     [SlashCommand("cast", "Thả cần câu cá!")]
     public async Task FishAsync()
     {
+        if (!await CheckFishingChannelAsync()) return;
+
         await DeferAsync();
 
         var (success, reason, result) =
@@ -108,6 +129,8 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
     public async Task PoolCastAsync(
         [Summary("pool-id", "ID của pool (dùng /fishing pools để xem)")] string poolId)
     {
+        if (!await CheckFishingChannelAsync()) return;
+
         await DeferAsync();
 
         if (!Guid.TryParse(poolId, out var guid))

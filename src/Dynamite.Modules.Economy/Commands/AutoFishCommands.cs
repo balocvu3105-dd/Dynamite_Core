@@ -22,14 +22,17 @@ public class AutoFishCommands : InteractionModuleBase<SocketInteractionContext>
     private const int MaxHours = 8;
 
     private readonly IUserProfileRepository _profileRepo;
+    private readonly IGuildConfigRepository _configRepo;
     private readonly ILogger<AutoFishCommands> _logger;
 
     public AutoFishCommands(
         IUserProfileRepository profileRepo,
+        IGuildConfigRepository configRepo,
         ILogger<AutoFishCommands> logger)
     {
         _profileRepo = profileRepo;
-        _logger = logger;
+        _configRepo  = configRepo;
+        _logger      = logger;
     }
 
     // ── /auto-fish start [hours] ─────────────────────────────────────────────
@@ -58,9 +61,13 @@ public class AutoFishCommands : InteractionModuleBase<SocketInteractionContext>
         // Nếu đang có session chưa hết → gia hạn
         var isRenew = profile.AutoFishExpiresAt.HasValue && profile.AutoFishExpiresAt > now;
 
+        // Kết quả luôn post vào FishingChannelId nếu đã set, fallback về channel hiện tại
+        var guildConfig = await _configRepo.GetByGuildIdAsync(Context.Guild.Id);
+        var fishChannel = guildConfig?.FishingChannelId ?? Context.Channel.Id;
+
         profile.AutoFishExpiresAt  = now.AddHours(hours);
         profile.AutoFishSellAll    = false; // admin mode: giữ Rare+
-        profile.AutoFishChannelId  = Context.Channel.Id; // post kết quả vào channel này
+        profile.AutoFishChannelId  = fishChannel;
         await _profileRepo.SaveChangesAsync();
 
         _logger.LogInformation(
