@@ -196,7 +196,11 @@ public class GuideService
             .AddField("🐟 Lợi ích",
                 "Drop rate cao hơn bể thường\n" +
                 "Xuất hiện cá độc quyền chỉ có trong pool", inline: false)
-            .AddField("Câu thủ công", "`/fishing pool cast` — Khi pool đang mở", inline: false)
+            .AddField("Câu thủ công",
+                "`/fishing pools` — Xem danh sách pool đang mở (lấy Pool ID)\n" +
+                "`/fishing pool-cast pool-id:<ID>` — Câu trong pool đặc biệt\n" +
+                "Bot tự check vé — nếu chưa có session sẽ tiêu **1 vé** và mở **2 tiếng** câu",
+                inline: false)
             .Build(),
 
         // ── Section 6: Auto Câu Cá ───────────────────────────────────────────
