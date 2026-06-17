@@ -6,6 +6,7 @@ using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Economy.Helpers;
 using Dynamite.Modules.Economy.Services;
 
+[RequireContext(ContextType.Guild)]
 [Group("fishing", "Câu cá và xem trạng thái bể")]
 public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
 {

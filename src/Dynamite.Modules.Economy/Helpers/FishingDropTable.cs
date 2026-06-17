@@ -59,10 +59,10 @@ public static class FishingDropTable
         double dropMultiplier = 1.0,
         double rareMod        = 0.0,
         double legendaryMod   = 0.0,
-        double stormMissBonus = 0.0)   // thêm từ Stormy weather
+        double missMod        = 0.0)   // weather miss modifier (âm = ít miss, dương = nhiều miss)
     {
         // ── 1. Miss check (TRƯỚC pond consumption — không tốn cá pond) ───────
-        var effectiveMiss = Math.Min(missRate + stormMissBonus, 0.60); // cap tổng miss 60%
+        var effectiveMiss = Math.Clamp(missRate + missMod, 0.0, 0.60); // cap tổng miss [0%, 60%]
         if (Random.Shared.NextDouble() < effectiveMiss)
             return new RollResult(RollOutcome.Miss, null);
 

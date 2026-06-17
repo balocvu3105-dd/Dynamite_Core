@@ -71,6 +71,7 @@ public sealed class AutoFishScheduler : BackgroundService
 
         var profileRepo    = scope.ServiceProvider.GetRequiredService<IUserProfileRepository>();
         var fishingService = scope.ServiceProvider.GetRequiredService<FishingService>();
+        var specialPool    = scope.ServiceProvider.GetRequiredService<SpecialPoolService>();
 
         var activeProfiles = await profileRepo.GetAllActiveAutoFishProfilesAsync();
 
@@ -84,7 +85,7 @@ public sealed class AutoFishScheduler : BackgroundService
 
             try
             {
-                await ProcessUserAsync(profile, fishingService, profileRepo);
+                await ProcessUserAsync(profile, fishingService, specialPool, profileRepo);
             }
             catch (Exception ex)
             {
@@ -101,6 +102,7 @@ public sealed class AutoFishScheduler : BackgroundService
     private async Task ProcessUserAsync(
         UserFishingProfile     profile,
         FishingService         fishingService,
+        SpecialPoolService     specialPoolService,
         IUserProfileRepository profileRepo)
     {
         if (profile.AutoFishPaused) return;
@@ -114,13 +116,52 @@ public sealed class AutoFishScheduler : BackgroundService
                     ?? _discord.GetUser(userId)?.Username
                     ?? userId.ToString();
 
+        // ── Route: Special Pool hay bể thường? ───────────────────────────────
+        var now = DateTime.UtcNow;
+        var specialPoolActive = profile.AutoFishSpecialPoolId.HasValue
+                             && profile.AutoFishSpecialPoolExpiresAt.HasValue
+                             && profile.AutoFishSpecialPoolExpiresAt > now;
+
+        if (specialPoolActive)
+        {
+            await ProcessSpecialPoolAsync(
+                profile, specialPoolService, profileRepo, guildId, userId, username);
+        }
+        else if (profile.AutoFishSpecialPoolId.HasValue)
+        {
+            // Vé hết hạn 2h → clear fields + notify + tiếp tục câu bể thường tick này
+            var freshProfile = await profileRepo.GetOrCreateFishingAsync(guildId, userId);
+            freshProfile.AutoFishSpecialPoolId        = null;
+            freshProfile.AutoFishSpecialPoolExpiresAt = null;
+            await profileRepo.SaveChangesAsync();
+
+            if (profile.AutoFishChannelId != 0)
+                await PostSpecialPoolFallbackAsync(profile, username, "Vé Pool Đặc Biệt đã hết hạn (2 tiếng).");
+
+            await ProcessRegularAsync(
+                profile, fishingService, profileRepo, guildId, userId, isAdmin, username);
+        }
+        else
+        {
+            await ProcessRegularAsync(
+                profile, fishingService, profileRepo, guildId, userId, isAdmin, username);
+        }
+    }
+
+    // ── Regular fish ──────────────────────────────────────────────────────────
+
+    private async Task ProcessRegularAsync(
+        UserFishingProfile     profile,
+        FishingService         fishingService,
+        IUserProfileRepository profileRepo,
+        ulong guildId, ulong userId, bool isAdmin, string username)
+    {
         var (success, _, result) = await fishingService.FishAsync(guildId, userId);
         if (!success || result is null) return;
 
         // ── Túi đầy → auto-pause + notify ────────────────────────────────────
         if (!result.SavedToBag)
         {
-            // Load fresh profile để tránh stale data
             var freshProfile = await profileRepo.GetOrCreateFishingAsync(guildId, userId);
             freshProfile.AutoFishPaused = true;
             await profileRepo.SaveChangesAsync();
@@ -135,13 +176,61 @@ public sealed class AutoFishScheduler : BackgroundService
             return;
         }
 
-        // ── Post embed kết quả ────────────────────────────────────────────────
         if (profile.AutoFishChannelId == 0) return;
 
         if (isAdmin)
             await PostAdminEmbedAsync(profile, result, username);
         else
             await PostUserEmbedAsync(profile, result, username);
+    }
+
+    // ── Special Pool fish ─────────────────────────────────────────────────────
+
+    private async Task ProcessSpecialPoolAsync(
+        UserFishingProfile     profile,
+        SpecialPoolService     specialPoolService,
+        IUserProfileRepository profileRepo,
+        ulong guildId, ulong userId, string username)
+    {
+        var poolId = profile.AutoFishSpecialPoolId!.Value;
+
+        var (success, reason, result) =
+            await specialPoolService.FishSpecialAsync(guildId, userId, poolId);
+
+        if (!success)
+        {
+            // Pool không còn active → tự switch về bể thường + notify
+            _logger.LogInformation(
+                "[AutoFish] Special pool failed ({Reason}) for user {UserId} — switching to regular",
+                reason, userId);
+
+            var freshProfile = await profileRepo.GetOrCreateFishingAsync(guildId, userId);
+            freshProfile.AutoFishSpecialPoolId        = null;
+            freshProfile.AutoFishSpecialPoolExpiresAt = null;
+            await profileRepo.SaveChangesAsync();
+
+            if (profile.AutoFishChannelId != 0)
+                await PostSpecialPoolFallbackAsync(profile, username, reason);
+
+            return;
+        }
+
+        // ── Túi đầy → pause ───────────────────────────────────────────────────
+        if (result is not null && !result.SavedToBag)
+        {
+            var freshProfile = await profileRepo.GetOrCreateFishingAsync(guildId, userId);
+            freshProfile.AutoFishPaused = true;
+            await profileRepo.SaveChangesAsync();
+
+            if (profile.AutoFishChannelId != 0)
+                await PostBagFullNotificationAsync(profile, username);
+
+            return;
+        }
+
+        if (profile.AutoFishChannelId == 0 || result is null) return;
+
+        await PostSpecialPoolEmbedAsync(profile, result, username);
     }
 
     private async Task PostUserEmbedAsync(UserFishingProfile profile, FishResult result, string username)
@@ -186,7 +275,7 @@ public sealed class AutoFishScheduler : BackgroundService
                 return;
 
             var embed = new EmbedBuilder()
-                .WithColor(new Color(0xE67E22)) // cam
+                .WithColor(new Color(0xE67E22))
                 .WithTitle("🎒 Túi Cá Đầy — Auto-Fish Tạm Dừng!")
                 .WithDescription(
                     $"**{username}** — Túi cá đã đầy!\n\n" +
@@ -201,6 +290,53 @@ public sealed class AutoFishScheduler : BackgroundService
         catch (Exception ex)
         {
             _logger.LogDebug("[AutoFish] Failed to post bag-full notification to channel {Id}: {Msg}",
+                profile.AutoFishChannelId, ex.Message);
+        }
+    }
+
+    private async Task PostSpecialPoolEmbedAsync(
+        UserFishingProfile profile, SpecialFishResult result, string username)
+    {
+        try
+        {
+            if (_discord.GetChannel(profile.AutoFishChannelId) is not IMessageChannel channel)
+                return;
+
+            var embed = EconomyEmbedBuilder.BuildAutoSpecialFishEmbed(result, profile.AutoFishExpiresAt!.Value, username);
+            await channel.SendMessageAsync(embed: embed);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug("[AutoFish] Failed to post special pool embed to channel {Id}: {Msg}",
+                profile.AutoFishChannelId, ex.Message);
+        }
+    }
+
+    private async Task PostSpecialPoolFallbackAsync(
+        UserFishingProfile profile, string username, string? reason)
+    {
+        try
+        {
+            if (_discord.GetChannel(profile.AutoFishChannelId) is not IMessageChannel channel)
+                return;
+
+            var embed = new EmbedBuilder()
+                .WithColor(new Color(0xE74C3C))
+                .WithTitle("⭐ Pool Đặc Biệt Không Khả Dụng — Chuyển Về Bể Thường")
+                .WithDescription(
+                    $"**{username}** — Auto-fish pool đặc biệt bị gián đoạn.\n\n" +
+                    $"**Lý do:** {reason ?? "Pool không còn hoạt động hoặc hết vé."}\n\n" +
+                    "Bot đã tự động chuyển về **Bể Thường**.\n" +
+                    "Mua thêm vé tại `/shop buy Vé Pool Đặc Biệt` hoặc chọn lại pool bằng `/fish-auto set-mode`.")
+                .WithFooter("Auto-Fish Pool Mode • Đã fallback về bể thường")
+                .WithCurrentTimestamp()
+                .Build();
+
+            await channel.SendMessageAsync($"<@{profile.UserId}>", embed: embed);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug("[AutoFish] Failed to post special pool fallback to channel {Id}: {Msg}",
                 profile.AutoFishChannelId, ex.Message);
         }
     }

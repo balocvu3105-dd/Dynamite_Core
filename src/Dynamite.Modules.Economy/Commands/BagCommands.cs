@@ -47,9 +47,7 @@ public class BagCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
-        // Lấy số dư hiện tại để hiển thị
-        var bag   = await _bagService.GetBagAsync(Context.Guild.Id, Context.User.Id);
-        var embed = EconomyEmbedBuilder.BuildBagSellResultEmbed(result, walletTotal: result.CoinsEarned);
+        var embed = EconomyEmbedBuilder.BuildBagSellResultEmbed(result, walletTotal: result.WalletBalance);
         await FollowupAsync(embed: embed);
     }
 
@@ -76,7 +74,7 @@ public class BagCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
-        var embed = EconomyEmbedBuilder.BuildBagSellResultEmbed(result, result.CoinsEarned);
+        var embed = EconomyEmbedBuilder.BuildBagSellResultEmbed(result, walletTotal: result.WalletBalance);
         await FollowupAsync(embed: embed);
     }
 }

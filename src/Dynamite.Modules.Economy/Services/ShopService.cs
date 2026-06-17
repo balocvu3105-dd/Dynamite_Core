@@ -27,6 +27,30 @@ public class ShopService
         _logger         = logger;
     }
 
+    // ── Bag upgrade pricing ───────────────────────────────────────────────────
+
+    private const int DefaultBagCapacity = 20;
+    private const int BagSlotStep        = 10;
+    private const int MaxBagCap          = 100;
+
+    /// <summary>
+    /// Giá nâng +10 slot tại mỗi tier (index = (currentCap - 20) / 10).
+    /// Tier 0: 20→30, Tier 1: 30→40, ... Tier 7: 90→100.
+    /// </summary>
+    private static readonly long[] BagPriceTiers =
+        [10_000, 20_000, 35_000, 55_000, 80_000, 110_000, 145_000, 185_000];
+
+    public static long GetBagUpgradePrice(int currentCapacity)
+    {
+        if (currentCapacity >= MaxBagCap) return 0; // đã max
+        var tier = (currentCapacity - DefaultBagCapacity) / BagSlotStep;
+        return tier >= 0 && tier < BagPriceTiers.Length
+            ? BagPriceTiers[tier]
+            : BagPriceTiers[^1];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     public Task<List<InventoryItem>> GetShopItemsAsync(ulong guildId)
         => _shopRepo.GetAvailableItemsAsync(guildId);
 
@@ -37,34 +61,46 @@ public class ShopService
         if (item is null)
             return (false, $"Không tìm thấy **{itemName}** trong cửa hàng.");
 
-        if (item.Price <= 0)
+        // BagUpgrade dùng dynamic pricing riêng — bỏ qua check price ở đây
+        if (item.Price <= 0 && item.Type != ItemType.BagUpgrade)
             return (false, "Vật phẩm này không thể mua.");
 
         var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
 
-        if (wallet.Coins < item.Price)
+        // Wallet check chung chỉ áp dụng cho non-BagUpgrade (BagUpgrade tự check ở dưới)
+        if (item.Type != ItemType.BagUpgrade && wallet.Coins < item.Price)
             return (false,
                 $"Không đủ coins. Cần **{item.Price:N0}** nhưng bạn chỉ có **{wallet.Coins:N0}**.");
 
-        // ── BagUpgrade — không lưu vào UserInventory, áp dụng thẳng ────────
+        // ── BagUpgrade — dynamic pricing theo tier, +10 slot mỗi lần ────────
         if (item.Type == ItemType.BagUpgrade)
         {
-            var targetCap = item.UsageCount ?? 20;
-            var (bagOk, bagMsg) = await _bagService.UpgradeBagAsync(guildId, userId, targetCap);
-            if (!bagOk) return (false, bagMsg);
+            var bag          = await _bagService.GetBagAsync(guildId, userId);
+            var dynamicPrice = GetBagUpgradePrice(bag.BagCapacity);
 
-            wallet.Coins -= item.Price;
+            if (dynamicPrice == 0)
+                return (false, $"🎒 Túi cá của bạn đã đạt tối đa **{MaxBagCap}** slot!");
+
+            if (wallet.Coins < dynamicPrice)
+                return (false,
+                    $"Không đủ coins. Nâng +10 slot hiện tại cần **{dynamicPrice:N0}** nhưng bạn chỉ có **{wallet.Coins:N0}**.");
+
+            var slotsToAdd = item.UsageCount ?? BagSlotStep;
+            var (bagOk, _, oldCap, newCap) = await _bagService.AddSlotsAsync(guildId, userId, slotsToAdd);
+            if (!bagOk) return (false, $"🎒 Túi cá đã đạt tối đa **{MaxBagCap}** slot!");
+
+            wallet.Coins -= dynamicPrice;
             await _walletRepo.AddTransactionAsync(new Transaction
             {
                 GuildId      = guildId,
                 FromWalletId = wallet.Id,
-                Amount       = item.Price,
+                Amount       = dynamicPrice,
                 Type         = TransactionType.Purchase,
-                Note         = $"Mua {item.Name}",
+                Note         = $"Nâng túi cá {oldCap} → {newCap} slot",
                 CreatedAt    = DateTime.UtcNow
             });
             await _walletRepo.SaveChangesAsync();
-            return (true, $"✅ {item.Emoji} **{item.Name}** — túi cá nâng lên **{targetCap}** slot!");
+            return (true, $"✅ {item.Emoji} Túi cá **{oldCap} → {newCap}** slot — **{dynamicPrice:N0}** coins!");
         }
 
         // ── FishingRod — không stack ─────────────────────────────────────────
@@ -74,14 +110,21 @@ public class ShopService
 
         wallet.Coins -= item.Price;
 
+        // Bait/PoolTicket: mỗi lần mua = UsageCount lần dùng (không phải 1).
+        // FishingRod: luôn 1 (không stack).
+        // Các loại khác: stack 1 đơn vị mỗi lần mua.
+        var addQuantity = item.Type == ItemType.Bait || item.Type == ItemType.PoolTicket
+            ? item.UsageCount ?? 1
+            : 1;
+
         if (existing is not null)
-            existing.Quantity++;
+            existing.Quantity += addQuantity;
         else
             await _shopRepo.AddUserInventoryAsync(new UserInventory
             {
                 WalletId   = wallet.Id,
                 ItemId     = item.Id,
-                Quantity   = 1,
+                Quantity   = addQuantity,
                 AcquiredAt = DateTime.UtcNow
             });
 
@@ -113,14 +156,18 @@ public class ShopService
         if (item is null)
             return (false, $"Không tìm thấy **{itemName}** trong cửa hàng.", null, 0, 0);
 
-        if (item.Price <= 0)
+        if (item.Price <= 0 && item.Type != ItemType.BagUpgrade)
             return (false, "Vật phẩm này không thể mua.", null, 0, 0);
 
-        var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
-        if (wallet.Coins < item.Price)
-            return (false,
-                $"Không đủ coins. Cần **{item.Price:N0}** nhưng bạn chỉ có **{wallet.Coins:N0}**.",
-                null, 0, 0);
+        // BagUpgrade: price check xảy ra bên trong BuyAsync với dynamic price
+        if (item.Type != ItemType.BagUpgrade)
+        {
+            var wallet0 = await _walletRepo.GetOrCreateAsync(guildId, userId);
+            if (wallet0.Coins < item.Price)
+                return (false,
+                    $"Không đủ coins. Cần **{item.Price:N0}** nhưng bạn chỉ có **{wallet0.Coins:N0}**.",
+                    null, 0, 0);
+        }
 
         // Delegate to core BuyAsync logic, then compute remaining
         var (success, message) = await BuyAsync(guildId, userId, itemName);
@@ -170,56 +217,56 @@ public class ShopService
             GuildId         = guildId,
             Name            = "Cần Câu Tre",
             Emoji           = "🪁",
-            Price           = 1_000,
-            Description     = "Cần câu cơ bản. Giảm nhẹ tỉ lệ hụt.",
+            Price           = 3_000,
+            Description     = "Cần câu cơ bản. Giảm nhẹ tỉ lệ hụt, tăng nhẹ giá trị cá.",
             Type            = ItemType.FishingRod,
             IsAvailable     = true,
             CooldownSeconds = 22,
-            DropMultiplier  = 1.0,
-            MissRate        = 0.12,
-            EscapeRate      = 0.08,
+            DropMultiplier  = 1.1,
+            MissRate        = 0.13,
+            EscapeRate      = 0.09,
         },
         new InventoryItem
         {
             GuildId         = guildId,
             Name            = "Cần Câu Bạc",
             Emoji           = "🎣",
-            Price           = 8_000,
-            Description     = "Cần câu nâng cấp. Tăng phần thưởng và giảm cooldown.",
+            Price           = 20_000,
+            Description     = "Cần câu nâng cấp. Tăng giá trị cá và giảm tỉ lệ hụt đáng kể.",
             Type            = ItemType.FishingRod,
             IsAvailable     = true,
-            CooldownSeconds = 18,
-            DropMultiplier  = 1.3,
-            MissRate        = 0.10,
-            EscapeRate      = 0.07,
+            CooldownSeconds = 19,
+            DropMultiplier  = 1.25,
+            MissRate        = 0.11,
+            EscapeRate      = 0.08,
         },
         new InventoryItem
         {
             GuildId         = guildId,
             Name            = "Cần Câu Vàng",
             Emoji           = "🏆",
-            Price           = 25_000,
-            Description     = "Cần câu cao cấp. Phần thưởng tốt hơn đáng kể.",
+            Price           = 60_000,
+            Description     = "Cần câu cao cấp. Hiệu quả rõ rệt — đầu tư cho người chơi nghiêm túc.",
             Type            = ItemType.FishingRod,
             IsAvailable     = true,
-            CooldownSeconds = 14,
-            DropMultiplier  = 1.6,
-            MissRate        = 0.07,
-            EscapeRate      = 0.05,
+            CooldownSeconds = 15,
+            DropMultiplier  = 1.55,
+            MissRate        = 0.08,
+            EscapeRate      = 0.06,
         },
         new InventoryItem
         {
             GuildId         = guildId,
             Name            = "Cần Câu Kim Cương",
             Emoji           = "💎",
-            Price           = 70_000,
-            Description     = "Cần câu huyền thoại. Hiệu quả vượt trội.",
+            Price           = 160_000,
+            Description     = "Cần câu huyền thoại. Mục tiêu end-game — sản lượng và giá trị vượt trội.",
             Type            = ItemType.FishingRod,
             IsAvailable     = true,
-            CooldownSeconds = 8,
-            DropMultiplier  = 2.5,
-            MissRate        = 0.04,
-            EscapeRate      = 0.03,
+            CooldownSeconds = 10,
+            DropMultiplier  = 2.0,
+            MissRate        = 0.05,
+            EscapeRate      = 0.04,
         },
 
         // ── Mồi Câu ──────────────────────────────────────────────────────────
@@ -246,28 +293,17 @@ public class ShopService
             UsageCount      = 30,
         },
 
-        // ── Nâng Túi Cá ──────────────────────────────────────────────────────
+        // ── Nâng Túi Cá (+10 slot mỗi lần, giá tăng dần theo tier) ──────────
         new InventoryItem
         {
             GuildId         = guildId,
-            Name            = "Túi Cá Mở Rộng",
+            Name            = "Nâng Túi Cá +10",
             Emoji           = "🎒",
-            Price           = 5_000,
-            Description     = "Nâng sức chứa túi cá lên 30 slot.",
+            Price           = 1,   // placeholder — giá thực tính động theo BagPriceTiers
+            Description     = "Mở rộng túi cá thêm +10 slot. Giá tăng dần: 10k → 20k → 35k → 55k → 80k → 110k → 145k → 185k (tối đa 100 slot).",
             Type            = ItemType.BagUpgrade,
             IsAvailable     = true,
-            UsageCount      = 30,
-        },
-        new InventoryItem
-        {
-            GuildId         = guildId,
-            Name            = "Túi Cá Siêu To",
-            Emoji           = "🧳",
-            Price           = 15_000,
-            Description     = "Nâng sức chứa túi cá lên 50 slot.",
-            Type            = ItemType.BagUpgrade,
-            IsAvailable     = true,
-            UsageCount      = 50,
+            UsageCount      = 10,
         },
 
         // ── Phép Thời Tiết ────────────────────────────────────────────────────
@@ -276,8 +312,8 @@ public class ShopService
             GuildId         = guildId,
             Name            = "Phép Triệu Mưa",
             Emoji           = "🌧️",
-            Price           = 2_500,
-            Description     = "Kích hoạt thời tiết Rainy trong 60 phút (+Rare chance).",
+            Price           = 20_000,
+            Description     = "Kích hoạt thời tiết Rainy trong 60 phút (+Rare chance, sản lượng cao hơn).",
             Type            = ItemType.WeatherItem,
             IsAvailable     = true,
             DurationMinutes = 60,
@@ -289,7 +325,7 @@ public class ShopService
             GuildId     = guildId,
             Name        = "Vé Pool Đặc Biệt",
             Emoji       = "🎟️",
-            Price       = 3_000,
+            Price       = 15_000,
             Description = "Cho phép câu 1 lần tại Special Pool (Level 20+ yêu cầu). Dùng 1 vé/lần câu.",
             Type        = ItemType.PoolTicket,
             IsAvailable = true,
@@ -334,7 +370,8 @@ public class ShopService
 
                 return (true,
                     $"🌧️ **{item.Name}** kích hoạt! Thời tiết **Mưa** trong **{duration} phút**.\n" +
-                    $"Drop rate Rare +15% | Legendary +5%",
+                    $"✅ Cá cắn câu nhiều hơn **10%** — sản lượng cao hơn\n" +
+                    $"✅ Tỉ lệ Hiếm **+15%** | Huyền Thoại **+5%**",
                     item);
             }
 

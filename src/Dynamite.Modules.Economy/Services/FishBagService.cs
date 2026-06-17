@@ -5,7 +5,7 @@ using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Microsoft.Extensions.Logging;
 
-public record BagSellResult(int FishSold, long CoinsEarned, int RemainingFish);
+public record BagSellResult(int FishSold, long CoinsEarned, int RemainingFish, long WalletBalance);
 
 /// <summary>
 /// Quản lý túi cá: xem, bán, nâng cấp dung lượng.
@@ -40,7 +40,7 @@ public class FishBagService
         var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
         var fish   = bag.Fish.ToList();
 
-        if (fish.Count == 0) return new BagSellResult(0, 0, 0);
+        if (fish.Count == 0) return new BagSellResult(0, 0, 0, wallet.Coins);
 
         var total = fish.Sum(f => f.CoinValue);
         wallet.Coins += total;
@@ -60,7 +60,7 @@ public class FishBagService
         await _walletRepo.SaveChangesAsync();
 
         _logger.LogInformation("User {UserId} sold {Count} fish for {Coins} coins", userId, fish.Count, total);
-        return new BagSellResult(fish.Count, total, 0);
+        return new BagSellResult(fish.Count, total, 0, wallet.Coins);
     }
 
     /// <summary>Bán theo rarity (ví dụ "Common", "Uncommon").</summary>
@@ -70,7 +70,7 @@ public class FishBagService
         var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
         var fish   = await _bagRepo.GetFishByRarityAsync(bag.Id, rarity);
 
-        if (fish.Count == 0) return new BagSellResult(0, 0, bag.Fish.Count);
+        if (fish.Count == 0) return new BagSellResult(0, 0, bag.Fish.Count, wallet.Coins);
 
         var total = fish.Sum(f => f.CoinValue);
         wallet.Coins += total;
@@ -89,30 +89,32 @@ public class FishBagService
         await _bagRepo.SaveChangesAsync();
         await _walletRepo.SaveChangesAsync();
 
-        return new BagSellResult(fish.Count, total, bag.Fish.Count - fish.Count);
+        return new BagSellResult(fish.Count, total, bag.Fish.Count - fish.Count, wallet.Coins);
     }
 
     // ── Upgrade ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Nâng cấp túi khi mua BagUpgrade từ shop.
-    /// targetCapacity từ InventoryItem.UsageCount (20 hoặc 50).
+    /// Nâng túi thêm <paramref name="slots"/> slot (thường là 10).
+    /// Trả về (success, message, oldCap, newCap).
     /// </summary>
-    public async Task<(bool success, string message)> UpgradeBagAsync(
-        ulong guildId, ulong userId, int targetCapacity)
+    public async Task<(bool success, string message, int oldCap, int newCap)> AddSlotsAsync(
+        ulong guildId, ulong userId, int slots)
     {
-        if (targetCapacity > MaxBagCapacity)
-            return (false, $"Dung lượng tối đa là **{MaxBagCapacity}** slot.");
-
         var bag = await _bagRepo.GetOrCreateAsync(guildId, userId);
 
-        if (bag.BagCapacity >= targetCapacity)
-            return (false, $"Túi của bạn đã có **{bag.BagCapacity}** slot rồi!");
+        if (bag.BagCapacity >= MaxBagCapacity)
+            return (false, $"Túi cá đã đạt tối đa **{MaxBagCapacity}** slot!", bag.BagCapacity, bag.BagCapacity);
 
-        bag.BagCapacity = targetCapacity;
+        var oldCap = bag.BagCapacity;
+        var newCap = Math.Min(oldCap + slots, MaxBagCapacity);
+
+        bag.BagCapacity = newCap;
         await _bagRepo.SaveChangesAsync();
 
-        _logger.LogInformation("User {UserId} upgraded bag to {Cap} slots", userId, targetCapacity);
-        return (true, $"✅ Túi cá đã được nâng cấp lên **{targetCapacity}** slot!");
+        _logger.LogInformation("User {UserId} expanded bag {Old} → {New} slots", userId, oldCap, newCap);
+        return (true, string.Empty, oldCap, newCap);
     }
+
+    public int GetMaxCapacity() => MaxBagCapacity;
 }

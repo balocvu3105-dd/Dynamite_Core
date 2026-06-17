@@ -6,6 +6,7 @@ using Discord.Interactions;
 using Discord.WebSocket;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
+using Dynamite.Modules.Economy.Helpers;
 using Dynamite.Modules.Economy.Services;
 using Microsoft.Extensions.Logging;
 
@@ -24,6 +25,8 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
     private readonly IFishBagRepository       _bagRepo;
     private readonly IFishingLogRepository    _fishLog;
     private readonly IGuildConfigRepository   _configRepo;
+    private readonly PondService              _pond;
+    private readonly WeatherService           _weather;
     private readonly ILogger<AdminFishingCommands> _logger;
 
     public AdminFishingCommands(
@@ -32,6 +35,8 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
         IFishBagRepository            bagRepo,
         IFishingLogRepository         fishLog,
         IGuildConfigRepository        configRepo,
+        PondService                   pond,
+        WeatherService                weather,
         ILogger<AdminFishingCommands> logger)
     {
         _snapshot    = snapshot;
@@ -39,6 +44,8 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
         _bagRepo     = bagRepo;
         _fishLog     = fishLog;
         _configRepo  = configRepo;
+        _pond        = pond;
+        _weather     = weather;
         _logger      = logger;
     }
 
@@ -58,6 +65,105 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
             $"✅ Đã set {channel.Mention} làm channel câu cá.\n" +
             $"Tất cả lệnh `/fishing`, `/bag`, `/fish-auto` chỉ hoạt động trong channel đó.",
             ephemeral: true);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /admin-fishing refill-pond [amount]
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [SlashCommand("refill-pond", "Nạp lại bể cá ngay lập tức (không ảnh hưởng chu kỳ reset tự động)")]
+    public async Task RefillPondAsync(
+        [Summary("amount", "Số cá muốn nạp (mặc định = MaxFish, tối đa = MaxFish)")]
+        [MinValue(1)]
+        int? amount = null)
+    {
+        await DeferAsync(ephemeral: true);
+
+        // Lấy trạng thái trước khi refill để hiển thị diff
+        var before = await _pond.GetStatusAsync(Context.Guild.Id);
+
+        PondStatus after;
+        if (amount.HasValue)
+        {
+            // Partial refill: chỉ cộng thêm, không vượt MaxFish, không clear timer
+            after = await _pond.AdminPartialRefillAsync(Context.Guild.Id, amount.Value);
+        }
+        else
+        {
+            // Full refill: CurrentFish = MaxFish + clear timer
+            after = await _pond.AdminRefillAsync(Context.Guild.Id);
+        }
+
+        _logger.LogWarning(
+            "[Pond] Admin {AdminId} refilled pond in guild {GuildId}: {Before} → {After}",
+            Context.User.Id, Context.Guild.Id, before.CurrentFish, after.CurrentFish);
+
+        var wasDepletedStr = before.IsEmpty
+            ? $"\n⚠️ Bể đang **trống** — timer reset đã bị hủy."
+            : before.ResetAvailableAt.HasValue
+                ? $"\n⏳ Đang đếm ngược reset — timer đã bị hủy."
+                : "";
+
+        var embed = new EmbedBuilder()
+            .WithColor(new Color(0x57F287))
+            .WithTitle("🪣 Bể Cá Đã Được Nạp Lại")
+            .WithDescription(
+                $"**Trước:** {before.CurrentFish:N0} / {before.MaxFish:N0} con\n" +
+                $"**Sau:** {after.CurrentFish:N0} / {after.MaxFish:N0} con" +
+                wasDepletedStr + "\n\n" +
+                $"Chu kỳ reset tự động (30 phút khi hết) **không bị ảnh hưởng**.\n" +
+                $"Khi bể cạn lần tiếp theo, bộ đếm 30 phút sẽ chạy bình thường.")
+            .WithFooter($"Admin: {Context.User.Username}")
+            .WithCurrentTimestamp()
+            .Build();
+
+        await FollowupAsync(embed: embed, ephemeral: true);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /admin-fishing set-weather <weather> [minutes]
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [SlashCommand("set-weather", "Ép thời tiết bể cá — tự động quay về chu kỳ bình thường sau khi hết giờ")]
+    public async Task SetWeatherAsync(
+        [Summary("weather", "Loại thời tiết muốn set")] PondWeather weather,
+        [Summary("minutes", "Thời gian giữ (phút, mặc định 120 = 2 tiếng, tối đa 480)")]
+        [MinValue(1)][MaxValue(480)]
+        int minutes = 120)
+    {
+        await DeferAsync(ephemeral: true);
+
+        var before = await _weather.GetCurrentWeatherAsync(Context.Guild.Id);
+        await _weather.ForceWeatherAsync(Context.Guild.Id, weather, minutes);
+
+        _logger.LogInformation(
+            "[Weather] Admin {AdminId} forced {Weather} for {Minutes}m in guild {GuildId}",
+            Context.User.Id, weather, minutes, Context.Guild.Id);
+
+        var expiresAt   = DateTime.UtcNow.AddMinutes(minutes);
+        var expiresUnix = ((DateTimeOffset)expiresAt).ToUnixTimeSeconds();
+
+        var (rareMod, legendaryMod, _, _, _) = WeatherService.GetModifiers(weather);
+        var effectDesc = weather switch
+        {
+            PondWeather.Rainy  => $"🌧️ Rare **+{rareMod * 100:0}%** · Legendary **+{legendaryMod * 100:0}%**",
+            PondWeather.Stormy => $"⛈️ Legendary **+{legendaryMod * 100:0}%** · Miss rate **+8%**",
+            _                  => "☀️ Tỷ lệ bình thường (không buff/debuff)"
+        };
+
+        var embed = new EmbedBuilder()
+            .WithColor(WeatherColor(weather))
+            .WithTitle($"{WeatherService.GetWeatherEmoji(weather)} Thời Tiết Đã Được Thay Đổi")
+            .AddField("Trước", $"{WeatherService.GetWeatherEmoji(before)} {before}", inline: true)
+            .AddField("Sau", $"{WeatherService.GetWeatherEmoji(weather)} {weather}", inline: true)
+            .AddField("Thời gian giữ", $"<t:{expiresUnix}:R> (<t:{expiresUnix}:T>)", inline: false)
+            .AddField("Hiệu ứng", effectDesc, inline: false)
+            .WithDescription("Sau khi hết thời gian, chu kỳ xoay vòng 2 tiếng tự động sẽ tiếp tục bình thường.")
+            .WithFooter($"Admin: {Context.User.Username}")
+            .WithCurrentTimestamp()
+            .Build();
+
+        await FollowupAsync(embed: embed, ephemeral: true);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -304,6 +410,26 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
         await FollowupAsync(embed: builder.Build(), ephemeral: true);
     }
 
+    // ── /admin-fishing view-bag ──────────────────────────────────────────────
+
+    [SlashCommand("view-bag", "Xem túi cá của một user bất kỳ (Admin)")]
+    public async Task ViewBagAsync(
+        [Summary("user", "User cần xem túi cá")] IUser target)
+    {
+        await DeferAsync(ephemeral: true);
+
+        var bag = await _bagRepo.GetOrCreateAsync(Context.Guild.Id, target.Id);
+
+        var embed = EconomyEmbedBuilder.BuildBagEmbed(bag,
+            (target as IGuildUser)?.DisplayName ?? target.Username);
+
+        // Override footer để admin biết đây là view của người khác
+        var embedBuilder = embed.ToEmbedBuilder()
+            .WithFooter($"👁️ Xem bởi Admin | User: {target.Username} ({target.Id})");
+
+        await FollowupAsync(embed: embedBuilder.Build(), ephemeral: true);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Private helpers
     // ─────────────────────────────────────────────────────────────────────────
@@ -321,10 +447,20 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
         p.ChestsOpened       = 0;
         p.TradesThisWeek     = 0;
         p.TradeWeekResetAt   = null;
-        p.AutoFishExpiresAt  = null;
-        p.LastFishedAt       = null;
+        p.AutoFishExpiresAt              = null;
+        p.AutoFishPaused                 = false;
+        p.AutoFishSpecialPoolId          = null;
+        p.AutoFishSpecialPoolExpiresAt   = null;
+        p.LastFishedAt                   = null;
         p.Achievements.Clear();
     }
+
+    private static Color WeatherColor(PondWeather w) => w switch
+    {
+        PondWeather.Rainy  => new Color(0x3498DB), // xanh dương
+        PondWeather.Stormy => new Color(0x9B59B6), // tím
+        _                  => new Color(0xF1C40F)  // vàng (Sunny)
+    };
 
     private static string EventEmoji(FishingEvent e) => e switch
     {

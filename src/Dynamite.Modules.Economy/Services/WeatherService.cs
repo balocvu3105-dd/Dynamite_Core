@@ -88,14 +88,21 @@ public class WeatherService
 
     /// <summary>
     /// Áp dụng weather modifier lên drop weight table.
-    /// Trả về (rareMod, legendaryMod, stormBreakChance).
+    /// Trả về (rareMod, legendaryMod, stormBreakChance, missMod, coinMod).
+    ///
+    /// missMod  — cộng vào missRate (âm = cá cắn nhiều hơn, dương = ít hơn)
+    ///            Rainy  -0.10 → câu được ~12% cá hơn/giờ
+    ///            Stormy +0.08 → câu ít hơn (nguy hiểm)
+    ///
+    /// coinMod  — nhân vào giá trị cá khi bắt được
+    ///            Stormy ×1.25 → risk-reward: ít câu nhưng mỗi con đáng tiền hơn
     /// </summary>
-    public static (double rareMod, double legendaryMod, double stormBreakChance)
+    public static (double rareMod, double legendaryMod, double stormBreakChance, double missMod, double coinMod)
         GetModifiers(PondWeather weather) => weather switch
     {
-        PondWeather.Rainy  => (0.15, 0.05, 0.0),
-        PondWeather.Stormy => (0.0,  0.05, 0.20),
-        _                  => (0.0,  0.0,  0.0)   // Sunny: no modifier
+        PondWeather.Rainy  => (0.15, 0.05, 0.0,  -0.10, 1.00),
+        PondWeather.Stormy => (0.0,  0.05, 0.20, +0.08, 1.25),
+        _                  => (0.0,  0.0,  0.0,   0.0,  1.00)  // Sunny: no modifier
     };
 
     public static string GetWeatherEmoji(PondWeather weather) => weather switch

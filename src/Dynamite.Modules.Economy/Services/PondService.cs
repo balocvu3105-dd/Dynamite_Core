@@ -92,6 +92,57 @@ public class PondService
         return (true, null, ToStatus(pond));
     }
 
+    /// <summary>
+    /// Admin override: nạp lại bể ngay lập tức.
+    /// - CurrentFish = MaxFish
+    /// - Xóa DepletedAt và ResetAvailableAt (cancel timer nếu đang đếm ngược)
+    /// - KHÔNG gửi notification, KHÔNG set timer mới
+    /// → Khi bể cạn lần tới, chu kỳ 30 phút bình thường sẽ chạy như cũ.
+    /// </summary>
+    public async Task<PondStatus> AdminRefillAsync(ulong guildId)
+    {
+        var pond = await _pondRepo.GetOrCreateAsync(guildId);
+
+        pond.CurrentFish      = pond.MaxFish;
+        pond.DepletedAt       = null;
+        pond.ResetAvailableAt = null;
+
+        await _pondRepo.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "[Guild {GuildId}] Pond admin-refilled → {MaxFish} fish (timer cleared)",
+            guildId, pond.MaxFish);
+
+        return ToStatus(pond);
+    }
+
+    /// <summary>
+    /// Admin override: cộng thêm một lượng cá cụ thể vào bể, không vượt MaxFish.
+    /// KHÔNG clear timer — nếu bể đang trong cooldown, timer vẫn chạy.
+    /// Dùng khi admin muốn "tiếp tế" một phần mà không reset hoàn toàn.
+    /// </summary>
+    public async Task<PondStatus> AdminPartialRefillAsync(ulong guildId, int amount)
+    {
+        var pond = await _pondRepo.GetOrCreateAsync(guildId);
+
+        pond.CurrentFish = Math.Min(pond.CurrentFish + amount, pond.MaxFish);
+
+        // Nếu bể không còn empty sau khi cộng → xóa trạng thái depleted
+        if (!pond.IsEmpty)
+        {
+            pond.DepletedAt       = null;
+            pond.ResetAvailableAt = null; // cancel timer nếu đang chạy
+        }
+
+        await _pondRepo.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "[Guild {GuildId}] Pond partial refill +{Amount} → {Current}/{Max}",
+            guildId, amount, pond.CurrentFish, pond.MaxFish);
+
+        return ToStatus(pond);
+    }
+
     private async Task ResetPondAsync(GuildPond pond, ulong guildId)
     {
         pond.CurrentFish = pond.MaxFish;

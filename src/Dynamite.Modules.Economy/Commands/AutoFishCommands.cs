@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 ///
 /// Thiết kế:
 /// - Session có thời hạn (max 8 giờ), lưu AutoFishExpiresAt trên profile
-/// - Bot câu mỗi 35 giây (AutoFishScheduler), auto-sell Common/Uncommon, giữ Rare+
+/// - Bot câu mỗi 27 giây (AutoFishScheduler), cá lưu vào túi (không tự bán)
 /// - Không tốn item hay coin — privilege cho Admin/Owner để flex bộ sưu tập
 /// </summary>
 [RequireContext(ContextType.Guild)]

@@ -42,11 +42,17 @@ public static class EconomyEmbedBuilder
 
     public static Embed BuildFishEmbed(FishResult result)
     {
-        var c = result.Catch;
-        var weather = WeatherService.GetWeatherEmoji(result.Weather);
+        var c        = result.Catch;
+        var weather  = WeatherService.GetWeatherEmoji(result.Weather);
         var rodInfo  = result.RodName != null ? $"🎣 Cần: {result.RodName}\n" : "";
         var xpInfo   = $"✨ +{result.FishingXpGained} Fishing XP\n";
         var pondInfo = $"🪣 Bể còn: **{result.PondRemaining:N0}** con";
+
+        var bagStatus = result.SavedToBag
+            ? result.BagFreeSlots <= 3
+                ? $"\n📦 Túi còn **{result.BagFreeSlots}** slot — bán sớm nhé!"
+                : ""
+            : "\n\n⚠️ **Túi đầy!** Cá không được lưu — dùng `/bag sell-all` rồi câu lại.";
 
         var levelUpText = result.FishingLevelUp is { LeveledUp: true }
             ? $"\n\n🎉 **Fishing Level Up! → Lv.{result.FishingLevelUp.NewLevel}**" +
@@ -66,10 +72,9 @@ public static class EconomyEmbedBuilder
             .WithTitle($"{c.Emoji} Bắt được {chestLabel}: {c.Name}!")
             .WithDescription(
                 $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
-                $"**Tiền:** +{c.Coins:N0} coins\n" +
-                $"💰 Số dư: **{result.TotalCoins:N0} coins**\n\n" +
+                $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n\n" +
                 $"{rodInfo}{xpInfo}{pondInfo} {weather}" +
-                levelUpText + achieveText)
+                bagStatus + levelUpText + achieveText)
             .WithColor(RarityColor(c.Rarity))
             .Build();
     }
@@ -106,8 +111,7 @@ public static class EconomyEmbedBuilder
             .WithTitle($"🤖 [Auto] {username} {c.Emoji} Bắt được {chestLabel}: {c.Name}!")
             .WithDescription(
                 $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
-                $"**Tiền:** +{c.Coins:N0} coins\n" +
-                $"💰 Số dư: **{result.TotalCoins:N0} coins**\n\n" +
+                $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n\n" +
                 $"{rodInfo}{xpInfo}{pondInfo} {weather}" +
                 levelUpText + achieveText)
             .WithColor(RarityColor(c.Rarity))
@@ -145,12 +149,47 @@ public static class EconomyEmbedBuilder
             .WithTitle($"🛠️ [Admin Auto] {username} {c.Emoji} Bắt được {chestLabel}: {c.Name}!")
             .WithDescription(
                 $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
-                $"**Tiền:** +{c.Coins:N0} coins\n" +
-                $"💰 Số dư: **{result.TotalCoins:N0} coins**\n\n" +
+                $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n\n" +
                 $"{rodInfo}{xpInfo}{pondInfo} {weather}" +
                 levelUpText + achieveText)
             .WithColor(RarityColor(c.Rarity))
             .WithFooter("🛠️ Admin Auto-Fish")
+            .Build();
+    }
+
+    /// <summary>
+    /// Embed cho auto-fish user mode — Special Pool variant.
+    /// Hiển thị tên pool, countdown, pearl cap warning nếu có.
+    /// </summary>
+    public static Embed BuildAutoSpecialFishEmbed(
+        SpecialFishResult result, DateTime expiresAt, string username)
+    {
+        var c = result.Catch;
+
+        var pearlCapMsg = result.PearlCapReached
+            ? "\n⚠️ _Ngọc quý đã đạt giới hạn tuần — nhận cá thay thế._"
+            : "";
+
+        var levelUpText = result.FishingLevelUp is { LeveledUp: true }
+            ? $"\n\n🎉 **Fishing Level Up! → Lv.{result.FishingLevelUp.NewLevel}**" +
+              (result.FishingLevelUp.RoleAwarded.HasValue
+                  ? $"\n🎖️ Role mới: <@&{result.FishingLevelUp.RoleAwarded.Value}>!"
+                  : "")
+            : "";
+
+        var remaining    = expiresAt - DateTime.UtcNow;
+        var countdownStr = remaining.TotalSeconds > 0 ? FormatRemaining(remaining) : "Hết hạn";
+
+        return new EmbedBuilder()
+            .WithTitle($"⭐ [Auto Pool] {username} {c.Emoji} {c.Name}!")
+            .WithDescription(
+                $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
+                $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n" +
+                $"✨ +{result.FishingXpGained} Fishing XP\n" +
+                $"🪣 Pool còn: **{result.PondRemaining:N0}** con" +
+                pearlCapMsg + levelUpText)
+            .WithColor(new Color(c.IsPearl ? 0xFFD700u : 0xF39C12u))
+            .WithFooter($"⏱️ Auto-fish còn lại: {countdownStr} • 🎟️ -1 vé")
             .Build();
     }
 
@@ -165,8 +204,8 @@ public static class EconomyEmbedBuilder
 
     public static Embed BuildPondStatusEmbed(PondStatus status)
     {
-        var weather = WeatherService.GetWeatherEmoji(status.Weather);
-        var weatherExp = new DateTimeOffset(status.WeatherExpiresAt).ToUnixTimeSeconds();
+        var weatherEmoji = WeatherService.GetWeatherEmoji(status.Weather);
+        var weatherExp   = new DateTimeOffset(status.WeatherExpiresAt).ToUnixTimeSeconds();
 
         string pondDesc;
         if (status.IsEmpty)
@@ -181,13 +220,39 @@ public static class EconomyEmbedBuilder
             pondDesc = $"🐟 {bar} **{status.CurrentFish:N0}/{status.MaxFish:N0}** con";
         }
 
+        // Weather effect description
+        var (rareMod, legendaryMod, _, missMod, coinMod) = WeatherService.GetModifiers(status.Weather);
+        var effectLines = new System.Text.StringBuilder();
+        if (missMod < 0)
+            effectLines.Append($"🎣 Cá cắn câu nhiều hơn **{Math.Abs(missMod * 100):0}%** — sản lượng cao\n");
+        else if (missMod > 0)
+            effectLines.Append($"🌊 Cá khó bắt hơn **{missMod * 100:0}%** — sản lượng thấp\n");
+        if (rareMod > 0)
+            effectLines.Append($"🐡 Tỉ lệ Hiếm **+{rareMod * 100:0}%**\n");
+        if (legendaryMod > 0)
+            effectLines.Append($"🦈 Tỉ lệ Huyền Thoại **+{legendaryMod * 100:0}%**\n");
+        if (coinMod > 1.0)
+            effectLines.Append($"💰 Giá trị cá **×{coinMod:0.##}** (thưởng nguy hiểm)\n");
+
+        var effectStr = effectLines.Length > 0
+            ? $"\n**Hiệu ứng thời tiết:**\n{effectLines.ToString().TrimEnd()}"
+            : "\n*Thời tiết bình thường — không có bonus.*";
+
+        var color = status.Weather switch
+        {
+            PondWeather.Rainy  => new Color(0x3498DB),
+            PondWeather.Stormy => new Color(0x9B59B6),
+            _                  => status.IsEmpty ? new Color(0xED4245) : new Color(0x1abc9c)
+        };
+
         return new EmbedBuilder()
             .WithTitle("🌊 Trạng Thái Bể Cá")
             .WithDescription(
                 $"{pondDesc}\n\n" +
-                $"**Thời tiết:** {weather} {status.Weather}\n" +
-                $"Thay đổi: <t:{weatherExp}:R>")
-            .WithColor(status.IsEmpty ? new Color(0xED4245) : new Color(0x3498db))
+                $"**Thời tiết:** {weatherEmoji} {status.Weather}\n" +
+                $"Thay đổi: <t:{weatherExp}:R>" +
+                effectStr)
+            .WithColor(color)
             .Build();
     }
 
@@ -375,15 +440,17 @@ public static class EconomyEmbedBuilder
             : "";
 
         var bagStatus = result.SavedToBag
-            ? $"\n📦 Đã lưu vào túi ({result.BagFreeSlots} slot còn lại)"
-            : "\n📦 Túi đầy — cá rơi xuống biển (vẫn nhận coins)";
+            ? result.BagFreeSlots <= 3
+                ? $"\n📦 Túi còn **{result.BagFreeSlots}** slot — bán sớm nhé!"
+                : $"\n📦 Đã lưu vào túi ({result.BagFreeSlots} slot còn lại)"
+            : "\n\n⚠️ **Túi đầy!** Cá không được lưu — dùng `/bag sell-all` rồi câu lại.";
 
         return new EmbedBuilder()
             .WithTitle($"{c.Emoji} [Pool Đặc Biệt] {c.Name}!")
             .WithDescription(
                 $"📍 Pool: **{poolName}**\n" +
                 $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
-                $"**Tiền:** +{c.Coins:N0} coins\n" +
+                $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n" +
                 $"✨ +{result.FishingXpGained} Fishing XP\n" +
                 $"🪣 Pool còn: **{result.PondRemaining:N0}** con" +
                 bagStatus + pearlCapMsg + levelUpText)

@@ -99,10 +99,7 @@ public class FishingService
         var multiplier  = bestRod?.Item.DropMultiplier ?? 1.0;
 
         var currentWeather = await _weather.GetCurrentWeatherAsync(guildId);
-        var (rareMod, legendaryMod, _) = WeatherService.GetModifiers(currentWeather);
-
-        // Stormy: thêm +8% miss (thay vì đứt cước cũ)
-        var stormMissBonus = currentWeather == PondWeather.Stormy ? 0.08 : 0.0;
+        var (rareMod, legendaryMod, _, missMod, coinMod) = WeatherService.GetModifiers(currentWeather);
 
         // ── 4. Bait check ─────────────────────────────────────────────────────
         var baitMod  = 0.0;
@@ -120,7 +117,7 @@ public class FishingService
             dropMultiplier: multiplier,
             rareMod:        rareMod + baitMod,
             legendaryMod:   legendaryMod,
-            stormMissBonus: stormMissBonus);
+            missMod:        missMod);
 
         profile.LastFishedAt = DateTime.UtcNow;
 
@@ -129,7 +126,7 @@ public class FishingService
             await LogFishEventAsync(guildId, userId,
                 FishingEvent.Miss, null, bestRod?.Item.Name, currentWeather, -1);
             await _profileRepo.SaveChangesAsync();
-            return (false, "🎣 Hụt! Không có gì cắn câu lần này...", null);
+            return (false, "🎣 **Hụt!** Không có gì cắn câu lần này... 👉😄 lêu lêu~", null);
         }
 
         // ── 6. Pond consume (chỉ khi không miss) ─────────────────────────────
@@ -148,7 +145,10 @@ public class FishingService
         }
 
         // ── 8. Caught: track stats ────────────────────────────────────────────
-        var fishCatch = roll.Fish!;
+        // Áp dụng coinMod từ weather (Stormy ×1.25 → cá đáng tiền hơn vì nguy hiểm)
+        var fishCatch = coinMod == 1.0
+            ? roll.Fish!
+            : roll.Fish! with { Coins = (long)(roll.Fish.Coins * coinMod) };;
         profile.TotalCaught++;
         if (!fishCatch.IsChest)
         {
@@ -165,17 +165,9 @@ public class FishingService
         else
             profile.ChestsOpened++;
 
-        // ── 9. Coins + Transaction ────────────────────────────────────────────
-        wallet.Coins += fishCatch.Coins;
-        await _walletRepo.AddTransactionAsync(new Transaction
-        {
-            GuildId    = guildId,
-            ToWalletId = wallet.Id,
-            Amount     = fishCatch.Coins,
-            Type       = TransactionType.Fishing,
-            Note       = $"Câu được {fishCatch.Name} ({fishCatch.Rarity})",
-            CreatedAt  = DateTime.UtcNow
-        });
+        // ── 9. Coins ──────────────────────────────────────────────────────────
+        // Coins KHÔNG được cộng khi câu — chỉ nhận khi bán cá qua /bag sell.
+        // wallet vẫn cần cho achievement reward (TryAward bên dưới cộng vào wallet).
 
         // ── 10. Fish Bag ──────────────────────────────────────────────────────
         var bag        = await _bagRepo.GetOrCreateAsync(guildId, userId);

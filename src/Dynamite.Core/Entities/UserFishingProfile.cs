@@ -54,6 +54,21 @@ public class UserFishingProfile : BaseEntity
     /// </summary>
     public bool AutoFishPaused { get; set; } = false;
 
+    /// <summary>
+    /// Pool ID nếu auto-fish đang nhắm vào Special Pool.
+    /// null = câu bể thường (default).
+    /// Có value = câu pool đặc biệt trong khoảng thời gian AutoFishSpecialPoolExpiresAt.
+    /// Tự động reset về null khi hết hạn vé hoặc pool không còn active.
+    /// </summary>
+    public Guid? AutoFishSpecialPoolId { get; set; } = null;
+
+    /// <summary>
+    /// Thời điểm hết hạn của lượt vé pool đặc biệt hiện tại.
+    /// null = không đang dùng pool đặc biệt.
+    /// 1 vé = 2 tiếng câu pool đặc biệt liên tục.
+    /// </summary>
+    public DateTime? AutoFishSpecialPoolExpiresAt { get; set; } = null;
+
     // ── Trade throttle ───────────────────────────────────────────────────────
     public int TradesThisWeek { get; set; } = 0;
     public DateTime? TradeWeekResetAt { get; set; }

@@ -72,6 +72,20 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
         await FollowupAsync(embed: embed, ephemeral: true);
     }
 
+    // ── /shop use ──────────────────────────────────────────────────────────────
+
+    [SlashCommand("use", "Sử dụng vật phẩm tiêu thụ trong túi đồ")]
+    public async Task UseAsync(
+        [Summary("item", "Tên vật phẩm muốn dùng (vd: Phép Triệu Mưa)")] string itemName)
+    {
+        await DeferAsync(ephemeral: true);
+
+        var (success, message, _) =
+            await _shop.UseItemAsync(Context.Guild.Id, Context.User.Id, itemName);
+
+        await FollowupAsync(success ? message : $"❌ {message}", ephemeral: true);
+    }
+
     // ── /shop seed (Admin) ─────────────────────────────────────────────────────
 
     [SlashCommand("seed", "Seed vật phẩm mặc định vào cửa hàng (Admin)")]

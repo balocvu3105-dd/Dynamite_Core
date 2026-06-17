@@ -79,19 +79,8 @@ public class SpecialPoolService
                 $"Cần **Fishing Level {pool.MinLevel}** để câu tại pool này. " +
                 $"Bạn đang ở Level **{profile.FishingLevel}**.", null);
 
-        // 3. Ticket check — cần sở hữu ít nhất 1 Vé Pool Đặc Biệt
+        // 3. Load wallet (dùng cho TotalCoins trong result)
         var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
-        var inventory = await _shopRepo.GetUserInventoryAsync(wallet.Id);
-        var ticket = inventory.FirstOrDefault(i => i.Item.Type == ItemType.PoolTicket && i.Quantity > 0);
-        if (ticket is null)
-            return (false,
-                "🎟️ Bạn cần có **Vé Pool Đặc Biệt** để vào pool này!\n" +
-                "Mua tại `/shop buy Vé Pool Đặc Biệt`.", null);
-
-        // Tiêu thụ 1 vé
-        ticket.Quantity--;
-        if (ticket.Quantity <= 0)
-            await _shopRepo.RemoveUserInventoryAsync(ticket);
 
         // 4. Roll drop table
         var catch_ = SpecialFishingDropTable.Roll(pool.DropTable);
@@ -130,17 +119,8 @@ public class SpecialPoolService
         // 5. Consume 1 fish from pool
         pool.RemainingFish--;
 
-        // 6. Coins
-        wallet.Coins += catch_.Coins;
-        await _walletRepo.AddTransactionAsync(new Transaction
-        {
-            GuildId    = guildId,
-            ToWalletId = wallet.Id,
-            Amount     = catch_.Coins,
-            Type       = TransactionType.Fishing,
-            Note       = $"[Special Pool: {pool.PoolName}] {catch_.Name} ({catch_.Rarity})",
-            CreatedAt  = DateTime.UtcNow
-        });
+        // 6. Coins — KHÔNG cộng khi câu, chỉ nhận khi bán qua /bag sell.
+        // wallet vẫn cần cho achievement/XP reward bên dưới.
 
         // 7. Fish bag
         var bag        = await _bagRepo.GetOrCreateAsync(guildId, userId);
