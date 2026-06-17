@@ -22,11 +22,12 @@ public class ShopServiceTests
         _walletRepoMock = new Mock<IWalletRepository>();
         _shopRepoMock   = new Mock<IShopRepository>();
 
-        // FishBagService chỉ dùng trong BagUpgrade path — các test này không cần
+        // FishBagService và WeatherService không dùng trong các test này
         _sut = new ShopService(
             _walletRepoMock.Object,
             _shopRepoMock.Object,
             null!,                                // FishBagService (not used in these tests)
+            null!,                                // WeatherService (not used in these tests)
             NullLogger<ShopService>.Instance);
     }
 
