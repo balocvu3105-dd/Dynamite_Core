@@ -27,6 +27,10 @@ public class ShopRepository : IShopRepository
     public Task<InventoryItem?> GetItemByIdAsync(Guid id)
         => _db.InventoryItems.FindAsync(id).AsTask();
 
+    public Task<InventoryItem?> GetItemByTypeAsync(ulong guildId, ItemType type)
+        => _db.InventoryItems
+            .FirstOrDefaultAsync(i => i.GuildId == guildId && i.Type == type && i.IsAvailable);
+
     public Task<UserInventory?> GetUserItemAsync(Guid walletId, Guid itemId)
         => _db.UserInventories
             .Include(u => u.Item)

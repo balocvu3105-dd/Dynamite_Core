@@ -226,7 +226,7 @@ public class SpecialPoolScheduler : BackgroundService
             .WithColor(new Color(0x1F8EF1))
             .WithFooter(
                 $"Yêu cầu: Level 20+ và Vé Pool Đặc Biệt 🎟️  •  Tuần {weekNum} ({weekParity}) • Ngày {dayParity}")
-            .AddField("Cách tham gia", "`/fishing pool cast` → chọn pool vừa xuất hiện")
+            .AddField("Cách tham gia", "`/fishing pool-cast` → nhập Pool ID vừa xuất hiện")
             .WithCurrentTimestamp()
             .Build();
 
