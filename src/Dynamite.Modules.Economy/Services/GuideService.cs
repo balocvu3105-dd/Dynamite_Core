@@ -187,12 +187,24 @@ public class GuideService
         new EmbedBuilder()
             .WithTitle("🤖 Auto Câu Cá")
             .WithColor(new Color(0xE74C3C))
-            .WithDescription("Bot tự động câu cá cho bạn trong khi bạn offline!")
-            .AddField("Mua Auto Fish",
-                "`/shop buy Auto Fish 1H` — Mua gói tự động câu\n" +
-                "Bot sẽ câu liên tục và kết quả hiện trong kênh câu cá", inline: false)
-            .AddField("User mode", "Bán hết cá tự động + hiển thị kết quả mỗi lần câu", inline: true)
-            .AddField("Xem trạng thái", "`/autofishing status` — Xem còn bao nhiêu thời gian", inline: false)
+            .WithDescription("Bot tự động câu cá cho bạn trong khi bạn offline!\nKết quả luôn hiển thị trong kênh câu cá.")
+            .AddField("🛒 Mua gói",
+                "`/fish-auto buy` — Mua / gia hạn gói 3 ngày (giá leo thang theo lần mua)\n" +
+                "Lần 1: **5,000** xu · Lần 2: **12,000** · Lần 3: **25,000** · Lần 4: **45,000** · Lần 5+: **70,000**",
+                inline: false)
+            .AddField("⏸️ Tạm dừng / Tiếp tục",
+                "`/fish-auto pause` — Tạm dừng (timer vẫn chạy, không mất thời gian)\n" +
+                "`/fish-auto resume` — Bật lại sau khi tạm dừng",
+                inline: false)
+            .AddField("⛔ Dừng hẳn",
+                "`/fish-auto stop` — Dừng session (không hoàn tiền)\n" +
+                "`/fish-auto status` — Xem còn bao nhiêu thời gian",
+                inline: false)
+            .AddField("📌 Lưu ý",
+                "• Bot câu mỗi **27 giây**, bán toàn bộ cá vào ví\n" +
+                "• Tên bạn hiển thị trên mỗi kết quả câu\n" +
+                "• Chỉ dùng lệnh trong kênh câu cá được chỉ định",
+                inline: false)
             .Build(),
 
         // ── Section 7: Level ─────────────────────────────────────────────────
