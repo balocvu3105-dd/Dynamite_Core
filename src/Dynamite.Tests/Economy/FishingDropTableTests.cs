@@ -6,7 +6,7 @@ using Xunit;
 
 public class FishingDropTableTests
 {
-    // Helpers — loại bỏ Miss/Escape bằng cách pass missRate=0, escapeRate=0
+    // Helpers - loai bo Miss/Escape bang cach pass missRate=0, escapeRate=0
     private static RollResult RollCatch(double dropMultiplier = 1.0)
         => FishingDropTable.Roll(missRate: 0, escapeRate: 0, dropMultiplier: dropMultiplier);
 
@@ -17,11 +17,11 @@ public class FishingDropTableTests
         {
             var result = RollCatch();
 
-            // Với missRate=0 và escapeRate=0 → kết quả phải là Caught
+            // Voi missRate=0 va escapeRate=0 -> ket qua phai la Caught
             Assert.Equal(RollOutcome.Caught, result.Outcome);
             Assert.NotNull(result.Fish);
 
-            // Trash là rác — 0 coins là đúng thiết kế
+            // Trash la rac - 0 coins la dung thiet ke
             if (result.Fish!.Rarity == "Trash")
             {
                 Assert.True(result.Fish.Coins >= 0,
@@ -38,7 +38,7 @@ public class FishingDropTableTests
     [Fact]
     public void Roll_WithHigherMultiplier_ShouldReturnMoreCoinsOnAverage()
     {
-        // 1000 rolls với multiplier 2.0 vs 1.0, bỏ qua Miss/Escape
+        // 1000 rolls voi multiplier 2.0 vs 1.0, bo qua Miss/Escape
         var baseTotal = Enumerable.Range(0, 1000)
             .Select(_ => RollCatch(dropMultiplier: 1.0))
             .Where(r => r.Outcome == RollOutcome.Caught && r.Fish is not null)
@@ -56,8 +56,7 @@ public class FishingDropTableTests
     [Fact]
     public void Roll_Caught_ShouldReturnKnownRarity()
     {
-        // Bao gồm chest rarities vì chest check xảy ra trước fish roll
-        // Trash là rác — 0 coins, thiết kế intentional (~9.3% chance)
+        // Trash la rac - 0 coins, thiet ke intentional (~9.3% chance)
         var validRarities = new[]
         {
             "Common", "Uncommon", "Rare", "Legendary", "Mythic",
@@ -77,4 +76,18 @@ public class FishingDropTableTests
     {
         var result = RollCatch();
         Assert.NotNull(result.Fish);
-        Assert.False(string.IsNullOrEmpty(re
+        Assert.False(string.IsNullOrEmpty(result.Fish!.Name));
+    }
+
+    [Fact]
+    public void Roll_DefaultParams_CanReturnMissOrEscape()
+    {
+        // Voi default params (15% miss, 10% escape), sau 500 lan roll phai co it nhat 1 Miss
+        var outcomes = Enumerable.Range(0, 500)
+            .Select(_ => FishingDropTable.Roll())
+            .Select(r => r.Outcome)
+            .ToList();
+
+        Assert.Contains(RollOutcome.Miss, outcomes);
+    }
+}
