@@ -153,19 +153,27 @@ public class FishingService
         // ── 7. Escape ────────────────────────────────────────────────────────
         if (roll.Outcome == RollOutcome.Escape)
         {
-            var escaped = roll.Fish!;
+            // roll.Fish CAN be null for chest escapes (FishingDropTable line 87 returns null fish).
+            var escaped = roll.Fish;
             await LogFishEventAsync(guildId, userId,
-                FishingEvent.Escape, escaped, bestRod?.Item.Name, currentWeather, pondResult.Value!.CurrentFish);
+                FishingEvent.Escape, escaped, bestRod?.Item.Name, currentWeather,
+                pondResult.Value?.CurrentFish ?? -1);
             await _profileRepo.SaveChangesAsync();
             return ServiceResult<FishResult>.Fail(
-                $"😱 **{escaped.Name}** ({escaped.Rarity}) cắn câu rồi thoát mất! Luyện thêm nhé.");
+                escaped is null
+                    ? "😱 **Hòm Kho Báu** vừa tuột khỏi câu! Luyện thêm nhé."
+                    : $"😱 **{escaped.Name}** ({escaped.Rarity}) cắn câu rồi thoát mất! Luyện thêm nhé.");
         }
 
         // ── 8. Caught: track stats ────────────────────────────────────────────
+        // roll.Fish should always be non-null for Caught, but guard defensively.
+        if (roll.Fish is null)
+            return ServiceResult<FishResult>.Fail("⚠️ Lỗi nội bộ: không xác định được cá câu được.");
+
         // Áp dụng coinMod từ weather (Stormy ×1.25 → cá đáng tiền hơn vì nguy hiểm)
         var fishCatch = coinMod == 1.0
-            ? roll.Fish!
-            : roll.Fish! with { Coins = (long)(roll.Fish.Coins * coinMod) };;
+            ? roll.Fish
+            : roll.Fish with { Coins = (long)(roll.Fish.Coins * coinMod) };
         profile.TotalCaught++;
         if (!fishCatch.IsChest)
         {
@@ -236,7 +244,7 @@ public class FishingService
 
         if (shouldLog)
             await LogFishEventAsync(guildId, userId, logEvent, fishCatch,
-                bestRod?.Item.Name, currentWeather, pondResult.Value!.CurrentFish,
+                bestRod?.Item.Name, currentWeather, pondResult.Value?.CurrentFish ?? -1,
                 coinsEarned: fishCatch.Coins, xpEarned: xpGained);
 
         // ── 15. Rod Durability — trừ 1 sau mỗi lần catch thành công ────────────
@@ -256,14 +264,14 @@ public class FishingService
 
         _logger.LogDebug("User {UserId} fished: {Fish} ({Rarity}) = {Coins}c | Bag:{Saved} | Pond:{Remaining}",
             userId, fishCatch.Name, fishCatch.Rarity, fishCatch.Coins,
-            savedToBag ? "saved" : "dropped", pondResult.Value!.CurrentFish);
+            savedToBag ? "saved" : "dropped", pondResult.Value?.CurrentFish ?? -1);
 
         return ServiceResult<FishResult>.Ok(new FishResult(
             Catch:           fishCatch,
             TotalCoins:      wallet.Coins,
             RodName:         bestRod?.Item.Name,
             Weather:         currentWeather,
-            PondRemaining:   pondResult.Value!.CurrentFish,
+            PondRemaining:   pondResult.Value?.CurrentFish ?? -1,
             FishingXpGained: xpGained,
             FishingLevelUp:  levelUpResult,
             NewAchievements:   newAchievements,
