@@ -292,6 +292,17 @@ public class BotHostedService : IHostedService
         if (interaction is SocketMessageComponent) return;
         if (interaction is SocketModal) return;
 
+        // Race condition guard: interaction có thể đến trước OnReadyAsync hoàn thành
+        // AddModulesAsync (tức là trước khi modules được load). Nếu chạy ExecuteCommandAsync
+        // lúc này → UnknownCommand vì InteractionService chưa biết command nào cả.
+        if (!_modulesLoaded)
+        {
+            try { await interaction.RespondAsync("⏳ Bot đang khởi động, vui lòng thử lại sau vài giây!", ephemeral: true); }
+            catch { /* ignore — interaction có thể đã timeout */ }
+            _logger.LogWarning("Interaction received before modules loaded — deferred for {Type}", interaction.GetType().Name);
+            return;
+        }
+
         try
         {
             // QUAN TRỌNG: pass root provider — InteractionService (AutoServiceScopes = true)
@@ -316,11 +327,24 @@ public class BotHostedService : IHostedService
 
         // UnmetPrecondition = user thiếu quyền — hành vi bình thường, không phải lỗi bot
         if (result.Error == InteractionCommandError.UnmetPrecondition)
+        {
             _logger.LogInformation("Precondition blocked: {Reason} | Command: {Command}",
                 result.ErrorReason, command?.Name ?? "unknown");
+        }
+        // UnknownCommand = stale Discord cache hoặc startup race — không phải lỗi nghiêm trọng
+        else if (result.Error == InteractionCommandError.UnknownCommand)
+        {
+            _logger.LogWarning("UnknownCommand — stale Discord command registration? | Reason: {Reason}",
+                result.ErrorReason);
+        }
         else
-            _logger.LogError("Interaction failed — Error: {Error} | Reason: {Reason} | Command: {Command}",
+        {
+            // Cố gắng extract exception thật (có stack trace) nếu là ExecuteResult
+            var innerException = result is ExecuteResult exec ? exec.Exception : null;
+            _logger.LogError(innerException,
+                "Interaction failed — Error: {Error} | Reason: {Reason} | Command: {Command}",
                 result.Error, result.ErrorReason, command?.Name ?? "unknown");
+        }
 
         // Respond to user với error message — bắt buộc để tránh "Ứng dụng không phản hồi"
         _ = Task.Run(async () =>
@@ -330,9 +354,10 @@ public class BotHostedService : IHostedService
                 var errorMessage = result.Error switch
                 {
                     InteractionCommandError.UnmetPrecondition => $"❌ {result.ErrorReason}",
-                    InteractionCommandError.BadArgs           => "❌ Invalid arguments provided.",
-                    InteractionCommandError.Exception         => "❌ An unexpected error occurred.",
-                    _                                         => $"❌ Command failed: {result.ErrorReason}"
+                    InteractionCommandError.BadArgs           => "❌ Tham số không hợp lệ.",
+                    InteractionCommandError.Exception         => "❌ Đã xảy ra lỗi nội bộ.",
+                    InteractionCommandError.UnknownCommand    => "❌ Lệnh không tìm thấy. Thử reload Discord (Ctrl+R) rồi dùng lại.",
+                    _                                         => $"❌ Lệnh thất bại: {result.ErrorReason}"
                 };
 
                 // Cố respond — nếu đã deferred thì dùng FollowupAsync, nếu chưa thì RespondAsync

@@ -201,10 +201,12 @@ public class ShopService
 
     /// <summary>
     /// Mua item và trả về thông tin đầy đủ cho Command và InvoiceService.
+    /// Gọi trực tiếp BuyAsync và capture snapshot coins trước/sau để tính coinsPaid.
     /// </summary>
     public async Task<ServiceResult<BuyResult>>
         BuyWithDetailsAsync(ulong guildId, ulong userId, string itemName)
     {
+        // Pre-validation (fast-fail trước khi vào BuyAsync để tránh load wallet thêm lần nữa)
         var item = await _shopRepo.GetItemByNameAsync(guildId, itemName);
         if (item is null)
             return ServiceResult<BuyResult>.Fail($"Không tìm thấy **{itemName}** trong cửa hàng.");
@@ -213,23 +215,23 @@ public class ShopService
             return ServiceResult<BuyResult>.Fail("Vật phẩm này không thể mua.");
 
         // Snapshot coins trước khi mua để tính coinsPaid chính xác
-        // (BagUpgrade dùng dynamicPrice, không phải item.Price)
-        var walletBefore = await _walletRepo.GetOrCreateAsync(guildId, userId);
-        var coinsBefore  = walletBefore.Coins;
+        // (BagUpgrade dùng dynamicPrice nên không thể dùng item.Price)
+        var wallet      = await _walletRepo.GetOrCreateAsync(guildId, userId);
+        var coinsBefore = wallet.Coins;
 
-        if (item.Type != ItemType.BagUpgrade && walletBefore.Coins < item.Price)
+        if (item.Type != ItemType.BagUpgrade && wallet.Coins < item.Price)
             return ServiceResult<BuyResult>.Fail(
-                $"Không đủ coins. Cần **{item.Price:N0}** nhưng bạn chỉ có **{walletBefore.Coins:N0}**.");
+                $"Không đủ coins. Cần **{item.Price:N0}** nhưng bạn chỉ có **{wallet.Coins:N0}**.");
 
-        // Delegate to private BuyAsync logic, then compute remaining
+        // Delegate to private BuyAsync — nó sẽ load lại wallet/item từ EF tracker (cache hit, không tốn thêm roundtrip)
         var (success, message) = await BuyAsync(guildId, userId, itemName);
         if (!success) return ServiceResult<BuyResult>.Fail(message);
 
-        // coinsPaid = chênh lệch thực tế (đúng với cả BagUpgrade dynamic price)
-        var updatedWallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
-        var coinsPaid     = coinsBefore - updatedWallet.Coins;
+        // Sau BuyAsync, wallet entity đã được update in-memory bởi EF tracker
+        // → dùng lại wallet.Coins (đã reflect deduction) thay vì GetOrCreateAsync lần 3
+        var coinsPaid = coinsBefore - wallet.Coins;
         return ServiceResult<BuyResult>.Ok(
-            new BuyResult(item, coinsPaid, updatedWallet.Coins, message));
+            new BuyResult(item, coinsPaid, wallet.Coins, message));
     }
 
     public async Task<List<UserInventory>> GetInventoryAsync(ulong guildId, ulong userId)

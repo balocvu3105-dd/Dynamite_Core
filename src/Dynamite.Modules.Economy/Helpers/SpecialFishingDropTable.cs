@@ -56,6 +56,15 @@ public static class SpecialFishingDropTable
         (new("💀 Bóng Ma Biển",             "💀", 20000,"Mythic"),    1),
     ];
 
+    // ── Weak-rod trash (penalty when using Cần Câu Tre/Bạc in special pool) ────
+
+    /// <summary>
+    /// Cá rác vớt được khi cần câu quá yếu cho pool đặc biệt.
+    /// Chiếm 1 slot trong pool (fishing attempt consumed) nhưng 0 giá trị.
+    /// </summary>
+    public static readonly SpecialFishCatch WeakRodTrash =
+        new("🗑️ Rác Biển", "🗑️", 0, "Trash");
+
     // ── Pearl chance (rolled independently, check cap before awarding) ───────
 
     private const double SeaEyeChance = 0.000001; // 0.0001%
@@ -63,9 +72,14 @@ public static class SpecialFishingDropTable
     /// <summary>
     /// Roll 1 lần câu trong special pool.
     /// Pearl check phải được xử lý bởi caller (cap + log).
+    /// <paramref name="weakRodTrashRate"/> — tỉ lệ ra rác khi dùng cần câu yếu (Cần Tre: 0.20, Cần Bạc: 0.10).
     /// </summary>
-    public static SpecialFishCatch Roll(SpecialDropTable table)
+    public static SpecialFishCatch Roll(SpecialDropTable table, double weakRodTrashRate = 0.0)
     {
+        // Weak-rod penalty: cần yếu → tỉ lệ ra rác cao khi câu pool đặc biệt
+        if (weakRodTrashRate > 0 && Random.Shared.NextDouble() < weakRodTrashRate)
+            return WeakRodTrash;
+
         // Pearl check first (extremely rare)
         if (Random.Shared.NextDouble() < SeaEyeChance)
             return new SpecialFishCatch("Con Mắt Biển Cả", "👁️", 50_000, "Mythic", IsPearl: true);

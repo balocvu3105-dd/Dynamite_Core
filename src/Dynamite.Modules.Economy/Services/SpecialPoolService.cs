@@ -83,10 +83,45 @@ public class SpecialPoolService
         // 3. Load wallet (dùng cho TotalCoins trong result)
         var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
 
-        // 4. Roll drop table
-        var catch_ = SpecialFishingDropTable.Roll(pool.DropTable);
+        // 4. Tính weak-rod penalty: Cần Câu Tre/Bạc có tỉ lệ ra rác cao trong special pool.
+        //    Mechanic này khuyến khích upgrade lên Cần Câu Vàng+ trước khi dùng vé pool.
+        //    Cần Câu Tre  (MissRate 0.13) → 20% trash
+        //    Cần Câu Bạc  (MissRate 0.11) → 10% trash
+        //    Cần Câu Vàng+ (MissRate < 0.11) → 0% penalty
+        var bestRod = await _shopRepo.GetBestRodAsync(wallet.Id);
+        var weakRodTrashRate = bestRod?.Item.Name switch
+        {
+            "Cần Câu Tre"  => 0.20,
+            "Cần Câu Bạc"  => 0.10,
+            _              => 0.0
+        };
 
-        // 4. Pearl cap enforcement
+        // 5. Roll drop table (với weak-rod penalty nếu có)
+        var catch_ = SpecialFishingDropTable.Roll(pool.DropTable, weakRodTrashRate);
+
+        // Nếu ra rác (weak-rod penalty): pool slot vẫn bị tiêu, nhưng không lưu vào túi,
+        // không tính XP, không tạm dừng session.
+        if (catch_.Rarity == "Trash")
+        {
+            pool.RemainingFish--;
+            await _poolRepo.SaveChangesAsync();
+
+            _logger.LogDebug(
+                "[SpecialPool] Weak-rod trash for user {UserId} (rod: {Rod}, trashRate: {Rate:P0})",
+                userId, bestRod?.Item.Name ?? "none", weakRodTrashRate);
+
+            return ServiceResult<SpecialFishResult>.Ok(new SpecialFishResult(
+                Catch:           catch_,
+                TotalCoins:      wallet.Coins,
+                PondRemaining:   pool.RemainingFish,
+                FishingXpGained: 0,
+                FishingLevelUp:  null,
+                SavedToBag:      true,  // true = không trigger bag-full pause
+                BagFreeSlots:    0,
+                PearlCapReached: false));
+        }
+
+        // 6. Pearl cap enforcement
         var pearlCapReached = false;
         if (catch_.IsPearl)
         {
@@ -117,13 +152,13 @@ public class SpecialPoolService
             }
         }
 
-        // 5. Consume 1 fish from pool
+        // 7. Consume 1 fish from pool
         pool.RemainingFish--;
 
-        // 6. Coins — KHÔNG cộng khi câu, chỉ nhận khi bán qua /bag sell.
+        // 8. Coins — KHÔNG cộng khi câu, chỉ nhận khi bán qua /bag sell.
         // wallet vẫn cần cho achievement/XP reward bên dưới.
 
-        // 7. Fish bag
+        // 9. Fish bag
         var bag        = await _bagRepo.GetOrCreateAsync(guildId, userId);
         var savedToBag = false;
 
@@ -146,15 +181,15 @@ public class SpecialPoolService
             savedToBag = true;
         }
 
-        // 8. Weekly activity
+        // 10. Weekly activity
         var activity = await _lbRepo.GetOrCreateWeeklyActivityAsync(guildId, userId);
         activity.WeeklyFishCaught++;
 
-        // 9. Fishing XP
+        // 11. Fishing XP
         var xpGained    = XpService.FishingXpTable.GetValueOrDefault(catch_.Rarity, 20);
         var levelUpResult = await _xp.AwardFishingXpAsync(guildId, userId, catch_.Rarity, profile);
 
-        // 10. Save
+        // 12. Save
         await _walletRepo.SaveChangesAsync();
         await _poolRepo.SaveChangesAsync();
         await _bagRepo.SaveChangesAsync();

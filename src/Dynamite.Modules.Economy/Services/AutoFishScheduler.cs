@@ -216,6 +216,21 @@ public sealed class AutoFishScheduler : BackgroundService
             await PostAdminEmbedAsync(profile, result, username);
         else
             await PostUserEmbedAsync(profile, result, username);
+
+        // ── Cần gãy → post embed trước (user thấy cá bắt được + thông báo gãy),
+        //              sau đó pause để tránh câu tiếp với cần trống ──────────────
+        if (result.RodJustBroke)
+        {
+            var freshProfile = await profileRepo.GetOrCreateFishingAsync(guildId, userId);
+            freshProfile.AutoFishPaused = true;
+            await profileRepo.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "[AutoFish] Rod broke — paused session for user {UserId} in guild {GuildId}",
+                userId, guildId);
+
+            await PostRodBrokeNotificationAsync(profile, result.RodName, username);
+        }
     }
 
     // ── Special Pool fish ─────────────────────────────────────────────────────
@@ -325,6 +340,36 @@ public sealed class AutoFishScheduler : BackgroundService
         catch (Exception ex)
         {
             _logger.LogDebug("[AutoFish] Failed to post bag-full notification to channel {Id}: {Msg}",
+                profile.AutoFishChannelId, ex.Message);
+        }
+    }
+
+    private async Task PostRodBrokeNotificationAsync(
+        UserFishingProfile profile, string? rodName, string username)
+    {
+        try
+        {
+            if (_discord.GetChannel(profile.AutoFishChannelId) is not IMessageChannel channel)
+                return;
+
+            var rodText = rodName is not null ? $"**{rodName}**" : "Cần câu của bạn";
+
+            var embed = new EmbedBuilder()
+                .WithColor(new Color(0xE74C3C))
+                .WithTitle("💔 Cần Câu Gãy — Auto-Fish Tạm Dừng!")
+                .WithDescription(
+                    $"**{username}** — {rodText} đã gãy sau lần câu này!\n\n" +
+                    "Bot đã tự động **tạm dừng** auto-fish.\n" +
+                    "Dùng `/shop repair-rod` để sửa cần, rồi `/fish-auto resume` để tiếp tục.")
+                .WithFooter("Auto-Fish đã tạm dừng tự động • Timer vẫn đang chạy")
+                .WithCurrentTimestamp()
+                .Build();
+
+            await channel.SendMessageAsync($"<@{profile.UserId}>", embed: embed);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug("[AutoFish] Failed to post rod-broke notification to channel {Id}: {Msg}",
                 profile.AutoFishChannelId, ex.Message);
         }
     }

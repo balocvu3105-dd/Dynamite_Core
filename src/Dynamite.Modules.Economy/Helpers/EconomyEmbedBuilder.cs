@@ -119,6 +119,12 @@ public static class EconomyEmbedBuilder
                   $"{a.Title} — +{a.CoinReward:N0} coins"))
             : "";
 
+        var rodDurText = result.RodJustBroke
+            ? "\n\n💔 **Cần câu vừa gãy!** Auto-fish đã tạm dừng — dùng `/shop repair-rod` để sửa."
+            : result.RodDurabilityLeft.HasValue && result.RodDurabilityLeft <= 20
+                ? $"\n\n⚠️ Cần câu còn **{result.RodDurabilityLeft}** lần câu — sắp gãy!"
+                : "";
+
         var remaining    = expiresAt - DateTime.UtcNow;
         var countdownStr = remaining.TotalSeconds > 0 ? FormatRemaining(remaining) : "Hết hạn";
         var chestLabel   = c.IsChest ? "Hòm Báu" : isTrash ? "Rác" : "Cá";
@@ -130,7 +136,7 @@ public static class EconomyEmbedBuilder
                 $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
                 coinLine +
                 $"{rodInfo}{xpInfo}{pondInfo} {weather}" +
-                levelUpText + achieveText)
+                levelUpText + achieveText + rodDurText)
             .WithColor(RarityColor(c.Rarity))
             .WithFooter($"⏱️ Auto-fish còn lại: {countdownStr}")
             .Build();
@@ -164,6 +170,12 @@ public static class EconomyEmbedBuilder
                   $"{a.Title} — +{a.CoinReward:N0} coins"))
             : "";
 
+        var rodDurText = result.RodJustBroke
+            ? "\n\n💔 **Cần câu vừa gãy!** Auto-fish đã tạm dừng — dùng `/shop repair-rod` để sửa."
+            : result.RodDurabilityLeft.HasValue && result.RodDurabilityLeft <= 20
+                ? $"\n\n⚠️ Cần câu còn **{result.RodDurabilityLeft}** lần câu — sắp gãy!"
+                : "";
+
         var chestLabel = c.IsChest ? "Hòm Báu" : isTrash ? "Rác" : "Cá";
         var catchVerb  = isTrash ? "Vớt được" : "Bắt được";
 
@@ -173,7 +185,7 @@ public static class EconomyEmbedBuilder
                 $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
                 coinLine +
                 $"{rodInfo}{xpInfo}{pondInfo} {weather}" +
-                levelUpText + achieveText)
+                levelUpText + achieveText + rodDurText)
             .WithColor(RarityColor(c.Rarity))
             .WithFooter("🛠️ Admin Auto-Fish")
             .Build();
@@ -199,18 +211,25 @@ public static class EconomyEmbedBuilder
                   : "")
             : "";
 
+        var isTrash      = c.Rarity == "Trash";
+        var catchVerb    = isTrash ? "Vớt được" : "Bắt được";
+        var coinLine     = isTrash
+            ? "💸 Giá trị: **0 coins** _(cần câu yếu — nâng cấp để câu pool hiệu quả hơn!)_\n"
+            : $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n";
+        var xpLine       = result.FishingXpGained > 0 ? $"✨ +{result.FishingXpGained} Fishing XP\n" : "";
+
         var remaining    = expiresAt - DateTime.UtcNow;
         var countdownStr = remaining.TotalSeconds > 0 ? FormatRemaining(remaining) : "Hết hạn";
 
         return new EmbedBuilder()
-            .WithTitle($"⭐ [Auto Pool] {username} {c.Emoji} {c.Name}!")
+            .WithTitle($"⭐ [Auto Pool] {username} {c.Emoji} {catchVerb}: {c.Name}!")
             .WithDescription(
                 $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
-                $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n" +
-                $"✨ +{result.FishingXpGained} Fishing XP\n" +
+                coinLine +
+                xpLine +
                 $"🪣 Pool còn: **{result.PondRemaining:N0}** con" +
                 pearlCapMsg + levelUpText)
-            .WithColor(new Color(c.IsPearl ? 0xFFD700u : 0xF39C12u))
+            .WithColor(isTrash ? new Color(0x636e72u) : new Color(c.IsPearl ? 0xFFD700u : 0xF39C12u))
             .WithFooter($"⏱️ Auto-fish còn lại: {countdownStr} • 🎟️ -1 vé")
             .Build();
     }
