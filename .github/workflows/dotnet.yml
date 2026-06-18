@@ -20,10 +20,12 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore dependencies
-        run: dotnet restore src/Dynamite.Bot/Dynamite.Bot.csproj
+        run: |
+          dotnet restore src/Dynamite.Bot/Dynamite.Bot.csproj
+          dotnet restore src/Dynamite.Tests/Dynamite.Tests.csproj
 
       - name: Build
         run: dotnet build src/Dynamite.Bot/Dynamite.Bot.csproj --no-restore --configuration Release
 
       - name: Test
-        run: dotnet test src/Dynamite.Tests/Dynamite.Tests.csproj --configuration Release --verbosity normal
+        run: dotnet test src/Dynamite.Tests/Dynamite.Tests.csproj --no-restore --configuration Release --verbosity normal
