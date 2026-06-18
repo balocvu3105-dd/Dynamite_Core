@@ -51,9 +51,19 @@ public class ShopRepository : IShopRepository
     public Task<UserInventory?> GetBestRodAsync(Guid walletId)
         => _db.UserInventories
             .Include(u => u.Item)
-            .Where(u => u.WalletId == walletId && u.Item.Type == ItemType.FishingRod)
+            .Where(u => u.WalletId == walletId
+                     && u.Item.Type == ItemType.FishingRod
+                     // Bỏ qua rod gãy (RodDurability == 0); null = legacy, vẫn dùng được
+                     && (u.RodDurability == null || u.RodDurability > 0))
             .OrderByDescending(u => u.Item.DropMultiplier)
             .FirstOrDefaultAsync();
+
+    public Task<List<UserInventory>> GetUserRodsAsync(Guid walletId)
+        => _db.UserInventories
+            .Include(u => u.Item)
+            .Where(u => u.WalletId == walletId && u.Item.Type == ItemType.FishingRod)
+            .OrderByDescending(u => u.Item.DropMultiplier)
+            .ToListAsync();
 
     public Task RemoveUserInventoryAsync(UserInventory inventory)
     {

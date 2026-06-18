@@ -7,6 +7,7 @@ using Discord.WebSocket;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Economy.Helpers;
+using Dynamite.Modules.Economy.Services;
 using Microsoft.Extensions.Logging;
 
 // Enum cho lựa chọn mode auto fish — Discord render thành dropdown
@@ -80,7 +81,7 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
 
     // ── /fish-auto buy ───────────────────────────────────────────────────────
 
-    [SlashCommand("buy", "Mua / gia hạn gói auto câu cá 5 tiếng")]
+    [SlashCommand("buy", "Mua gói auto câu cá 5 tiếng (1 session / lần)")]
     public async Task BuyAsync()
     {
         if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
@@ -92,6 +93,20 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
             Context.Guild.Id, Context.User.Id);
 
         var now = DateTime.UtcNow;
+
+        // ── Block nếu session đang còn active ───────────────────────────────
+        if (profile.AutoFishExpiresAt.HasValue
+            && profile.AutoFishExpiresAt > now
+            && profile.AutoFishSellAll)
+        {
+            var activeExpiresUnix = ((DateTimeOffset)profile.AutoFishExpiresAt.Value).ToUnixTimeSeconds();
+            await FollowupAsync(
+                $"❌ **Bạn đang có session auto-fish đang chạy!**\n" +
+                $"Session kết thúc <t:{activeExpiresUnix}:R> (<t:{activeExpiresUnix}:T>).\n" +
+                $"Vui lòng đợi session kết thúc rồi mua lại.",
+                ephemeral: true);
+            return;
+        }
 
         // ── Kiểm tra cooldown 1 tiếng sau khi session kết thúc ──────────────
         if (profile.AutoFishExpiresAt.HasValue
@@ -120,24 +135,8 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
             return;
         }
 
-        // ── Tính thời hạn ────────────────────────────────────────────────────
-        // Gia hạn: nếu đang có session user (SellAll=true) thì cộng thêm từ thời điểm hiện tại hết hạn
-        // Reset: nếu đang dùng admin session hoặc không có session
-        DateTime newExpires;
-        bool isRenew = false;
-
-        if (profile.AutoFishExpiresAt.HasValue
-            && profile.AutoFishExpiresAt > now
-            && profile.AutoFishSellAll)
-        {
-            // Gia hạn từ điểm hết hạn hiện tại
-            newExpires = profile.AutoFishExpiresAt.Value + SessionDuration;
-            isRenew = true;
-        }
-        else
-        {
-            newExpires = now + SessionDuration;
-        }
+        // ── Tính thời hạn — luôn bắt đầu từ now ─────────────────────────────
+        var newExpires = now + SessionDuration;
 
         // ── Trừ coins ────────────────────────────────────────────────────────
         wallet.Coins -= price;
@@ -176,7 +175,7 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
 
         var embed = new EmbedBuilder()
             .WithColor(Color.Blue)
-            .WithTitle(isRenew ? "🔄 Auto-Fish Gia Hạn!" : "🎣 Auto-Fish Kích Hoạt!")
+            .WithTitle("🎣 Auto-Fish Kích Hoạt!")
             .WithDescription(
                 $"Bot sẽ tự câu cho bạn mỗi **27 giây**.\n" +
                 $"Cá câu được sẽ **lưu vào túi cá** (không tự bán).\n" +
@@ -194,7 +193,25 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
             .WithFooter("Dùng /fish-auto stop để dừng sớm • Không hoàn tiền • Dừng sớm vẫn tính cooldown")
             .Build();
 
+        // ── Hỏi về bait preference ───────────────────────────────────────────
+        var currentBait = profile.AutoFishUseBait ? "✅ Đang dùng" : "❌ Không dùng";
+        var baitEmbed = new EmbedBuilder()
+            .WithColor(new Color(0xF39C12))
+            .WithTitle("🪱 Bạn có muốn dùng Mồi Câu không?")
+            .WithDescription(
+                "Nếu bạn có **Mồi Câu** trong túi đồ, auto-fish có thể tự động dùng để tăng **+10% tỉ lệ cá Hiếm**.\n\n" +
+                "⚠️ Mồi sẽ **bị tiêu thụ tự động** trong lúc auto chạy.\n" +
+                $"Lựa chọn hiện tại: **{currentBait}**")
+            .WithFooter("Lựa chọn này được lưu lại cho các lần tiếp theo")
+            .Build();
+
+        var baitButtons = new ComponentBuilder()
+            .WithButton("✅ Dùng mồi câu", $"autofish_bait:use:{Context.User.Id}", ButtonStyle.Success)
+            .WithButton("❌ Không dùng", $"autofish_bait:skip:{Context.User.Id}", ButtonStyle.Secondary)
+            .Build();
+
         await FollowupAsync(embed: embed, ephemeral: true);
+        await FollowupAsync(embed: baitEmbed, components: baitButtons, ephemeral: true);
     }
 
     // ── /fish-auto pause ─────────────────────────────────────────────────────
@@ -374,12 +391,43 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
         await FollowupAsync(embed: embed.Build(), ephemeral: true);
     }
 
+    // ── /fish-auto toggle ────────────────────────────────────────────────────
+
+    [SlashCommand("toggle", "Bật/tắt nhanh auto câu (pause ↔ resume)")]
+    public async Task ToggleAsync()
+    {
+        await DeferAsync(ephemeral: true);
+
+        var profile = await _profileRepo.GetOrCreateFishingAsync(
+            Context.Guild.Id, Context.User.Id);
+
+        var now = DateTime.UtcNow;
+
+        if (profile.AutoFishExpiresAt is null || profile.AutoFishExpiresAt <= now || !profile.AutoFishSellAll)
+        {
+            await FollowupAsync(
+                "ℹ️ Bạn không có session auto-fish nào đang chạy.\n" +
+                "Dùng `/fish-auto buy` để kích hoạt.",
+                ephemeral: true);
+            return;
+        }
+
+        profile.AutoFishPaused = !profile.AutoFishPaused;
+        await _profileRepo.SaveChangesAsync();
+
+        if (profile.AutoFishPaused)
+            await FollowupAsync("⏸️ Auto câu đã **tạm dừng**. Dùng `/fish-auto toggle` để tiếp tục.", ephemeral: true);
+        else
+            await FollowupAsync("▶️ Auto câu đã **tiếp tục**!", ephemeral: true);
+    }
+
     // ── /fish-auto set-mode ──────────────────────────────────────────────────
 
     [SlashCommand("set-mode", "Chọn chế độ auto câu: bể thường hoặc pool đặc biệt")]
     public async Task SetModeAsync(
         [Summary("mode", "Chế độ auto câu")] AutoFishMode mode,
-        [Summary("pool_id", "ID của pool đặc biệt (lấy từ /fishing pools, bắt buộc khi chọn SpecialPool)")]
+        [Summary("pool", "Chọn pool đặc biệt (bắt buộc khi chọn SpecialPool)")]
+        [Autocomplete(typeof(SpecialPoolAutocomplete))]
         string? poolId = null)
     {
         await DeferAsync(ephemeral: true);
@@ -502,4 +550,55 @@ public class UserAutoFishCommands : InteractionModuleBase<SocketInteractionConte
     /// <summary>Lấy giá theo số lần đã mua (index clamped vào PriceTiers).</summary>
     private static long GetPrice(int purchaseCount)
         => PriceTiers[Math.Min(purchaseCount, PriceTiers.Length - 1)];
+}
+
+/// <summary>
+/// Component handlers cho auto-fish bait selection.
+/// Tách ra khỏi [Group] vì Discord.Net không route ComponentInteraction đúng trong grouped module.
+/// </summary>
+[RequireContext(ContextType.Guild)]
+public class AutoFishComponentHandlers : InteractionModuleBase<SocketInteractionContext>
+{
+    private readonly IUserProfileRepository _profileRepo;
+
+    public AutoFishComponentHandlers(IUserProfileRepository profileRepo)
+    {
+        _profileRepo = profileRepo;
+    }
+
+    [ComponentInteraction("autofish_bait:use:*")]
+    public async Task BaitUseAsync(string userId)
+    {
+        if (Context.User.Id.ToString() != userId)
+        {
+            await RespondAsync("❌ Đây không phải lựa chọn của bạn.", ephemeral: true);
+            return;
+        }
+
+        var profile = await _profileRepo.GetOrCreateFishingAsync(Context.Guild.Id, Context.User.Id);
+        profile.AutoFishUseBait = true;
+        await _profileRepo.SaveChangesAsync();
+
+        await RespondAsync(
+            "✅ Auto-fish sẽ **tự động dùng mồi câu** nếu có trong túi đồ.",
+            ephemeral: true);
+    }
+
+    [ComponentInteraction("autofish_bait:skip:*")]
+    public async Task BaitSkipAsync(string userId)
+    {
+        if (Context.User.Id.ToString() != userId)
+        {
+            await RespondAsync("❌ Đây không phải lựa chọn của bạn.", ephemeral: true);
+            return;
+        }
+
+        var profile = await _profileRepo.GetOrCreateFishingAsync(Context.Guild.Id, Context.User.Id);
+        profile.AutoFishUseBait = false;
+        await _profileRepo.SaveChangesAsync();
+
+        await RespondAsync(
+            "❌ Auto-fish sẽ **không dùng mồi câu**. Mồi chỉ có tác dụng khi câu tay.",
+            ephemeral: true);
+    }
 }

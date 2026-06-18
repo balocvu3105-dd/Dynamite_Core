@@ -72,6 +72,7 @@ public sealed class AutoFishScheduler : BackgroundService
         var profileRepo    = scope.ServiceProvider.GetRequiredService<IUserProfileRepository>();
         var fishingService = scope.ServiceProvider.GetRequiredService<FishingService>();
         var specialPool    = scope.ServiceProvider.GetRequiredService<SpecialPoolService>();
+        var configRepo     = scope.ServiceProvider.GetRequiredService<IGuildConfigRepository>();
 
         var activeProfiles = await profileRepo.GetAllActiveAutoFishProfilesAsync();
 
@@ -79,9 +80,27 @@ public sealed class AutoFishScheduler : BackgroundService
 
         _logger.LogDebug("[AutoFish] Ticking {Count} active session(s).", activeProfiles.Count);
 
+        // Cache guild fishing-enabled state per tick (tránh query DB lặp cho cùng guild)
+        var guildEnabledCache = new Dictionary<ulong, bool>();
+
         foreach (var profile in activeProfiles)
         {
             if (ct.IsCancellationRequested) break;
+
+            // Bãi câu đóng → bỏ qua toàn bộ user trong guild đó
+            if (!guildEnabledCache.TryGetValue(profile.GuildId, out var enabled))
+            {
+                var cfg = await configRepo.GetByGuildIdAsync(profile.GuildId);
+                enabled = cfg?.FishingEnabled ?? true;
+                guildEnabledCache[profile.GuildId] = enabled;
+            }
+
+            if (!enabled)
+            {
+                _logger.LogDebug("[AutoFish] Fishing closed in guild {GuildId} — skipping user {UserId}.",
+                    profile.GuildId, profile.UserId);
+                continue;
+            }
 
             try
             {
@@ -156,8 +175,22 @@ public sealed class AutoFishScheduler : BackgroundService
         IUserProfileRepository profileRepo,
         ulong guildId, ulong userId, bool isAdmin, string username)
     {
-        var (success, _, result) = await fishingService.FishAsync(guildId, userId);
-        if (!success || result is null) return;
+        var (success, reason, result) = await fishingService.FishAsync(guildId, userId, useBait: profile.AutoFishUseBait);
+
+        if (!success)
+        {
+            // Bỏ qua cooldown (không nên xảy ra với tick 27s vs cooldown 25s)
+            // Hiện miss/escape và các lý do khác ra channel
+            if (!string.IsNullOrEmpty(reason)
+                && !reason.StartsWith("⏳")
+                && profile.AutoFishChannelId != 0)
+            {
+                await PostMissEscapeEmbedAsync(profile, reason, username);
+            }
+            return;
+        }
+
+        if (result is null) return;
 
         // ── Túi đầy → auto-pause + notify ────────────────────────────────────
         if (!result.SavedToBag)
@@ -337,6 +370,24 @@ public sealed class AutoFishScheduler : BackgroundService
         catch (Exception ex)
         {
             _logger.LogDebug("[AutoFish] Failed to post special pool fallback to channel {Id}: {Msg}",
+                profile.AutoFishChannelId, ex.Message);
+        }
+    }
+
+    private async Task PostMissEscapeEmbedAsync(
+        UserFishingProfile profile, string reason, string username)
+    {
+        try
+        {
+            if (_discord.GetChannel(profile.AutoFishChannelId) is not IMessageChannel channel)
+                return;
+
+            var embed = EconomyEmbedBuilder.BuildAutoFishMissEmbed(reason, username);
+            await channel.SendMessageAsync(embed: embed);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug("[AutoFish] Failed to post miss/escape embed to channel {Id}: {Msg}",
                 profile.AutoFishChannelId, ex.Message);
         }
     }

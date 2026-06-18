@@ -16,7 +16,11 @@ public record FishResult(
     LevelUpResult? FishingLevelUp,
     IReadOnlyList<AchievementUnlock> NewAchievements,
     bool SavedToBag,
-    int BagFreeSlots);
+    int BagFreeSlots,
+    /// <summary>Độ bền còn lại sau lần câu này. null = rod không track durability.</summary>
+    int? RodDurabilityLeft = null,
+    /// <summary>true = lần câu này làm gãy cần câu.</summary>
+    bool RodJustBroke = false);
 
 public record AchievementUnlock(string Id, string Title, string Description, long CoinReward);
 
@@ -42,6 +46,7 @@ public class FishingService
     private readonly ILeaderboardRepository  _lbRepo;
     private readonly IFishingLogRepository   _fishLog;
     private readonly IFishTrophyRepository   _trophyRepo;
+    private readonly IPondRepository _pondRepo;
     private readonly PondService    _pond;
     private readonly WeatherService _weather;
     private readonly XpService      _xp;
@@ -55,6 +60,7 @@ public class FishingService
         ILeaderboardRepository lbRepo,
         IFishingLogRepository  fishLog,
         IFishTrophyRepository  trophyRepo,
+        IPondRepository pondRepo,
         PondService    pond,
         WeatherService weather,
         XpService      xp,
@@ -67,6 +73,7 @@ public class FishingService
         _lbRepo      = lbRepo;
         _fishLog     = fishLog;
         _trophyRepo  = trophyRepo;
+        _pondRepo    = pondRepo;
         _pond        = pond;
         _weather     = weather;
         _xp          = xp;
@@ -74,7 +81,7 @@ public class FishingService
     }
 
     public async Task<(bool success, string? reason, FishResult? result)>
-        FishAsync(ulong guildId, ulong userId)
+        FishAsync(ulong guildId, ulong userId, bool useBait = true)
     {
         // ── 1. Load profile + wallet + rod ───────────────────────────────────
         var profile = await _profileRepo.GetOrCreateFishingAsync(guildId, userId);
@@ -98,16 +105,25 @@ public class FishingService
         var escapeRate  = bestRod?.Item.EscapeRate ?? FishingDropTable.DefaultEscapeRate;
         var multiplier  = bestRod?.Item.DropMultiplier ?? 1.0;
 
+        // Guild owner override (từ /set-fish-rate) — ghi đè rod rate nếu được set
+        var pond = await _pondRepo.GetOrCreateAsync(guildId);
+        if (pond.FishMissRateOverride.HasValue)   missRate   = pond.FishMissRateOverride.Value;
+        if (pond.FishEscapeRateOverride.HasValue)  escapeRate = pond.FishEscapeRateOverride.Value;
+
         var currentWeather = await _weather.GetCurrentWeatherAsync(guildId);
         var (rareMod, legendaryMod, _, missMod, coinMod) = WeatherService.GetModifiers(currentWeather);
 
         // ── 4. Bait check ─────────────────────────────────────────────────────
+        // useBait = false khi auto-fish và user không chọn dùng bait
         var baitMod  = 0.0;
-        var baitItem = await GetActiveBaitAsync(wallet.Id);
-        if (baitItem is not null)
+        if (useBait)
         {
-            baitMod = 0.10; // +10% Rare
-            await ConsumeBaitChargeAsync(baitItem);
+            var baitItem = await GetActiveBaitAsync(wallet.Id);
+            if (baitItem is not null)
+            {
+                baitMod = 0.10; // +10% Rare
+                await ConsumeBaitChargeAsync(baitItem);
+            }
         }
 
         // ── 5. Roll (miss check ở đây — TRƯỚC khi trừ pond) ─────────────────
@@ -222,11 +238,25 @@ public class FishingService
                 bestRod?.Item.Name, currentWeather, pondStatus.CurrentFish,
                 coinsEarned: fishCatch.Coins, xpEarned: xpGained);
 
-        // ── 15. Save ─────────────────────────────────────────────────────────
+        // ── 15. Rod Durability — trừ 1 sau mỗi lần catch thành công ────────────
+        int? rodDurabilityLeft = null;
+        bool rodJustBroke      = false;
+
+        if (bestRod is not null && bestRod.RodDurability.HasValue)
+        {
+            bestRod.RodDurability -= 1;
+            rodDurabilityLeft      = bestRod.RodDurability;
+            rodJustBroke           = bestRod.RodDurability <= 0;
+            if (rodJustBroke) bestRod.RodDurability = 0;
+        }
+
+        // ── 16. Save ─────────────────────────────────────────────────────────
         await _walletRepo.SaveChangesAsync();
         await _profileRepo.SaveChangesAsync();
         await _bagRepo.SaveChangesAsync();
         await _lbRepo.SaveChangesAsync();
+        if (bestRod is not null && bestRod.RodDurability.HasValue)
+            await _shopRepo.SaveChangesAsync();
         if (shouldLog) await _fishLog.SaveChangesAsync();
         if (fishCatch.Rarity is "Rare" or "Legendary" or "Mythic")
             await _trophyRepo.SaveChangesAsync();
@@ -243,9 +273,11 @@ public class FishingService
             PondRemaining:   pondStatus.CurrentFish,
             FishingXpGained: xpGained,
             FishingLevelUp:  levelUpResult,
-            NewAchievements: newAchievements,
-            SavedToBag:      savedToBag,
-            BagFreeSlots:    bag.IsFull ? 0 : bag.FreeSlots - 1));
+            NewAchievements:   newAchievements,
+            SavedToBag:        savedToBag,
+            BagFreeSlots:      bag.IsFull ? 0 : bag.FreeSlots - 1,
+            RodDurabilityLeft: rodDurabilityLeft,
+            RodJustBroke:      rodJustBroke));
     }
 
     // ── Bait helpers ──────────────────────────────────────────────────────────

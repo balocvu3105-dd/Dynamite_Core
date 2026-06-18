@@ -45,7 +45,7 @@ public static class EconomyEmbedBuilder
         var c        = result.Catch;
         var weather  = WeatherService.GetWeatherEmoji(result.Weather);
         var rodInfo  = result.RodName != null ? $"🎣 Cần: {result.RodName}\n" : "";
-        var xpInfo   = $"✨ +{result.FishingXpGained} Fishing XP\n";
+        var xpInfo   = result.FishingXpGained > 0 ? $"✨ +{result.FishingXpGained} Fishing XP\n" : "";
         var pondInfo = $"🪣 Bể còn: **{result.PondRemaining:N0}** con";
 
         var bagStatus = result.SavedToBag
@@ -67,14 +67,26 @@ public static class EconomyEmbedBuilder
                   $"{a.Title} — +{a.CoinReward:N0} coins"))
             : "";
 
-        var chestLabel = c.IsChest ? "Hòm Báu" : "Cá";
+        var isTrash    = c.Rarity == "Trash";
+        var chestLabel = c.IsChest ? "Hòm Báu" : isTrash ? "Rác" : "Cá";
+        var catchVerb  = isTrash ? "Vớt được" : "Bắt được";
+        var coinLine   = isTrash
+            ? "💸 Giá trị: **0 coins** _(rác rưởi thôi...)_\n\n"
+            : $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n\n";
+
+        var rodDurText = result.RodJustBroke
+            ? "\n\n💔 **Cần câu vừa gãy!** Dùng `/shop repair-rod` để sửa trước khi câu tiếp."
+            : result.RodDurabilityLeft.HasValue && result.RodDurabilityLeft <= 20
+                ? $"\n\n⚠️ Cần câu còn **{result.RodDurabilityLeft}** lần câu — sắp gãy!"
+                : "";
+
         return new EmbedBuilder()
-            .WithTitle($"{c.Emoji} Bắt được {chestLabel}: {c.Name}!")
+            .WithTitle($"{c.Emoji} {catchVerb} {chestLabel}: {c.Name}!")
             .WithDescription(
                 $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
-                $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n\n" +
+                coinLine +
                 $"{rodInfo}{xpInfo}{pondInfo} {weather}" +
-                bagStatus + levelUpText + achieveText)
+                bagStatus + levelUpText + achieveText + rodDurText)
             .WithColor(RarityColor(c.Rarity))
             .Build();
     }
@@ -85,10 +97,14 @@ public static class EconomyEmbedBuilder
     public static Embed BuildAutoFishEmbed(FishResult result, DateTime expiresAt, string username)
     {
         var c        = result.Catch;
+        var isTrash  = c.Rarity == "Trash";
         var weather  = WeatherService.GetWeatherEmoji(result.Weather);
         var rodInfo  = result.RodName != null ? $"🎣 Cần: {result.RodName}\n" : "";
-        var xpInfo   = $"✨ +{result.FishingXpGained} Fishing XP\n";
+        var xpInfo   = result.FishingXpGained > 0 ? $"✨ +{result.FishingXpGained} Fishing XP\n" : "";
         var pondInfo = $"🪣 Bể còn: **{result.PondRemaining:N0}** con";
+        var coinLine = isTrash
+            ? "💸 Giá trị: **0 coins** _(rác rưởi thôi...)_\n\n"
+            : $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n\n";
 
         var levelUpText = result.FishingLevelUp is { LeveledUp: true }
             ? $"\n\n🎉 **Fishing Level Up! → Lv.{result.FishingLevelUp.NewLevel}**" +
@@ -105,13 +121,14 @@ public static class EconomyEmbedBuilder
 
         var remaining    = expiresAt - DateTime.UtcNow;
         var countdownStr = remaining.TotalSeconds > 0 ? FormatRemaining(remaining) : "Hết hạn";
-        var chestLabel   = c.IsChest ? "Hòm Báu" : "Cá";
+        var chestLabel   = c.IsChest ? "Hòm Báu" : isTrash ? "Rác" : "Cá";
+        var catchVerb    = isTrash ? "Vớt được" : "Bắt được";
 
         return new EmbedBuilder()
-            .WithTitle($"🤖 [Auto] {username} {c.Emoji} Bắt được {chestLabel}: {c.Name}!")
+            .WithTitle($"🤖 [Auto] {username} {c.Emoji} {catchVerb} {chestLabel}: {c.Name}!")
             .WithDescription(
                 $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
-                $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n\n" +
+                coinLine +
                 $"{rodInfo}{xpInfo}{pondInfo} {weather}" +
                 levelUpText + achieveText)
             .WithColor(RarityColor(c.Rarity))
@@ -125,10 +142,14 @@ public static class EconomyEmbedBuilder
     public static Embed BuildAdminAutoFishEmbed(FishResult result, string username)
     {
         var c        = result.Catch;
+        var isTrash  = c.Rarity == "Trash";
         var weather  = WeatherService.GetWeatherEmoji(result.Weather);
         var rodInfo  = result.RodName != null ? $"🎣 Cần: {result.RodName}\n" : "";
-        var xpInfo   = $"✨ +{result.FishingXpGained} Fishing XP\n";
+        var xpInfo   = result.FishingXpGained > 0 ? $"✨ +{result.FishingXpGained} Fishing XP\n" : "";
         var pondInfo = $"🪣 Bể còn: **{result.PondRemaining:N0}** con";
+        var coinLine = isTrash
+            ? "💸 Giá trị: **0 coins** _(rác rưởi thôi...)_\n\n"
+            : $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n\n";
 
         var levelUpText = result.FishingLevelUp is { LeveledUp: true }
             ? $"\n\n🎉 **Fishing Level Up! → Lv.{result.FishingLevelUp.NewLevel}**" +
@@ -143,13 +164,14 @@ public static class EconomyEmbedBuilder
                   $"{a.Title} — +{a.CoinReward:N0} coins"))
             : "";
 
-        var chestLabel = c.IsChest ? "Hòm Báu" : "Cá";
+        var chestLabel = c.IsChest ? "Hòm Báu" : isTrash ? "Rác" : "Cá";
+        var catchVerb  = isTrash ? "Vớt được" : "Bắt được";
 
         return new EmbedBuilder()
-            .WithTitle($"🛠️ [Admin Auto] {username} {c.Emoji} Bắt được {chestLabel}: {c.Name}!")
+            .WithTitle($"🛠️ [Admin Auto] {username} {c.Emoji} {catchVerb} {chestLabel}: {c.Name}!")
             .WithDescription(
                 $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
-                $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n\n" +
+                coinLine +
                 $"{rodInfo}{xpInfo}{pondInfo} {weather}" +
                 levelUpText + achieveText)
             .WithColor(RarityColor(c.Rarity))
@@ -313,15 +335,40 @@ public static class EconomyEmbedBuilder
 
     public static Embed BuildInventoryEmbed(List<UserInventory> items, string username)
     {
-        var desc = items.Count == 0
-            ? "Kho đồ đang trống."
-            : string.Join("\n", items.Select(i =>
-                $"{i.Item.Emoji} **{i.Item.Name}** x{i.Quantity}"));
+        if (items.Count == 0)
+            return new EmbedBuilder()
+                .WithTitle($"🎒 Kho Đồ của {username}")
+                .WithDescription("Kho đồ đang trống.")
+                .WithColor(new Color(0x5865F2))
+                .Build();
+
+        var lines = items.Select(i =>
+        {
+            var base_ = $"{i.Item.Emoji} **{i.Item.Name}**";
+
+            // Rod: hiển thị durability bar
+            if (i.Item.Type == ItemType.FishingRod && i.RodDurability.HasValue && i.Item.MaxDurability.HasValue)
+            {
+                var dur    = i.RodDurability.Value;
+                var maxDur = i.Item.MaxDurability.Value;
+                var pct    = (double)dur / maxDur * 100;
+                var bar    = BuildProgressBar(pct, 6);
+                var status = dur == 0 ? " 💔 **GÃY**" : dur <= maxDur * 0.2 ? " ⚠️" : "";
+                return $"{base_}{status}\n  └ Độ bền: {bar} {dur}/{maxDur}";
+            }
+
+            // Stackable items: show quantity
+            if (i.Quantity > 1)
+                return $"{base_} ×{i.Quantity}";
+
+            return base_;
+        });
 
         return new EmbedBuilder()
             .WithTitle($"🎒 Kho Đồ của {username}")
-            .WithDescription(desc)
+            .WithDescription(string.Join("\n", lines))
             .WithColor(new Color(0x5865F2))
+            .WithFooter("Dùng /shop repair-rod để sửa cần câu bị mòn")
             .Build();
     }
 
@@ -534,6 +581,7 @@ public static class EconomyEmbedBuilder
         "Bronze"    => new Color(0xCD7F32),
         "Gold"      => new Color(0xFFD700),
         "Diamond"   => new Color(0xB9F2FF),
+        "Trash"     => new Color(0x5d4037),
         _           => new Color(0x95a5a6)
     };
 
@@ -547,6 +595,7 @@ public static class EconomyEmbedBuilder
         "Bronze"    => "Đồng",
         "Gold"      => "Vàng",
         "Diamond"   => "Kim Cương",
+        "Trash"     => "Rác",
         _           => rarity
     };
 
@@ -568,6 +617,7 @@ public static class EconomyEmbedBuilder
         "Rare"      => "🟦",
         "Legendary" => "🟪",
         "Mythic"    => "🟧",
+        "Trash"     => "🟫",
         _           => "❓"
     };
 
@@ -578,6 +628,16 @@ public static class EconomyEmbedBuilder
         "Rare"      => 3,
         "Legendary" => 4,
         "Mythic"    => 5,
+        "Trash"     => 6,
         _           => 9
     };
+
+    /// <summary>
+    /// Embed nhỏ cho auto-fish khi bị miss hoặc cá thoát — post ra channel.
+    /// </summary>
+    public static Embed BuildAutoFishMissEmbed(string reason, string username)
+        => new EmbedBuilder()
+            .WithColor(new Color(0x636e72))
+            .WithDescription($"🤖 **{username}** — {reason}")
+            .Build();
 }

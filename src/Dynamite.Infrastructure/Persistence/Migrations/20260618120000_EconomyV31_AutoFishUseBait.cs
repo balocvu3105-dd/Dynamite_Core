@@ -4,14 +4,14 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Dynamite.Infrastructure.Persistence.Migrations
 {
-    [Migration("20260617120000_EconomyV27_AutoFishPause")]
-    public partial class EconomyV27_AutoFishPause : Migration
+    [Migration("20260618120000_EconomyV31_AutoFishUseBait")]
+    public partial class EconomyV31_AutoFishUseBait : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<bool>(
-                name: "AutoFishPaused",
+                name: "AutoFishUseBait",
                 table: "UserFishingProfiles",
                 type: "boolean",
                 nullable: false,
@@ -22,7 +22,7 @@ namespace Dynamite.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "AutoFishPaused",
+                name: "AutoFishUseBait",
                 table: "UserFishingProfiles");
         }
     }

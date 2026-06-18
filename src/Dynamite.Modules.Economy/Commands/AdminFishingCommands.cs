@@ -25,9 +25,11 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
     private readonly IFishBagRepository       _bagRepo;
     private readonly IFishingLogRepository    _fishLog;
     private readonly IGuildConfigRepository   _configRepo;
+    private readonly ISpecialPoolRepository   _poolRepo;
     private readonly PondService              _pond;
     private readonly WeatherService           _weather;
     private readonly WeatherForecastService   _weatherForecast;
+    private readonly DiscordSocketClient      _discord;
     private readonly ILogger<AdminFishingCommands> _logger;
 
     public AdminFishingCommands(
@@ -36,9 +38,11 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
         IFishBagRepository            bagRepo,
         IFishingLogRepository         fishLog,
         IGuildConfigRepository        configRepo,
+        ISpecialPoolRepository        poolRepo,
         PondService                   pond,
         WeatherService                weather,
         WeatherForecastService        weatherForecast,
+        DiscordSocketClient           discord,
         ILogger<AdminFishingCommands> logger)
     {
         _snapshot        = snapshot;
@@ -46,9 +50,11 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
         _bagRepo         = bagRepo;
         _fishLog         = fishLog;
         _configRepo      = configRepo;
+        _poolRepo        = poolRepo;
         _pond            = pond;
         _weather         = weather;
         _weatherForecast = weatherForecast;
+        _discord         = discord;
         _logger          = logger;
     }
 
@@ -459,6 +465,140 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
         await FollowupAsync(embed: embedBuilder.Build(), ephemeral: true);
     }
 
+    // ── /admin-fishing open ──────────────────────────────────────────────────
+
+    [SlashCommand("open", "Mở bãi câu — cho phép user dùng lệnh câu cá trở lại")]
+    public async Task OpenFishingAsync(
+        [Summary("announce", "Thông báo lý do vào channel câu cá (tùy chọn)")] string? message = null)
+    {
+        await DeferAsync(ephemeral: true);
+
+        var config = await _configRepo.GetOrCreateAsync(Context.Guild.Id, Context.Guild.Name);
+
+        if (config.FishingEnabled)
+        {
+            await FollowupAsync("ℹ️ Bãi câu đang **mở** rồi — không cần làm gì thêm.", ephemeral: true);
+            return;
+        }
+
+        config.FishingEnabled = true;
+        await _configRepo.SaveChangesAsync();
+
+        _logger.LogInformation("[AdminFishing] Admin {AdminId} OPENED fishing area in guild {GuildId}",
+            Context.User.Id, Context.Guild.Id);
+
+        // Thông báo nội bộ cho admin
+        await FollowupAsync(
+            embed: new EmbedBuilder()
+                .WithColor(new Color(0x57F287))
+                .WithTitle("✅ Bãi Câu Đã Mở!")
+                .WithDescription("Tất cả lệnh câu cá hoạt động trở lại bình thường.")
+                .WithFooter($"Admin: {Context.User.Username}")
+                .WithCurrentTimestamp()
+                .Build(),
+            ephemeral: true);
+
+        // Thông báo public vào channel câu cá (nếu có)
+        if (config.FishingChannelId.HasValue &&
+            _discord.GetChannel(config.FishingChannelId.Value) is IMessageChannel fishChannel)
+        {
+            var desc = message is not null
+                ? $"**Lý do:** {message}"
+                : "Bãi câu đã sẵn sàng cho mùa câu mới!";
+
+            var announcement = new EmbedBuilder()
+                .WithColor(new Color(0x57F287))
+                .WithTitle("🎣 Bãi Câu Đã Mở Cửa!")
+                .WithDescription(desc + "\n\nDùng `/fishing cast` để bắt đầu câu cá nhé!")
+                .WithFooter("Dynamite Fishing System")
+                .WithCurrentTimestamp()
+                .Build();
+
+            await fishChannel.SendMessageAsync(
+                config.FishingRoleId.HasValue ? $"<@&{config.FishingRoleId}>" : null,
+                embed: announcement);
+        }
+    }
+
+    // ── /admin-fishing close ─────────────────────────────────────────────────
+
+    [SlashCommand("close", "Đóng bãi câu — chặn toàn bộ lệnh câu cá (auto-fish vẫn giữ timer)")]
+    public async Task CloseFishingAsync(
+        [Summary("reason", "Lý do đóng cửa (sẽ hiển thị trong thông báo)")] string? reason = null,
+        [Summary("stop-auto", "Dừng luôn toàn bộ session auto-fish?")] bool stopAuto = false)
+    {
+        await DeferAsync(ephemeral: true);
+
+        var config = await _configRepo.GetOrCreateAsync(Context.Guild.Id, Context.Guild.Name);
+
+        if (!config.FishingEnabled)
+        {
+            await FollowupAsync("ℹ️ Bãi câu đang **đóng** rồi — không cần làm gì thêm.", ephemeral: true);
+            return;
+        }
+
+        config.FishingEnabled = false;
+        await _configRepo.SaveChangesAsync();
+
+        _logger.LogWarning("[AdminFishing] Admin {AdminId} CLOSED fishing area in guild {GuildId}. Reason: {Reason}",
+            Context.User.Id, Context.Guild.Id, reason ?? "—");
+
+        // Dừng auto-fish nếu admin chọn
+        int stoppedCount = 0;
+        if (stopAuto)
+        {
+            var profiles = await _profileRepo.GetAllActiveAutoFishProfilesAsync();
+            var guildProfiles = profiles.Where(p => p.GuildId == Context.Guild.Id).ToList();
+            foreach (var p in guildProfiles)
+            {
+                p.AutoFishExpiresAt            = DateTime.UtcNow;
+                p.AutoFishPaused               = false;
+                p.AutoFishSpecialPoolId        = null;
+                p.AutoFishSpecialPoolExpiresAt = null;
+            }
+            if (guildProfiles.Count > 0)
+                await _profileRepo.SaveChangesAsync();
+            stoppedCount = guildProfiles.Count;
+        }
+
+        // Thông báo nội bộ cho admin
+        var stopLine = stopAuto
+            ? $"\n⛔ Đã dừng **{stoppedCount}** session auto-fish."
+            : "\n⚠️ Session auto-fish vẫn giữ timer — bot sẽ bỏ qua tick cho đến khi mở lại.";
+
+        await FollowupAsync(
+            embed: new EmbedBuilder()
+                .WithColor(new Color(0xE74C3C))
+                .WithTitle("🔒 Bãi Câu Đã Đóng Cửa")
+                .WithDescription($"Toàn bộ lệnh câu cá đã bị chặn.{stopLine}")
+                .WithFooter($"Admin: {Context.User.Username}")
+                .WithCurrentTimestamp()
+                .Build(),
+            ephemeral: true);
+
+        // Thông báo public vào channel câu cá (nếu có)
+        if (config.FishingChannelId.HasValue &&
+            _discord.GetChannel(config.FishingChannelId.Value) is IMessageChannel fishChannel)
+        {
+            var reasonLine = reason is not null ? $"**Lý do:** {reason}\n\n" : string.Empty;
+
+            var announcement = new EmbedBuilder()
+                .WithColor(new Color(0xE74C3C))
+                .WithTitle("🔒 Bãi Câu Tạm Đóng Cửa")
+                .WithDescription(
+                    reasonLine +
+                    "Bãi câu cá hiện **không khả dụng**.\n" +
+                    "Vui lòng đợi thông báo mở lại từ Admin.")
+                .WithFooter("Dynamite Fishing System")
+                .WithCurrentTimestamp()
+                .Build();
+
+            await fishChannel.SendMessageAsync(
+                config.FishingRoleId.HasValue ? $"<@&{config.FishingRoleId}>" : null,
+                embed: announcement);
+        }
+    }
+
     // ── /admin-fishing stop-all-auto ────────────────────────────────────────
 
     [SlashCommand("stop-all-auto", "Dừng toàn bộ session auto-fish của tất cả user trong guild")]
@@ -560,4 +700,104 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
     private static Embed InfoEmbed(string title, string desc)
         => new EmbedBuilder().WithTitle(title).WithDescription(desc)
             .WithColor(new Color(0x5865F2)).WithTimestamp(DateTimeOffset.UtcNow).Build();
+
+    // ── /admin-fishing spawn-pool ─────────────────────────────────────────────
+
+    [SlashCommand("spawn-pool", "Mở pool đặc biệt ngay lập tức (Admin)")]
+    public async Task SpawnPoolAsync(
+        [Summary("type", "Loại pool")]
+        [Choice("Vịnh San Hô 🪸",       "CoralBay")]
+        [Choice("Đáy Đại Dương 🌊",      "DeepOcean")]
+        [Choice("Rừng Ngập Mặn 🌿",      "MangroveForest")]
+        [Choice("Vực Thẳm Huyền Bí 🌑", "AbyssalZone")]
+        string type,
+        [Summary("duration", "Thời gian mở (giờ, mặc định 2h)")]
+        [MinValue(1)][MaxValue(24)]
+        int durationHours = 2,
+        [Summary("min-level", "Level tối thiểu (mặc định 20)")]
+        [MinValue(1)][MaxValue(50)]
+        int minLevel = 20,
+        [Summary("capacity", "Số cá trong pool (mặc định 2000)")]
+        [MinValue(100)][MaxValue(10000)]
+        int capacity = 2000)
+    {
+        await DeferAsync(ephemeral: true);
+
+        if (!Enum.TryParse<SpecialDropTable>(type, out var dropTable))
+        {
+            await FollowupAsync("❌ Loại pool không hợp lệ.", ephemeral: true);
+            return;
+        }
+
+        var now       = DateTime.UtcNow;
+        var expiresAt = now.AddHours(durationHours);
+
+        var poolName = dropTable switch
+        {
+            SpecialDropTable.CoralBay        => "Vịnh San Hô 🪸",
+            SpecialDropTable.DeepOcean       => "Đáy Đại Dương 🌊",
+            SpecialDropTable.MangroveForest  => "Rừng Ngập Mặn 🌿",
+            SpecialDropTable.AbyssalZone     => "Vực Thẳm Huyền Bí 🌑",
+            _                               => type
+        };
+
+        var pool = new SpecialPool
+        {
+            GuildId       = Context.Guild.Id,
+            PoolName      = poolName,
+            DropTable     = dropTable,
+            Capacity      = capacity,
+            RemainingFish = capacity,
+            MinLevel      = minLevel,
+            StartsAt      = now,
+            ExpiresAt     = expiresAt,
+            CreatedAt     = now
+        };
+
+        await _poolRepo.AddPoolAsync(pool);
+        await _poolRepo.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "[AdminFishing] {AdminId} spawned pool {Name} ({Type}) for {Hours}h in guild {GuildId}",
+            Context.User.Id, poolName, dropTable, durationHours, Context.Guild.Id);
+
+        // Thông báo vào SpecialPoolChannelId nếu có
+        var config = await _configRepo.GetOrCreateAsync(Context.Guild.Id, Context.Guild.Name);
+        var announceChannelId = config.SpecialPoolChannelId ?? config.FishingChannelId;
+        if (announceChannelId.HasValue)
+        {
+            var ch = _discord.GetGuild(Context.Guild.Id)?.GetTextChannel(announceChannelId.Value);
+            if (ch is not null)
+            {
+                var expiresUnix = new DateTimeOffset(expiresAt).ToUnixTimeSeconds();
+                await ch.SendMessageAsync(embed: new EmbedBuilder()
+                    .WithColor(new Color(0xF39C12))
+                    .WithTitle($"🎣 Pool Đặc Biệt Xuất Hiện!")
+                    .WithDescription(
+                        $"**{poolName}** vừa được Admin mở!\n\n" +
+                        $"Level tối thiểu: **{minLevel}+**\n" +
+                        $"Cá trong pool: **{capacity:N0}**\n" +
+                        $"Đóng lúc: <t:{expiresUnix}:F> (<t:{expiresUnix}:R>)\n\n" +
+                        $"Dùng `/fishing pools` để xem và `/fishing pool-cast` để câu!")
+                    .WithFooter($"Mở bởi Admin {Context.User.Username}")
+                    .WithCurrentTimestamp()
+                    .Build());
+            }
+        }
+
+        var closeUnix = new DateTimeOffset(expiresAt).ToUnixTimeSeconds();
+        await FollowupAsync(
+            embed: new EmbedBuilder()
+                .WithColor(new Color(0x57F287))
+                .WithTitle("✅ Pool Đặc Biệt Đã Mở")
+                .AddField("Pool",      poolName,                      inline: true)
+                .AddField("Duration",  $"{durationHours}h",           inline: true)
+                .AddField("Min Level", $"Level {minLevel}+",          inline: true)
+                .AddField("Capacity",  $"{capacity:N0} cá",           inline: true)
+                .AddField("Đóng lúc", $"<t:{closeUnix}:R>",          inline: true)
+                .WithFooter("Dùng /fishing pools để user xem pool")
+                .WithCurrentTimestamp()
+                .Build(),
+            ephemeral: true);
+    }
 }

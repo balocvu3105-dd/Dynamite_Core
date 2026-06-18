@@ -91,6 +91,24 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
         await FollowupAsync(success ? message : $"❌ {message}", ephemeral: true);
     }
 
+    // ── /shop repair-rod ──────────────────────────────────────────────────────
+
+    [SlashCommand("repair-rod", "Sửa chữa cần câu bị mòn hoặc gãy")]
+    public async Task RepairRodAsync(
+        [Summary("rod", "Tên cần câu muốn sửa (để trống = tự chọn cần hư nhất)")] string? rodName = null)
+    {
+        await DeferAsync(ephemeral: true);
+
+        var (success, message, coinsPaid, repairItem, coinsRemaining) =
+            await _shop.RepairRodAsync(Context.Guild.Id, Context.User.Id, rodName);
+
+        await FollowupAsync(success ? message : $"❌ {message}", ephemeral: true);
+
+        if (success && coinsPaid > 0 && repairItem is not null)
+            await _invoice.SendAsync(Context.Guild.Id, Context.User.Id,
+                repairItem, coinsPaid, coinsRemaining);
+    }
+
     // ── /shop seed (Admin) ─────────────────────────────────────────────────────
 
     [SlashCommand("seed", "Seed vật phẩm mặc định vào cửa hàng (Admin)")]

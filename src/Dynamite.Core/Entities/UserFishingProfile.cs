@@ -55,6 +55,13 @@ public class UserFishingProfile : BaseEntity
     public bool AutoFishPaused { get; set; } = false;
 
     /// <summary>
+    /// true  = auto-fish sẽ dùng mồi câu (bait) nếu có trong inventory.
+    /// false = auto-fish bỏ qua bait, chỉ dùng rod (default an toàn).
+    /// User chọn khi bấm /fish-auto buy thông qua button.
+    /// </summary>
+    public bool AutoFishUseBait { get; set; } = false;
+
+    /// <summary>
     /// Pool ID nếu auto-fish đang nhắm vào Special Pool.
     /// null = câu bể thường (default).
     /// Có value = câu pool đặc biệt trong khoảng thời gian AutoFishSpecialPoolExpiresAt.

@@ -18,8 +18,9 @@ public static class FishingDropTable
     // ── Hard cap: Rare+Legendary+Mythic ≤ 40% tổng weight ───────────────────
     private const double RareCapFraction = 0.40;
 
-    // ── Base weights (tổng = 98, còn chỗ cho modifier) ──────────────────────
-    // Index: 0=Common, 1=Uncommon, 2=Rare, 3=Legendary, 4=Mythic
+    // ── Base weights (tổng = 108, còn chỗ cho modifier) ─────────────────────
+    // Index: 0=Common, 1=Uncommon, 2=Rare, 3=Legendary, 4=Mythic (KHÔNG thay đổi)
+    // Index: 5-8=Trash (thêm vào cuối, không ảnh hưởng rare cap logic)
     private static readonly (int Weight, FishCatch Template)[] BaseTable =
     [
         (50, new("Cá Thường",       "🐟", 0, "Common")),
@@ -27,6 +28,11 @@ public static class FishingDropTable
         (14, new("Cá Hiếm",         "🐡", 0, "Rare")),
         (5,  new("Cá Huyền Thoại",  "🦈", 0, "Legendary")),
         (1,  new("Cá Thần",         "🐉", 0, "Mythic")),
+        // ── Trash tier (tổng weight 10 ≈ 9.3%) ────────────────────────────────
+        (4,  new("Rác",             "🗑️", 0, "Trash")),
+        (3,  new("Vỏ Lon",          "🥫", 0, "Trash")),
+        (2,  new("Bao Rác",         "🛍️", 0, "Trash")),
+        (1,  new("Quần Cũ",         "👖", 0, "Trash")),
     ];
 
     // Chest check theo thứ tự Diamond → Gold → Bronze
@@ -47,6 +53,7 @@ public static class FishingDropTable
         ["Bronze"]    = (200,  500),
         ["Gold"]      = (600,  1500),
         ["Diamond"]   = (2000, 5000),
+        ["Trash"]     = (0,    0),   // rác — 0 coins
     };
 
     /// <summary>

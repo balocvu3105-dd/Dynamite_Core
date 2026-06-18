@@ -37,6 +37,18 @@ public class GuildPond : BaseEntity
     /// <summary>Channel dành riêng cho câu cá. Null = bất kỳ channel.</summary>
     public ulong? FishingChannelId { get; set; }
 
+    /// <summary>
+    /// Override tỉ lệ câu hụt toàn guild. Null = dùng default rod/item rate.
+    /// Range [0.0, 1.0]. Ví dụ: 0.0 = không bao giờ hụt, 0.5 = 50% hụt.
+    /// </summary>
+    public double? FishMissRateOverride { get; set; }
+
+    /// <summary>
+    /// Override tỉ lệ cá thoát toàn guild. Null = dùng default rod/item rate.
+    /// Range [0.0, 1.0].
+    /// </summary>
+    public double? FishEscapeRateOverride { get; set; }
+
     public bool IsEmpty => CurrentFish <= 0;
     public bool CanReset => ResetAvailableAt.HasValue && DateTime.UtcNow >= ResetAvailableAt.Value;
 }

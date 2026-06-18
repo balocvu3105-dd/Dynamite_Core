@@ -5,6 +5,7 @@ using Discord;
 using Discord.WebSocket;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -14,28 +15,28 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 public class WeatherForecastService
 {
-    private readonly IGuildConfigRepository _configRepo;
-    private readonly IPondRepository        _pondRepo;
-    private readonly DiscordSocketClient    _discord;
+    private readonly IServiceScopeFactory            _scopeFactory;
+    private readonly DiscordSocketClient             _discord;
     private readonly ILogger<WeatherForecastService> _logger;
 
     public WeatherForecastService(
-        IGuildConfigRepository configRepo,
-        IPondRepository        pondRepo,
-        DiscordSocketClient    discord,
+        IServiceScopeFactory            scopeFactory,
+        DiscordSocketClient             discord,
         ILogger<WeatherForecastService> logger)
     {
-        _configRepo = configRepo;
-        _pondRepo   = pondRepo;
-        _discord    = discord;
-        _logger     = logger;
+        _scopeFactory = scopeFactory;
+        _discord      = discord;
+        _logger       = logger;
     }
 
     /// <summary>Set channel dự báo, post embed lần đầu và pin.</summary>
     public async Task<(bool ok, string message)> SetChannelAsync(
         ulong guildId, string guildName, ITextChannel channel)
     {
-        var config = await _configRepo.GetOrCreateAsync(guildId, guildName);
+        using var scope      = _scopeFactory.CreateScope();
+        var configRepo       = scope.ServiceProvider.GetRequiredService<IGuildConfigRepository>();
+
+        var config = await configRepo.GetOrCreateAsync(guildId, guildName);
 
         // Xóa message cũ nếu có
         if (config.WeatherForecastMessageId.HasValue)
@@ -43,14 +44,14 @@ public class WeatherForecastService
 
         config.WeatherChannelId          = channel.Id;
         config.WeatherForecastMessageId  = null;
-        await _configRepo.SaveChangesAsync();
+        await configRepo.SaveChangesAsync();
 
-        var msgId = await PostForecastAsync(guildId, channel);
+        var msgId = await PostForecastAsync(guildId, channel, scope.ServiceProvider);
         if (msgId is null)
             return (false, "❌ Không thể post embed dự báo thời tiết.");
 
         config.WeatherForecastMessageId = msgId;
-        await _configRepo.SaveChangesAsync();
+        await configRepo.SaveChangesAsync();
 
         try
         {
@@ -71,7 +72,10 @@ public class WeatherForecastService
     {
         try
         {
-            var config = await _configRepo.GetByGuildIdAsync(guildId);
+            using var scope  = _scopeFactory.CreateScope();
+            var configRepo   = scope.ServiceProvider.GetRequiredService<IGuildConfigRepository>();
+
+            var config = await configRepo.GetByGuildIdAsync(guildId);
             if (config?.WeatherChannelId is null) return;
 
             var guild   = _discord.GetGuild(guildId);
@@ -83,18 +87,18 @@ public class WeatherForecastService
                 var msg = await channel.GetMessageAsync(config.WeatherForecastMessageId.Value) as IUserMessage;
                 if (msg is not null)
                 {
-                    var embed = await BuildForecastEmbedAsync(guildId);
+                    var embed = await BuildForecastEmbedAsync(guildId, scope.ServiceProvider);
                     await msg.ModifyAsync(p => p.Embed = embed);
                     return;
                 }
             }
 
             // Message bị xóa — post lại
-            var newId = await PostForecastAsync(guildId, channel);
+            var newId = await PostForecastAsync(guildId, channel, scope.ServiceProvider);
             if (newId.HasValue)
             {
                 config.WeatherForecastMessageId = newId;
-                await _configRepo.SaveChangesAsync();
+                await configRepo.SaveChangesAsync();
             }
         }
         catch (Exception ex)
@@ -105,12 +109,21 @@ public class WeatherForecastService
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private async Task<ulong?> PostForecastAsync(ulong guildId, ITextChannel channel)
+    private async Task<ulong?> PostForecastAsync(ulong guildId, ITextChannel channel, IServiceProvider? sp = null)
     {
         try
         {
-            var embed = await BuildForecastEmbedAsync(guildId);
-            var msg   = await channel.SendMessageAsync(embed: embed);
+            Embed embed;
+            if (sp is not null)
+            {
+                embed = await BuildForecastEmbedAsync(guildId, sp);
+            }
+            else
+            {
+                using var scope = _scopeFactory.CreateScope();
+                embed = await BuildForecastEmbedAsync(guildId, scope.ServiceProvider);
+            }
+            var msg = await channel.SendMessageAsync(embed: embed);
             return msg.Id;
         }
         catch (Exception ex)
@@ -120,9 +133,10 @@ public class WeatherForecastService
         }
     }
 
-    private async Task<Embed> BuildForecastEmbedAsync(ulong guildId)
+    private async Task<Embed> BuildForecastEmbedAsync(ulong guildId, IServiceProvider sp)
     {
-        var pond = await _pondRepo.GetOrCreateAsync(guildId);
+        var pondRepo = sp.GetRequiredService<IPondRepository>();
+        var pond = await pondRepo.GetOrCreateAsync(guildId);
         var now  = DateTime.UtcNow;
 
         var weather     = pond.CurrentWeather;
@@ -167,7 +181,7 @@ public class WeatherForecastService
             .Build();
     }
 
-    private async Task TryDeleteOldMessageAsync(ulong guildId, Core.Entities.GuildConfig config)
+    private async Task TryDeleteOldMessageAsync(ulong guildId, GuildConfig config)
     {
         try
         {

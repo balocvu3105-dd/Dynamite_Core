@@ -43,6 +43,8 @@ public class GuildConfig : BaseEntity
     public ulong? DailyChannelId { get; set; }
     /// <summary>Channel câu cá. Null = mọi channel đều dùng được.</summary>
     public ulong? FishingChannelId { get; set; }
+    /// <summary>true = bãi câu mở (default); false = đóng cửa, mọi lệnh câu cá bị chặn.</summary>
+    public bool FishingEnabled { get; set; } = true;
 
     // ── Phase A Channel System ────────────────────────────────────────────────
 

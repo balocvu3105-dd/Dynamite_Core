@@ -16,6 +16,17 @@ public static class FishingChannelGuard
         IGuildConfigRepository   configRepo)
     {
         var config = await configRepo.GetByGuildIdAsync(ctx.Guild.Id);
+
+        // Bãi câu đang đóng cửa
+        if (config is not null && !config.FishingEnabled)
+        {
+            await ctx.Interaction.RespondAsync(
+                "🚫 **Bãi câu đang đóng cửa!** Admin đã tạm thời đóng khu vực câu cá.\n" +
+                "Vui lòng đợi thông báo mở lại.",
+                ephemeral: true);
+            return false;
+        }
+
         if (config?.FishingChannelId is null) return true;
         if (ctx.Channel.Id == config.FishingChannelId) return true;
 

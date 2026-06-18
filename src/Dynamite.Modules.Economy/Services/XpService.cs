@@ -42,6 +42,7 @@ public class XpService
             ["Bronze"]    = 50,   // chests
             ["Gold"]      = 120,
             ["Diamond"]   = 300,
+            ["Trash"]     = 0,    // rác — không có XP
         };
 
     private readonly IUserProfileRepository _profileRepo;

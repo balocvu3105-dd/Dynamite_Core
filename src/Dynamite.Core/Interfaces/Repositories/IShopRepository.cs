@@ -14,6 +14,8 @@ public interface IShopRepository
     Task AddUserInventoryAsync(UserInventory inventory);
     Task<List<UserInventory>> GetUserInventoryAsync(Guid walletId);
     Task<UserInventory?> GetBestRodAsync(Guid walletId);
+    /// <summary>Lấy tất cả cần câu của user (kể cả gãy).</summary>
+    Task<List<UserInventory>> GetUserRodsAsync(Guid walletId);
     Task RemoveUserInventoryAsync(UserInventory inventory);
     Task SaveChangesAsync();
 }

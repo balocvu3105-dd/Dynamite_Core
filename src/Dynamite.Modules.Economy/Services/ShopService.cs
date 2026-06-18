@@ -27,6 +27,21 @@ public class ShopService
         _logger         = logger;
     }
 
+    // ── Rod repair pricing ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Tính chi phí repair cần câu.
+    /// Công thức: (maxDur - currentDur) * (rodPrice * 0.5 / maxDur)
+    /// = 50% giá mua gốc nếu repair từ 0 lên max.
+    /// </summary>
+    public static long GetRepairCost(long rodPrice, int maxDurability, int currentDurability)
+    {
+        var missing     = maxDurability - currentDurability;
+        if (missing <= 0) return 0;
+        var costPerUnit = rodPrice * 0.5 / maxDurability;
+        return (long)Math.Ceiling(costPerUnit * missing);
+    }
+
     // ── Bag upgrade pricing ───────────────────────────────────────────────────
 
     private const int DefaultBagCapacity = 10;
@@ -114,7 +129,31 @@ public class ShopService
         // ── FishingRod — không stack ─────────────────────────────────────────
         var existing = await _shopRepo.GetUserItemAsync(wallet.Id, item.Id);
         if (existing is not null && item.Type == ItemType.FishingRod)
+        {
+            // Nếu rod đang bị gãy → cho phép "mua lại" = repair về max
+            if (existing.RodDurability.HasValue && existing.RodDurability == 0 && item.MaxDurability.HasValue)
+            {
+                var repairCost = GetRepairCost(item.Price, item.MaxDurability.Value, 0);
+                if (wallet.Coins < repairCost)
+                    return (false,
+                        $"Cần câu của bạn đang **gãy**! Repair cần **{repairCost:N0}** xu nhưng bạn chỉ có **{wallet.Coins:N0}** xu.\n" +
+                        $"Dùng `/shop repair-rod` để sửa.");
+                wallet.Coins -= repairCost;
+                existing.RodDurability = item.MaxDurability.Value;
+                await _walletRepo.AddTransactionAsync(new Transaction
+                {
+                    GuildId      = guildId,
+                    FromWalletId = wallet.Id,
+                    Amount       = repairCost,
+                    Type         = TransactionType.Purchase,
+                    Note         = $"Repair {item.Name}",
+                    CreatedAt    = DateTime.UtcNow
+                });
+                await _walletRepo.SaveChangesAsync();
+                return (true, $"🔧 **{item.Name}** đã được sửa chữa! Độ bền: **{item.MaxDurability}** lần câu.");
+            }
             return (false, $"Bạn đã có **{item.Name}** rồi!");
+        }
 
         wallet.Coins -= item.Price;
 
@@ -130,10 +169,12 @@ public class ShopService
         else
             await _shopRepo.AddUserInventoryAsync(new UserInventory
             {
-                WalletId   = wallet.Id,
-                ItemId     = item.Id,
-                Quantity   = addQuantity,
-                AcquiredAt = DateTime.UtcNow
+                WalletId      = wallet.Id,
+                ItemId        = item.Id,
+                Quantity      = addQuantity,
+                AcquiredAt    = DateTime.UtcNow,
+                // Rod: set durability = MaxDurability khi mua mới
+                RodDurability = item.Type == ItemType.FishingRod ? item.MaxDurability : null,
             });
 
         await _walletRepo.AddTransactionAsync(new Transaction
@@ -167,23 +208,24 @@ public class ShopService
         if (item.Price <= 0 && item.Type != ItemType.BagUpgrade)
             return (false, "Vật phẩm này không thể mua.", null, 0, 0);
 
-        // BagUpgrade: price check xảy ra bên trong BuyAsync với dynamic price
-        if (item.Type != ItemType.BagUpgrade)
-        {
-            var wallet0 = await _walletRepo.GetOrCreateAsync(guildId, userId);
-            if (wallet0.Coins < item.Price)
-                return (false,
-                    $"Không đủ coins. Cần **{item.Price:N0}** nhưng bạn chỉ có **{wallet0.Coins:N0}**.",
-                    null, 0, 0);
-        }
+        // Snapshot coins trước khi mua để tính coinsPaid chính xác
+        // (BagUpgrade dùng dynamicPrice, không phải item.Price)
+        var walletBefore = await _walletRepo.GetOrCreateAsync(guildId, userId);
+        var coinsBefore  = walletBefore.Coins;
+
+        if (item.Type != ItemType.BagUpgrade && walletBefore.Coins < item.Price)
+            return (false,
+                $"Không đủ coins. Cần **{item.Price:N0}** nhưng bạn chỉ có **{walletBefore.Coins:N0}**.",
+                null, 0, 0);
 
         // Delegate to core BuyAsync logic, then compute remaining
         var (success, message) = await BuyAsync(guildId, userId, itemName);
         if (!success) return (false, message, null, 0, 0);
 
-        // Re-read wallet for remaining coins
+        // coinsPaid = chênh lệch thực tế (đúng với cả BagUpgrade dynamic price)
         var updatedWallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
-        return (true, message, item, item.Price, updatedWallet.Coins);
+        var coinsPaid     = coinsBefore - updatedWallet.Coins;
+        return (true, message, item, coinsPaid, updatedWallet.Coins);
     }
 
     public async Task<List<UserInventory>> GetInventoryAsync(ulong guildId, ulong userId)
@@ -228,6 +270,7 @@ public class ShopService
                 existing.EscapeRate      = item.EscapeRate;
                 existing.UsageCount      = item.UsageCount;
                 existing.DurationMinutes = item.DurationMinutes;
+                existing.MaxDurability   = item.MaxDurability;
                 updated++;
             }
         }
@@ -247,13 +290,14 @@ public class ShopService
             Name            = "Cần Câu Tre",
             Emoji           = "🪁",
             Price           = 3_000,
-            Description     = "Cần câu cơ bản. Giảm nhẹ tỉ lệ hụt, tăng nhẹ giá trị cá.",
+            Description     = "Cần câu cơ bản. Giảm nhẹ tỉ lệ hụt, tăng nhẹ giá trị cá. Độ bền 150 lần câu.",
             Type            = ItemType.FishingRod,
             IsAvailable     = true,
             CooldownSeconds = 22,
             DropMultiplier  = 1.1,
             MissRate        = 0.13,
             EscapeRate      = 0.09,
+            MaxDurability   = 150,
         },
         new InventoryItem
         {
@@ -261,13 +305,14 @@ public class ShopService
             Name            = "Cần Câu Bạc",
             Emoji           = "🎣",
             Price           = 20_000,
-            Description     = "Cần câu nâng cấp. Tăng giá trị cá và giảm tỉ lệ hụt đáng kể.",
+            Description     = "Cần câu nâng cấp. Tăng giá trị cá và giảm tỉ lệ hụt đáng kể. Độ bền 250 lần câu.",
             Type            = ItemType.FishingRod,
             IsAvailable     = true,
             CooldownSeconds = 19,
             DropMultiplier  = 1.25,
             MissRate        = 0.11,
             EscapeRate      = 0.08,
+            MaxDurability   = 250,
         },
         new InventoryItem
         {
@@ -275,13 +320,14 @@ public class ShopService
             Name            = "Cần Câu Vàng",
             Emoji           = "🏆",
             Price           = 60_000,
-            Description     = "Cần câu cao cấp. Hiệu quả rõ rệt — đầu tư cho người chơi nghiêm túc.",
+            Description     = "Cần câu cao cấp. Hiệu quả rõ rệt — đầu tư cho người chơi nghiêm túc. Độ bền 400 lần câu.",
             Type            = ItemType.FishingRod,
             IsAvailable     = true,
             CooldownSeconds = 15,
             DropMultiplier  = 1.55,
             MissRate        = 0.08,
             EscapeRate      = 0.06,
+            MaxDurability   = 400,
         },
         new InventoryItem
         {
@@ -289,13 +335,14 @@ public class ShopService
             Name            = "Cần Câu Kim Cương",
             Emoji           = "💎",
             Price           = 160_000,
-            Description     = "Cần câu huyền thoại. Mục tiêu end-game — sản lượng và giá trị vượt trội.",
+            Description     = "Cần câu huyền thoại. Mục tiêu end-game — sản lượng và giá trị vượt trội. Độ bền 600 lần câu.",
             Type            = ItemType.FishingRod,
             IsAvailable     = true,
             CooldownSeconds = 10,
             DropMultiplier  = 2.0,
             MissRate        = 0.05,
             EscapeRate      = 0.04,
+            MaxDurability   = 600,
         },
 
         // ── Mồi Câu ──────────────────────────────────────────────────────────
@@ -409,6 +456,77 @@ public class ShopService
                     $"❌ **{item.Name}** không thể dùng trực tiếp bằng lệnh này.",
                     null);
         }
+    }
+
+    // ── /shop repair-rod ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sửa chữa cần câu. rodName = null → sửa cần câu hư nhất.
+    /// Trả về (success, message, coinsPaid, item, coinsRemaining).
+    /// </summary>
+    public async Task<(bool success, string message, long coinsPaid, InventoryItem? item, long coinsRemaining)>
+        RepairRodAsync(ulong guildId, ulong userId, string? rodName)
+    {
+        var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
+        var rods   = await _shopRepo.GetUserRodsAsync(wallet.Id);
+
+        if (rods.Count == 0)
+            return (false, "Bạn chưa có cần câu nào.", 0, null, wallet.Coins);
+
+        // Tìm rod cần repair
+        UserInventory? target;
+        if (rodName is not null)
+        {
+            target = rods.FirstOrDefault(r =>
+                string.Equals(r.Item.Name, rodName, StringComparison.OrdinalIgnoreCase));
+            if (target is null)
+                return (false, $"Không tìm thấy cần câu **{rodName}** trong túi đồ.", 0, null, wallet.Coins);
+        }
+        else
+        {
+            // Ưu tiên rod gãy, sau đó rod hư hao nhất
+            target = rods.FirstOrDefault(r => r.RodDurability == 0)
+                  ?? rods.Where(r => r.RodDurability.HasValue && r.Item.MaxDurability.HasValue)
+                         .OrderBy(r => (double)r.RodDurability!.Value / r.Item.MaxDurability!.Value)
+                         .FirstOrDefault();
+        }
+
+        if (target is null)
+            return (false, "Không tìm thấy cần câu nào cần repair.", 0, null, wallet.Coins);
+
+        if (!target.RodDurability.HasValue || !target.Item.MaxDurability.HasValue)
+            return (false, $"**{target.Item.Name}** không hỗ trợ durability tracking (cần câu cũ).", 0, null, wallet.Coins);
+
+        if (target.RodDurability >= target.Item.MaxDurability)
+            return (false, $"**{target.Item.Name}** vẫn còn nguyên vẹn (**{target.RodDurability}/{target.Item.MaxDurability}** độ bền).", 0, null, wallet.Coins);
+
+        var cost = GetRepairCost(target.Item.Price, target.Item.MaxDurability.Value, target.RodDurability.Value);
+        if (wallet.Coins < cost)
+            return (false,
+                $"Không đủ xu. Sửa **{target.Item.Name}** ({target.RodDurability}/{target.Item.MaxDurability} → {target.Item.MaxDurability}) cần **{cost:N0}** xu, bạn có **{wallet.Coins:N0}** xu.",
+                0, null, wallet.Coins);
+
+        var oldDur = target.RodDurability.Value;
+        target.RodDurability = target.Item.MaxDurability.Value;
+        wallet.Coins        -= cost;
+
+        await _walletRepo.AddTransactionAsync(new Transaction
+        {
+            GuildId      = guildId,
+            FromWalletId = wallet.Id,
+            Amount       = cost,
+            Type         = TransactionType.Purchase,
+            Note         = $"Repair {target.Item.Name} ({oldDur} → {target.Item.MaxDurability})",
+            CreatedAt    = DateTime.UtcNow
+        });
+        await _walletRepo.SaveChangesAsync();
+        await _shopRepo.SaveChangesAsync();
+
+        return (true,
+            $"🔧 **{target.Item.Emoji} {target.Item.Name}** đã được sửa chữa!\n" +
+            $"Độ bền: **{oldDur} → {target.Item.MaxDurability}** ✅\n" +
+            $"Đã trả: **{cost:N0}** xu",
+            cost, target.Item, wallet.Coins);
     }
 
     public async Task<(bool success, string message)> AddShopItemAsync(

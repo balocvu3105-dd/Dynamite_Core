@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Dynamite.Infrastructure.Persistence.Migrations
 {
-    /// <inheritdoc />
+    [Migration("20260617130000_EconomyV28_AutoFishSpecialPool")]
     public partial class EconomyV28_AutoFishSpecialPool : Migration
     {
         /// <inheritdoc />

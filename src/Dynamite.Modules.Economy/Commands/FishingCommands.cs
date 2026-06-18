@@ -45,8 +45,21 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
 
         await DeferAsync();
 
-        var (success, reason, result) =
-            await _fishing.FishAsync(Context.Guild.Id, Context.User.Id);
+        var guildId = Context.Guild.Id;
+        var userId  = Context.User.Id;
+
+        // ── Mutual exclusion: block manual cast nếu auto đang chạy ───────────
+        var profile = await _profileRepo.GetOrCreateFishingAsync(guildId, userId);
+        if (profile.AutoFishExpiresAt.HasValue && profile.AutoFishExpiresAt > DateTime.UtcNow)
+        {
+            await FollowupAsync(
+                "⚠️ **Auto câu đang chạy!** Không thể câu tay khi auto đang hoạt động.\n" +
+                "Dùng `/fish-auto stop` để dừng, hoặc `/fish-auto pause` để tạm dừng rồi câu tay.",
+                ephemeral: true);
+            return;
+        }
+
+        var (success, reason, result) = await _fishing.FishAsync(guildId, userId);
 
         if (!success)
         {
@@ -124,7 +137,9 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
 
     [SlashCommand("pool-cast", "Câu cá trong pool đặc biệt (Level 20+ | cần Vé Pool Đặc Biệt)")]
     public async Task PoolCastAsync(
-        [Summary("pool-id", "ID của pool (dùng /fishing pools để xem)")] string poolId)
+        [Summary("pool", "Chọn pool đặc biệt")]
+        [Autocomplete(typeof(SpecialPoolAutocomplete))]
+        string poolId)
     {
         if (!await FishingChannelGuard.CheckAsync(Context, _configRepo)) return;
 

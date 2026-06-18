@@ -35,5 +35,11 @@ public class InventoryItem : BaseEntity
     public int? UsageCount { get; set; }
     public int? DurationMinutes { get; set; }
 
+    /// <summary>
+    /// Độ bền tối đa khi mua mới (chỉ FishingRod). null = không track durability.
+    /// Giảm 1 mỗi lần câu thành công; về 0 → cần bị "gãy", cần repair.
+    /// </summary>
+    public int? MaxDurability { get; set; }
+
     public ICollection<UserInventory> Owners { get; set; } = [];
 }
