@@ -162,7 +162,11 @@ public class ShopShowcaseService
             var lines = group.Select(item =>
             {
                 var desc = item.Description is not null ? $"\n  ↳ *{item.Description}*" : string.Empty;
-                return $"{item.Emoji} **{item.Name}** — 🪙 {item.Price:N0} xu{desc}";
+                // BagUpgrade dùng dynamic pricing — hiển thị giá khởi điểm (tier 1 = 10 slot đầu tiên)
+                var displayPrice = item.Type == ItemType.BagUpgrade
+                    ? ShopService.GetBagUpgradePrice(10) // giá cho túi 10 slot (mặc định)
+                    : item.Price;
+                return $"{item.Emoji} **{item.Name}** — 🪙 {displayPrice:N0} xu{desc}";
             });
 
             builder.AddField(header, string.Join("\n\n", lines), inline: false);
