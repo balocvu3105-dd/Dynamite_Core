@@ -2,6 +2,7 @@
 namespace Dynamite.Modules.Economy.Services;
 
 using System.Text.Json;
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Microsoft.Extensions.Logging;
@@ -98,12 +99,12 @@ public class FishingSnapshotService
 
     // ── Restore from snapshot ─────────────────────────────────────────────────
 
-    public async Task<(bool success, string message)> RestoreSnapshotAsync(
+    public async Task<ServiceResult<string>> RestoreSnapshotAsync(
         ulong guildId, ulong userId, Guid snapshotId)
     {
         var snapshot = await _snapshotRepo.GetByIdAsync(snapshotId);
         if (snapshot is null || snapshot.GuildId != guildId || snapshot.UserId != userId)
-            return (false, "Không tìm thấy snapshot này.");
+            return ServiceResult<string>.Fail("Không tìm thấy snapshot này.");
 
         // Chụp snapshot hiện tại trước khi restore (safety net)
         await CreateSnapshotAsync(guildId, userId, $"pre-restore:{snapshotId:N}");
@@ -171,7 +172,7 @@ public class FishingSnapshotService
             userId, guildId, snapshotId);
 
         var snapshotTime = snapshot.CreatedAt.ToString("dd/MM/yyyy HH:mm");
-        return (true, $"✅ Đã restore dữ liệu câu cá từ **{snapshotTime} UTC** (lý do: {snapshot.Reason})");
+        return ServiceResult<string>.Ok($"Đã restore dữ liệu câu cá từ **{snapshotTime} UTC** (lý do: {snapshot.Reason})");
     }
 
     // ── Query ─────────────────────────────────────────────────────────────────

@@ -20,17 +20,17 @@ public class EconomyCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var (success, message, coins, streak) = await _wallet.ClaimDailyAsync(
-            Context.Guild.Id, Context.User.Id);
+        var result = await _wallet.ClaimDailyAsync(Context.Guild.Id, Context.User.Id);
 
-        if (!success)
+        if (!result)
         {
-            await FollowupAsync(message, ephemeral: true);
+            await FollowupAsync(result.ErrorMessage, ephemeral: true);
             return;
         }
 
-        var wallet = await _wallet.GetWalletAsync(Context.Guild.Id, Context.User.Id);
-        var embed = EconomyEmbedBuilder.BuildDailyEmbed(coins, wallet.Coins, streak);
+        var d = result.Value!;
+        // TotalCoins đã bao gồm coins vừa earn → không cần GetWalletAsync thêm
+        var embed = EconomyEmbedBuilder.BuildDailyEmbed(d.CoinsEarned, d.TotalCoins, d.Streak);
         await FollowupAsync(embed: embed, ephemeral: true);
     }
 
@@ -53,10 +53,12 @@ public class EconomyCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var (success, message) = await _wallet.TransferAsync(
-            Context.Guild.Id, Context.User.Id, user.Id, amount);
+        var result = await _wallet.TransferAsync(Context.Guild.Id, Context.User.Id, user.Id, amount);
 
-        await FollowupAsync(success ? message : $"❌ {message}", ephemeral: true);
+        var response = result
+            ? $"✅ Transferred **{amount:N0}** coins to {user.Mention}."
+            : $"❌ {result.ErrorMessage}";
+        await FollowupAsync(response, ephemeral: true);
     }
 
     [SlashCommand("richest", "Top người giàu nhất server (coins)")]

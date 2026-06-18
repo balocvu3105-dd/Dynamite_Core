@@ -56,14 +56,19 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var (success, message, item, coinsPaid, coinsRemaining) =
-            await _shop.BuyWithDetailsAsync(Context.Guild.Id, Context.User.Id, itemName);
+        var result = await _shop.BuyWithDetailsAsync(Context.Guild.Id, Context.User.Id, itemName);
 
-        await FollowupAsync(success ? message : $"❌ {message}", ephemeral: true);
+        if (!result)
+        {
+            await FollowupAsync($"❌ {result.ErrorMessage}", ephemeral: true);
+            return;
+        }
+
+        var r = result.Value!;
+        await FollowupAsync(r.DisplayMessage, ephemeral: true);
 
         // Gửi hóa đơn vào invoice channel + DM người mua
-        if (success && item is not null)
-            await _invoice.SendAsync(Context.Guild.Id, Context.User.Id, item, coinsPaid, coinsRemaining);
+        await _invoice.SendAsync(Context.Guild.Id, Context.User.Id, r.Item, r.CoinsPaid, r.CoinsRemaining);
     }
 
     // ── /shop inventory ────────────────────────────────────────────────────────
@@ -85,10 +90,12 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var (success, message, _) =
-            await _shop.UseItemAsync(Context.Guild.Id, Context.User.Id, itemName);
+        var result = await _shop.UseItemAsync(Context.Guild.Id, Context.User.Id, itemName);
 
-        await FollowupAsync(success ? message : $"❌ {message}", ephemeral: true);
+        var response = result
+            ? result.Value!.EffectDescription
+            : $"❌ {result.ErrorMessage}";
+        await FollowupAsync(response, ephemeral: true);
     }
 
     // ── /shop repair-rod ──────────────────────────────────────────────────────
@@ -99,14 +106,20 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var (success, message, coinsPaid, repairItem, coinsRemaining) =
-            await _shop.RepairRodAsync(Context.Guild.Id, Context.User.Id, rodName);
+        var result = await _shop.RepairRodAsync(Context.Guild.Id, Context.User.Id, rodName);
 
-        await FollowupAsync(success ? message : $"❌ {message}", ephemeral: true);
+        if (!result)
+        {
+            await FollowupAsync($"❌ {result.ErrorMessage}", ephemeral: true);
+            return;
+        }
 
-        if (success && coinsPaid > 0 && repairItem is not null)
-            await _invoice.SendAsync(Context.Guild.Id, Context.User.Id,
-                repairItem, coinsPaid, coinsRemaining);
+        var r     = result.Value!;
+        var embed = EconomyEmbedBuilder.BuildRepairRodEmbed(r.Item, r.OldDurability, r.NewDurability, r.CoinsPaid, r.CoinsRemaining);
+        await FollowupAsync(embed: embed, ephemeral: true);
+
+        await _invoice.SendAsync(Context.Guild.Id, Context.User.Id,
+            r.Item, r.CoinsPaid, r.CoinsRemaining);
     }
 
     // ── /shop seed (Admin) ─────────────────────────────────────────────────────
@@ -148,14 +161,17 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var (success, message) = await _shop.AddShopItemAsync(
+        var result = await _shop.AddShopItemAsync(
             Context.Guild.Id, name, emoji, price, description, type,
             cooldown, multiplier, usageCount: null, durationMinutes: null);
 
-        await FollowupAsync(success ? message : $"❌ {message}", ephemeral: true);
+        var response = result
+            ? $"✅ Đã thêm **{name}** vào cửa hàng."
+            : $"❌ {result.ErrorMessage}";
+        await FollowupAsync(response, ephemeral: true);
 
         // Cập nhật showcase
-        if (success) await _showcase.RefreshAsync(Context.Guild.Id);
+        if (result) await _showcase.RefreshAsync(Context.Guild.Id);
     }
 
     // ── Admin: channel setup ──────────────────────────────────────────────────
@@ -167,10 +183,12 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var (ok, msg) = await _showcase.SetChannelAsync(
-            Context.Guild.Id, Context.Guild.Name, channel);
+        var result = await _showcase.SetChannelAsync(Context.Guild.Id, Context.Guild.Name, channel);
 
-        await FollowupAsync(msg, ephemeral: true);
+        var response = result
+            ? $"✅ Đã đặt {channel.Mention} làm phòng trưng bày cửa hàng và ghim embed."
+            : $"❌ {result.ErrorMessage}";
+        await FollowupAsync(response, ephemeral: true);
     }
 
     [SlashCommand("set-invoice-channel", "Đặt kênh hóa đơn giao dịch (Admin)")]
@@ -194,9 +212,11 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var (ok, msg) = await _weatherForecast.SetChannelAsync(
-            Context.Guild.Id, Context.Guild.Name, channel);
+        var result = await _weatherForecast.SetChannelAsync(Context.Guild.Id, Context.Guild.Name, channel);
 
-        await FollowupAsync(msg, ephemeral: true);
+        var response = result
+            ? $"✅ Đã đặt {channel.Mention} làm kênh dự báo thời tiết."
+            : $"❌ {result.ErrorMessage}";
+        await FollowupAsync(response, ephemeral: true);
     }
 }

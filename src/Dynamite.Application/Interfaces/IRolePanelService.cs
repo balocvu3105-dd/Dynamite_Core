@@ -1,5 +1,6 @@
 // src/Dynamite.Application/Interfaces/IRolePanelService.cs
 namespace Dynamite.Application.Interfaces;
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Enums;
 public interface IRolePanelService
@@ -17,7 +18,7 @@ public interface IRolePanelService
     Task<IEnumerable<RolePanel>> GetPanelsAsync(ulong guildId, CancellationToken ct = default);
     Task<RolePanelItem?> GetItemAsync(Guid itemId, CancellationToken ct = default);
     Task<RolePanel?> GetPanelByItemAsync(Guid itemId, CancellationToken ct = default);
-    Task<(bool success, string message, RolePanel? panel)> AddItemAsync(
+    Task<ServiceResult<RolePanel>> AddItemAsync(
         Guid panelId, RolePanelItemDto item, CancellationToken ct = default);
 }
 // DTO để truyền item data từ module xuống service

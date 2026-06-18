@@ -1,6 +1,8 @@
 // src/Dynamite.Tests/Economy/WalletServiceTests.cs
 namespace Dynamite.Tests.Economy;
 
+using Dynamite.Core.Common;
+using Dynamite.Core.Common.Results;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Economy.Services;
@@ -33,12 +35,12 @@ public class WalletServiceTests
         _repoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
 
         // Act
-        var (success, _, coins, streak) = await _sut.ClaimDailyAsync(GuildId, UserId);
+        var result = await _sut.ClaimDailyAsync(GuildId, UserId);
 
         // Assert
-        Assert.True(success);
-        Assert.Equal(100, coins);
-        Assert.Equal(1, streak);
+        Assert.True(result);
+        Assert.Equal(100, result.Value!.CoinsEarned);
+        Assert.Equal(1, result.Value.Streak);
         Assert.Equal(100, wallet.Coins);
     }
 
@@ -57,12 +59,12 @@ public class WalletServiceTests
         _repoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
 
         // Act
-        var (success, _, coins, streak) = await _sut.ClaimDailyAsync(GuildId, UserId);
+        var result = await _sut.ClaimDailyAsync(GuildId, UserId);
 
         // Assert
-        Assert.True(success);
-        Assert.Equal(5, streak);
-        Assert.Equal(140, coins); // 100 base + 40 bonus
+        Assert.True(result);
+        Assert.Equal(5, result.Value!.Streak);
+        Assert.Equal(140, result.Value.CoinsEarned); // 100 base + 40 bonus
     }
 
     [Fact]
@@ -80,11 +82,11 @@ public class WalletServiceTests
         _repoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
 
         // Act
-        var (success, _, coins, _) = await _sut.ClaimDailyAsync(GuildId, UserId);
+        var result = await _sut.ClaimDailyAsync(GuildId, UserId);
 
         // Assert
-        Assert.True(success);
-        Assert.Equal(300, coins); // 100 base + 200 max bonus
+        Assert.True(result);
+        Assert.Equal(300, result.Value!.CoinsEarned); // 100 base + 200 max bonus
     }
 
     [Fact]
@@ -100,12 +102,11 @@ public class WalletServiceTests
         _repoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
 
         // Act
-        var (success, message, coins, _) = await _sut.ClaimDailyAsync(GuildId, UserId);
+        var result = await _sut.ClaimDailyAsync(GuildId, UserId);
 
         // Assert
-        Assert.False(success);
-        Assert.Contains("already claimed", message);
-        Assert.Equal(0, coins);
+        Assert.False(result);
+        Assert.Contains("already claimed", result.ErrorMessage);
     }
 
     [Fact]
@@ -122,11 +123,11 @@ public class WalletServiceTests
         _repoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
 
         // Act
-        var (success, _, _, streak) = await _sut.ClaimDailyAsync(GuildId, UserId);
+        var result = await _sut.ClaimDailyAsync(GuildId, UserId);
 
         // Assert
-        Assert.True(success);
-        Assert.Equal(1, streak); // reset về 1
+        Assert.True(result);
+        Assert.Equal(1, result.Value!.Streak); // reset về 1
     }
 
     // ── Transfer ──────────────────────────────────────────────────────────────
@@ -142,10 +143,10 @@ public class WalletServiceTests
         _repoMock.Setup(r => r.GetOrCreateAsync(GuildId, User2Id)).ReturnsAsync(to);
 
         // Act
-        var (success, _) = await _sut.TransferAsync(GuildId, UserId, User2Id, 200);
+        var result = await _sut.TransferAsync(GuildId, UserId, User2Id, 200);
 
         // Assert
-        Assert.True(success);
+        Assert.True(result);
         Assert.Equal(300, from.Coins);
         Assert.Equal(300, to.Coins);
     }
@@ -161,11 +162,11 @@ public class WalletServiceTests
         _repoMock.Setup(r => r.GetOrCreateAsync(GuildId, User2Id)).ReturnsAsync(to);
 
         // Act
-        var (success, message) = await _sut.TransferAsync(GuildId, UserId, User2Id, 200);
+        var result = await _sut.TransferAsync(GuildId, UserId, User2Id, 200);
 
         // Assert
-        Assert.False(success);
-        Assert.Contains("Insufficient", message);
+        Assert.False(result);
+        Assert.Contains("Insufficient", result.ErrorMessage);
         Assert.Equal(50, from.Coins); // không thay đổi
     }
 
@@ -173,20 +174,20 @@ public class WalletServiceTests
     public async Task Transfer_ToSelf_ShouldFail()
     {
         // Act
-        var (success, message) = await _sut.TransferAsync(GuildId, UserId, UserId, 100);
+        var result = await _sut.TransferAsync(GuildId, UserId, UserId, 100);
 
         // Assert
-        Assert.False(success);
-        Assert.Contains("yourself", message);
+        Assert.False(result);
+        Assert.Contains("yourself", result.ErrorMessage);
     }
 
     [Fact]
     public async Task Transfer_ZeroAmount_ShouldFail()
     {
         // Act
-        var (success, _) = await _sut.TransferAsync(GuildId, UserId, User2Id, 0);
+        var result = await _sut.TransferAsync(GuildId, UserId, User2Id, 0);
 
         // Assert
-        Assert.False(success);
+        Assert.False(result);
     }
 }

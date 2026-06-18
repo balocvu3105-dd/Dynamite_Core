@@ -3,6 +3,7 @@ namespace Dynamite.Modules.Economy.Services;
 
 using Discord;
 using Discord.WebSocket;
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,7 +31,7 @@ public class WeatherForecastService
     }
 
     /// <summary>Set channel dự báo, post embed lần đầu và pin.</summary>
-    public async Task<(bool ok, string message)> SetChannelAsync(
+    public async Task<ServiceResult> SetChannelAsync(
         ulong guildId, string guildName, ITextChannel channel)
     {
         using var scope      = _scopeFactory.CreateScope();
@@ -48,7 +49,7 @@ public class WeatherForecastService
 
         var msgId = await PostForecastAsync(guildId, channel, scope.ServiceProvider);
         if (msgId is null)
-            return (false, "❌ Không thể post embed dự báo thời tiết.");
+            return ServiceResult.Fail("Không thể post embed dự báo thời tiết.");
 
         config.WeatherForecastMessageId = msgId;
         await configRepo.SaveChangesAsync();
@@ -60,7 +61,7 @@ public class WeatherForecastService
         }
         catch { /* pin failed */ }
 
-        return (true, $"✅ Đã đặt {channel.Mention} làm kênh dự báo thời tiết.");
+        return ServiceResult.Ok();
     }
 
     /// <summary>

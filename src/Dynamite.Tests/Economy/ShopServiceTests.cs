@@ -1,6 +1,8 @@
 // src/Dynamite.Tests/Economy/ShopServiceTests.cs
 namespace Dynamite.Tests.Economy;
 
+using Dynamite.Core.Common;
+using Dynamite.Core.Common.Results;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Economy.Services;
@@ -38,11 +40,11 @@ public class ShopServiceTests
         _shopRepoMock.Setup(r => r.GetItemByNameAsync(GuildId, "ghost")).ReturnsAsync((InventoryItem?)null);
 
         // Act
-        var (success, message) = await _sut.BuyAsync(GuildId, UserId, "ghost");
+        var result = await _sut.BuyWithDetailsAsync(GuildId, UserId, "ghost");
 
         // Assert
-        Assert.False(success);
-        Assert.Contains("ghost", message); // "Không tìm thấy **ghost** trong cửa hàng."
+        Assert.False(result);
+        Assert.Contains("ghost", result.ErrorMessage); // "Không tìm thấy **ghost** trong cửa hàng."
     }
 
     [Fact]
@@ -56,10 +58,10 @@ public class ShopServiceTests
         _walletRepoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
 
         // Act
-        var (success, _) = await _sut.BuyAsync(GuildId, UserId, item.Name);
+        var result = await _sut.BuyWithDetailsAsync(GuildId, UserId, item.Name);
 
         // Assert
-        Assert.False(success);
+        Assert.False(result);
         Assert.Equal(100, wallet.Coins); // không bị deduct
     }
 
@@ -72,14 +74,16 @@ public class ShopServiceTests
 
         _shopRepoMock.Setup(r => r.GetItemByNameAsync(GuildId, item.Name)).ReturnsAsync(item);
         _shopRepoMock.Setup(r => r.GetUserItemAsync(wallet.Id, item.Id)).ReturnsAsync((UserInventory?)null);
+        // BuyWithDetailsAsync gọi GetOrCreateAsync 2 lần (trước và sau buy)
         _walletRepoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
 
         // Act
-        var (success, _) = await _sut.BuyAsync(GuildId, UserId, item.Name);
+        var result = await _sut.BuyWithDetailsAsync(GuildId, UserId, item.Name);
 
         // Assert
-        Assert.True(success);
+        Assert.True(result);
         Assert.Equal(300, wallet.Coins); // 500 - 200
+        Assert.Equal(200, result.Value!.CoinsPaid);
         _shopRepoMock.Verify(r => r.AddUserInventoryAsync(It.IsAny<UserInventory>()), Times.Once);
     }
 
@@ -96,10 +100,119 @@ public class ShopServiceTests
         _walletRepoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
 
         // Act
-        var (success, _) = await _sut.BuyAsync(GuildId, UserId, item.Name);
+        var result = await _sut.BuyWithDetailsAsync(GuildId, UserId, item.Name);
 
         // Assert
-        Assert.False(success);
+        Assert.False(result);
+    }
+
+    // ── GetRepairCost ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetRepairCost_FullDamage_ShouldBeHalfPrice()
+    {
+        // 0/200 durability → cost = 50% giá
+        var cost = ShopService.GetRepairCost(rodPrice: 20_000, maxDurability: 200, currentDurability: 0);
+        Assert.Equal(10_000, cost);
+    }
+
+    [Fact]
+    public void GetRepairCost_HalfDamage_ShouldBeQuarterPrice()
+    {
+        // 100/200 durability → cost = 25% giá
+        var cost = ShopService.GetRepairCost(rodPrice: 20_000, maxDurability: 200, currentDurability: 100);
+        Assert.Equal(5_000, cost);
+    }
+
+    [Fact]
+    public void GetRepairCost_NoDamage_ShouldBeZero()
+    {
+        var cost = ShopService.GetRepairCost(rodPrice: 20_000, maxDurability: 200, currentDurability: 200);
+        Assert.Equal(0, cost);
+    }
+
+    // ── RepairRodAsync ────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RepairRod_NoRods_ShouldFail()
+    {
+        var wallet = new UserWallet { GuildId = GuildId, UserId = UserId, Coins = 50_000 };
+        _walletRepoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
+        _shopRepoMock.Setup(r => r.GetUserRodsAsync(wallet.Id)).ReturnsAsync([]);
+
+        var result = await _sut.RepairRodAsync(GuildId, UserId, null);
+
+        Assert.False(result);
+        Assert.Contains("cần câu", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task RepairRod_AlreadyFullDurability_ShouldFail()
+    {
+        var item = MakeRod(price: 20_000, maxDur: 200);
+        var wallet = new UserWallet { GuildId = GuildId, UserId = UserId, Coins = 50_000 };
+        var inv = new UserInventory { Item = item, RodDurability = 200 };
+
+        _walletRepoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
+        _shopRepoMock.Setup(r => r.GetUserRodsAsync(wallet.Id)).ReturnsAsync([inv]);
+
+        var result = await _sut.RepairRodAsync(GuildId, UserId, null);
+
+        Assert.False(result);
+        Assert.Contains("nguyên vẹn", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task RepairRod_InsufficientCoins_ShouldFail()
+    {
+        var item = MakeRod(price: 20_000, maxDur: 200);
+        var wallet = new UserWallet { GuildId = GuildId, UserId = UserId, Coins = 100 };
+        var inv = new UserInventory { Item = item, RodDurability = 0 };
+
+        _walletRepoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
+        _shopRepoMock.Setup(r => r.GetUserRodsAsync(wallet.Id)).ReturnsAsync([inv]);
+
+        var result = await _sut.RepairRodAsync(GuildId, UserId, null);
+
+        Assert.False(result);
+        Assert.Equal(100, wallet.Coins); // không bị deduct
+    }
+
+    [Fact]
+    public async Task RepairRod_BrokenRod_ShouldRestoreAndDeduct()
+    {
+        var item = MakeRod(price: 20_000, maxDur: 200);
+        var wallet = new UserWallet { GuildId = GuildId, UserId = UserId, Coins = 50_000 };
+        var inv = new UserInventory { Item = item, RodDurability = 0 };
+
+        _walletRepoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
+        _shopRepoMock.Setup(r => r.GetUserRodsAsync(wallet.Id)).ReturnsAsync([inv]);
+
+        var result = await _sut.RepairRodAsync(GuildId, UserId, null);
+
+        Assert.True(result);
+        Assert.Equal(10_000, result.Value!.CoinsPaid);     // 50% giá
+        Assert.Equal(40_000, wallet.Coins);                // 50_000 - 10_000
+        Assert.Equal(0,   result.Value.OldDurability);
+        Assert.Equal(200, result.Value.NewDurability);
+        Assert.Equal(200, inv.RodDurability);              // restored
+    }
+
+    [Fact]
+    public async Task RepairRod_PartialDamage_ShouldChargeProportionally()
+    {
+        var item = MakeRod(price: 20_000, maxDur: 200);
+        var wallet = new UserWallet { GuildId = GuildId, UserId = UserId, Coins = 50_000 };
+        var inv = new UserInventory { Item = item, RodDurability = 100 }; // half damaged
+
+        _walletRepoMock.Setup(r => r.GetOrCreateAsync(GuildId, UserId)).ReturnsAsync(wallet);
+        _shopRepoMock.Setup(r => r.GetUserRodsAsync(wallet.Id)).ReturnsAsync([inv]);
+
+        var result = await _sut.RepairRodAsync(GuildId, UserId, null);
+
+        Assert.True(result);
+        Assert.Equal(5_000, result.Value!.CoinsPaid);  // 25% giá
+        Assert.Equal(45_000, wallet.Coins);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -113,5 +226,17 @@ public class ShopServiceTests
         Price       = price,
         Type        = type,
         IsAvailable = true
+    };
+
+    private static InventoryItem MakeRod(long price, int maxDur) => new()
+    {
+        Id            = Guid.NewGuid(),
+        GuildId       = GuildId,
+        Name          = "Test Rod",
+        Emoji         = "🎣",
+        Price         = price,
+        Type          = ItemType.FishingRod,
+        IsAvailable   = true,
+        MaxDurability = maxDur,
     };
 }

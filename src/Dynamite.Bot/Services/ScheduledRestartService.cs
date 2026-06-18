@@ -67,7 +67,7 @@ public sealed class ScheduledRestartService : BackgroundService
             _lifetime.StopApplication();
 
             // Đợi host thực sự stop — tránh loop lại trong khi đang shutdown
-            await Task.Delay(TimeSpan.FromSeconds(60), CancellationToken.None);
+            await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
         }
     }
 

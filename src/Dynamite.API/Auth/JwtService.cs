@@ -63,6 +63,8 @@ public class JwtService
 
     public async Task<string> GenerateRefreshTokenAsync(
         string discordUserId,
+        string username,
+        string? avatar,
         CancellationToken ct = default)
     {
         // Revoke tất cả token cũ của user này trước khi tạo mới
@@ -75,10 +77,12 @@ public class JwtService
         var refreshToken = new RefreshToken
         {
             DiscordUserId = discordUserId,
-            Token = tokenString,
-            ExpiresAt = DateTime.UtcNow.AddDays(
+            Username      = username,
+            Avatar        = avatar,
+            Token         = tokenString,
+            ExpiresAt     = DateTime.UtcNow.AddDays(
                 int.Parse(_config["Jwt:RefreshTokenExpiryDays"]!)),
-            IsRevoked = false
+            IsRevoked     = false
         };
 
         _db.RefreshTokens.Add(refreshToken);
@@ -87,7 +91,11 @@ public class JwtService
         return tokenString;
     }
 
-    public async Task<string?> ValidateRefreshTokenAsync(
+    /// <summary>
+    /// Validates a refresh token and returns its stored claims,
+    /// or null if the token is invalid/expired/revoked.
+    /// </summary>
+    public async Task<RefreshTokenClaims?> ValidateRefreshTokenAsync(
         string token,
         CancellationToken ct = default)
     {
@@ -97,7 +105,7 @@ public class JwtService
         if (record is null || !record.IsActive)
             return null;
 
-        return record.DiscordUserId;
+        return new RefreshTokenClaims(record.DiscordUserId, record.Username, record.Avatar);
     }
 
     public async Task RevokeRefreshTokenAsync(
@@ -132,3 +140,9 @@ public class JwtService
             await _db.SaveChangesAsync(ct);
     }
 }
+
+/// <summary>
+/// Claims stored in a refresh token record, used to rebuild the access token
+/// without needing to call Discord API on every refresh.
+/// </summary>
+public record RefreshTokenClaims(string DiscordUserId, string Username, string? Avatar);

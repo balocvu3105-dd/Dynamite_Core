@@ -3,6 +3,7 @@ namespace Dynamite.Modules.Economy.Services;
 
 using Discord;
 using Discord.WebSocket;
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Microsoft.Extensions.Logging;
@@ -35,7 +36,7 @@ public class ShopShowcaseService
     /// Set channel trưng bày, post embed và pin message.
     /// Gọi từ /shop set-channel.
     /// </summary>
-    public async Task<(bool ok, string message)> SetChannelAsync(ulong guildId, string guildName, ITextChannel channel)
+    public async Task<ServiceResult> SetChannelAsync(ulong guildId, string guildName, ITextChannel channel)
     {
         var config = await _configRepo.GetOrCreateAsync(guildId, guildName);
 
@@ -50,7 +51,7 @@ public class ShopShowcaseService
         // Post embed mới
         var messageId = await PostShowcaseAsync(guildId, channel);
         if (messageId is null)
-            return (false, "❌ Không thể post embed vào channel đó.");
+            return ServiceResult.Fail("Không thể post embed vào channel đó.");
 
         config.ShopShowcaseMessageId = messageId;
         await _configRepo.SaveChangesAsync();
@@ -63,7 +64,7 @@ public class ShopShowcaseService
         }
         catch { /* pin failed — non-critical */ }
 
-        return (true, $"✅ Đã đặt **{channel.Mention}** làm phòng trưng bày cửa hàng và ghim embed.");
+        return ServiceResult.Ok();
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 // src/Dynamite.Modules.Economy/Services/SpecialPoolService.cs
 namespace Dynamite.Modules.Economy.Services;
 
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Economy.Helpers;
@@ -64,20 +65,20 @@ public class SpecialPoolService
 
     // ── Public: fish in a specific pool ──────────────────────────────────────
 
-    public async Task<(bool success, string? reason, SpecialFishResult? result)>
+    public async Task<ServiceResult<SpecialFishResult>>
         FishSpecialAsync(ulong guildId, ulong userId, Guid poolId)
     {
         // 1. Load pool
         var pool = await _poolRepo.GetByIdAsync(poolId);
         if (pool is null || !pool.IsActive)
-            return (false, "Pool này không còn hoạt động.", null);
+            return ServiceResult<SpecialFishResult>.Fail("Pool này không còn hoạt động.");
 
         // 2. Level check
         var profile = await _profileRepo.GetOrCreateFishingAsync(guildId, userId);
         if (profile.FishingLevel < pool.MinLevel)
-            return (false,
+            return ServiceResult<SpecialFishResult>.Fail(
                 $"Cần **Fishing Level {pool.MinLevel}** để câu tại pool này. " +
-                $"Bạn đang ở Level **{profile.FishingLevel}**.", null);
+                $"Bạn đang ở Level **{profile.FishingLevel}**.");
 
         // 3. Load wallet (dùng cho TotalCoins trong result)
         var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
@@ -174,6 +175,6 @@ public class SpecialPoolService
             BagFreeSlots:   savedToBag ? bag.FreeSlots - 1 : 0,
             PearlCapReached: pearlCapReached);
 
-        return (true, null, fishResult);
+        return ServiceResult<SpecialFishResult>.Ok(fishResult);
     }
 }

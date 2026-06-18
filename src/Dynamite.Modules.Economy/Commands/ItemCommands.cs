@@ -34,20 +34,20 @@ public class ItemCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: false); // public — thấy hiệu ứng
 
-        var (success, message, item) = await _shop.UseItemAsync(
-            Context.Guild.Id, Context.User.Id, itemName);
+        var result = await _shop.UseItemAsync(Context.Guild.Id, Context.User.Id, itemName);
 
-        if (!success)
+        if (!result)
         {
-            await FollowupAsync(message, ephemeral: true);
+            await FollowupAsync($"❌ {result.ErrorMessage}", ephemeral: true);
             return;
         }
 
+        var r = result.Value!;
         // Gửi result public
-        await FollowupAsync($"<@{Context.User.Id}> {message}");
+        await FollowupAsync($"<@{Context.User.Id}> {r.EffectDescription}");
 
         // Cập nhật forecast embed nếu là WeatherItem
-        if (item?.Type == Core.Entities.ItemType.WeatherItem)
+        if (r.Item.Type == Core.Entities.ItemType.WeatherItem)
             await _weatherForecast.RefreshAsync(Context.Guild.Id);
     }
 }

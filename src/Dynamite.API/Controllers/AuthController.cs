@@ -1,6 +1,7 @@
 // src/Dynamite.API/Controllers/AuthController.cs
 namespace Dynamite.API.Controllers;
 
+using System.Security.Cryptography;
 using Dynamite.API.Auth;
 using Dynamite.API.DTOs.Auth;
 using Microsoft.AspNetCore.Authorization;
@@ -49,7 +50,8 @@ public class AuthController : ControllerBase
             discordUser.Username,
             discordUser.Avatar);
 
-        var refreshToken = await _jwt.GenerateRefreshTokenAsync(discordUser.Id, ct);
+        var refreshToken = await _jwt.GenerateRefreshTokenAsync(
+            discordUser.Id, discordUser.Username, discordUser.Avatar, ct);
 
         _logger.LogInformation("User {UserId} ({Username}) logged in via SPA",
             discordUser.Id, discordUser.Username);
@@ -74,12 +76,22 @@ public class AuthController : ControllerBase
     /// <summary>
     /// GET /auth/login
     /// Redirect user sang Discord OAuth2 authorization page.
+    /// Generates a random state value, stores it in an HttpOnly cookie,
+    /// and embeds it in the OAuth URL for CSRF protection.
     /// </summary>
     [HttpGet("login")]
     [AllowAnonymous]
     public IActionResult Login()
     {
-        var url = _discord.BuildOAuthUrl();
+        var state = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        Response.Cookies.Append("oauth_state", state, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure   = true,
+            SameSite = SameSiteMode.Lax,
+            MaxAge   = TimeSpan.FromMinutes(10)
+        });
+        var url = _discord.BuildOAuthUrl(state);
         return Redirect(url);
     }
 
@@ -93,10 +105,18 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Callback(
         [FromQuery] string? code,
         [FromQuery] string? error,
+        [FromQuery] string? state,
         CancellationToken ct)
     {
         if (error is not null || code is null)
             return BadRequest(new { error = "Authorization was denied or code is missing." });
+
+        // CSRF check: state must match the value stored in the cookie during /auth/login
+        var storedState = Request.Cookies["oauth_state"];
+        if (string.IsNullOrEmpty(state) || storedState != state)
+            return BadRequest(new { error = "Invalid state parameter. Possible CSRF attack." });
+
+        Response.Cookies.Delete("oauth_state");
 
         var discordAccessToken = await _discord.ExchangeCodeAsync(code, ct);
         var discordUser = await _discord.GetCurrentUserAsync(discordAccessToken, ct);
@@ -106,7 +126,8 @@ public class AuthController : ControllerBase
             discordUser.Username,
             discordUser.Avatar);
 
-        var refreshToken = await _jwt.GenerateRefreshTokenAsync(discordUser.Id, ct);
+        var refreshToken = await _jwt.GenerateRefreshTokenAsync(
+            discordUser.Id, discordUser.Username, discordUser.Avatar, ct);
 
         SetRefreshTokenCookie(refreshToken);
 
@@ -134,16 +155,17 @@ public class AuthController : ControllerBase
         if (string.IsNullOrEmpty(token))
             return Unauthorized(new { error = "Refresh token is missing." });
 
-        var discordUserId = await _jwt.ValidateRefreshTokenAsync(token, ct);
-        if (discordUserId is null)
+        var claims = await _jwt.ValidateRefreshTokenAsync(token, ct);
+        if (claims is null)
             return Unauthorized(new { error = "Refresh token is invalid or expired." });
 
         await _jwt.RevokeRefreshTokenAsync(token, ct);
 
         var (accessToken, expiry) = _jwt.GenerateAccessToken(
-            discordUserId, string.Empty, null);
+            claims.DiscordUserId, claims.Username, claims.Avatar);
 
-        var newRefreshToken = await _jwt.GenerateRefreshTokenAsync(discordUserId, ct);
+        var newRefreshToken = await _jwt.GenerateRefreshTokenAsync(
+            claims.DiscordUserId, claims.Username, claims.Avatar, ct);
 
         SetRefreshTokenCookie(newRefreshToken);
 

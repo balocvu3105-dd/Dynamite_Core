@@ -21,7 +21,7 @@ public class ShopRepository : IShopRepository
     public Task<InventoryItem?> GetItemByNameAsync(ulong guildId, string name)
         => _db.InventoryItems
             .FirstOrDefaultAsync(i => i.GuildId == guildId &&
-                                      i.Name.ToLower() == name.ToLower() &&
+                                      EF.Functions.ILike(i.Name, name) &&
                                       i.IsAvailable);
 
     public Task<InventoryItem?> GetItemByIdAsync(Guid id)

@@ -1,6 +1,8 @@
 // src/Dynamite.Modules.Economy/Services/WalletService.cs
 namespace Dynamite.Modules.Economy.Services;
 
+using Dynamite.Core.Common;
+using Dynamite.Core.Common.Results;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Microsoft.Extensions.Logging;
@@ -20,7 +22,7 @@ public class WalletService
         _logger = logger;
     }
 
-    public async Task<(bool success, string message, long coins, int streak)> ClaimDailyAsync(
+    public async Task<ServiceResult<DailyResult>> ClaimDailyAsync(
         ulong guildId, ulong userId)
     {
         var wallet = await _repo.GetOrCreateAsync(guildId, userId);
@@ -34,7 +36,7 @@ public class WalletService
             {
                 var next = wallet.LastDaily.Value.AddHours(24);
                 var ts = new DateTimeOffset(next).ToUnixTimeSeconds();
-                return (false, $"You already claimed today. Next daily: <t:{ts}:R>", 0, 0);
+                return ServiceResult<DailyResult>.Fail($"You already claimed today. Next daily: <t:{ts}:R>");
             }
 
             // Streak: nếu claim trong vòng 48h thì giữ streak, quá thì reset
@@ -67,45 +69,45 @@ public class WalletService
         _logger.LogInformation("User {UserId} claimed daily: {Coins} coins (streak {Streak})",
             userId, earned, wallet.DailyStreak);
 
-        return (true, string.Empty, earned, wallet.DailyStreak);
+        return ServiceResult<DailyResult>.Ok(new DailyResult(earned, wallet.Coins, wallet.DailyStreak));
     }
 
     public async Task<UserWallet> GetWalletAsync(ulong guildId, ulong userId)
         => await _repo.GetOrCreateAsync(guildId, userId);
 
-    public async Task<(bool success, string message)> TransferAsync(
+    public async Task<ServiceResult<TransferResult>> TransferAsync(
         ulong guildId, ulong fromUserId, ulong toUserId, long amount)
     {
         if (fromUserId == toUserId)
-            return (false, "You cannot transfer coins to yourself.");
+            return ServiceResult<TransferResult>.Fail("You cannot transfer coins to yourself.");
 
         if (amount <= 0)
-            return (false, "Amount must be greater than 0.");
+            return ServiceResult<TransferResult>.Fail("Amount must be greater than 0.");
 
         var from = await _repo.GetOrCreateAsync(guildId, fromUserId);
-        var to = await _repo.GetOrCreateAsync(guildId, toUserId);
+        var to   = await _repo.GetOrCreateAsync(guildId, toUserId);
 
         if (from.Coins < amount)
-            return (false, $"Insufficient balance. You have **{from.Coins:N0}** coins.");
+            return ServiceResult<TransferResult>.Fail($"Insufficient balance. You have **{from.Coins:N0}** coins.");
 
         from.Coins -= amount;
-        to.Coins += amount;
+        to.Coins   += amount;
 
         var tx = new Transaction
         {
-            GuildId = guildId,
+            GuildId      = guildId,
             FromWalletId = from.Id,
-            ToWalletId = to.Id,
-            Amount = amount,
-            Type = TransactionType.Transfer,
-            Note = $"Transfer from {fromUserId} to {toUserId}",
-            CreatedAt = DateTime.UtcNow
+            ToWalletId   = to.Id,
+            Amount       = amount,
+            Type         = TransactionType.Transfer,
+            Note         = $"Transfer from {fromUserId} to {toUserId}",
+            CreatedAt    = DateTime.UtcNow
         };
 
         await _repo.AddTransactionAsync(tx);
         await _repo.SaveChangesAsync();
 
-        return (true, $"✅ Transferred **{amount:N0}** coins to <@{toUserId}>.");
+        return ServiceResult<TransferResult>.Ok(new TransferResult(from.Coins, to.Coins));
     }
 
     public async Task<List<(int rank, ulong userId, long coins)>> GetLeaderboardAsync(ulong guildId)

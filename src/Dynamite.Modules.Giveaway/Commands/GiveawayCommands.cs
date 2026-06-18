@@ -126,9 +126,9 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
         var results = new List<string>();
         foreach (var uid in users)
         {
-            var (success, message) = await _service.PreSelectWinnerAsync(
+            var r = await _service.PreSelectWinnerAsync(
                 giveawayId, uid, Context.User.Id, Context.Guild.Id);
-            results.Add(success ? $"✅ {message}" : $"❌ {message}");
+            results.Add(r ? $"✅ {r.Value}" : $"❌ {r.ErrorMessage}");
         }
 
         await FollowupAsync(string.Join("\n", results), ephemeral: true);
@@ -154,10 +154,14 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
-        var (success, message) = await _service.ClearPreSelectionAsync(
+        var result = await _service.ClearPreSelectionAsync(
             giveawayId, Context.User.Id, Context.Guild.Id, user?.Id);
 
-        await FollowupAsync(success ? $"✅ {message}" : $"❌ {message}", ephemeral: true);
+        await FollowupAsync(
+            result
+                ? $"✅ {(user is null ? "All pre-selections cleared. Giveaway will pick random winners." : $"Removed {user.Mention} from pre-selected list.")}"
+                : $"❌ {result.ErrorMessage}",
+            ephemeral: true);
     }
 
     [SlashCommand("list", "List all active giveaways in this server")]
@@ -206,8 +210,10 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
-        var (success, message) = await _service.EndEarlyAsync(giveawayId, Context.User.Id, Context.Guild.Id);
-        await FollowupAsync(success ? $"✅ {message}" : $"❌ {message}", ephemeral: true);
+        var result = await _service.EndEarlyAsync(giveawayId, Context.User.Id, Context.Guild.Id);
+        await FollowupAsync(
+            result ? "✅ Giveaway ended early — winners announced!" : $"❌ {result.ErrorMessage}",
+            ephemeral: true);
     }
 
     [SlashCommand("cancel", "Cancel an active giveaway")]
@@ -238,8 +244,10 @@ public class GiveawayCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
-        var (success, message) = await _service.RerollAsync(giveawayId, Context.User.Id);
-        await FollowupAsync(success ? $"✅ {message}" : $"❌ {message}", ephemeral: true);
+        var result = await _service.RerollAsync(giveawayId, Context.User.Id);
+        await FollowupAsync(
+            result ? "✅ Rerolled successfully." : $"❌ {result.ErrorMessage}",
+            ephemeral: true);
     }
 
     [SlashCommand("entries", "List all participants of a giveaway")]

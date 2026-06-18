@@ -9,6 +9,13 @@ public class RefreshToken : BaseEntity
     /// </summary>
     public string DiscordUserId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Stored so the refresh endpoint can rebuild access token claims
+    /// without re-fetching from Discord API.
+    /// </summary>
+    public string Username { get; set; } = string.Empty;
+    public string? Avatar { get; set; }
+
     public string Token { get; set; } = string.Empty;
 
     public DateTime ExpiresAt { get; set; }

@@ -175,12 +175,13 @@ public sealed class AutoFishScheduler : BackgroundService
         IUserProfileRepository profileRepo,
         ulong guildId, ulong userId, bool isAdmin, string username)
     {
-        var (success, reason, result) = await fishingService.FishAsync(guildId, userId, useBait: profile.AutoFishUseBait);
+        var fishResult = await fishingService.FishAsync(guildId, userId, useBait: profile.AutoFishUseBait);
 
-        if (!success)
+        if (!fishResult)
         {
             // Bỏ qua cooldown (không nên xảy ra với tick 27s vs cooldown 25s)
             // Hiện miss/escape và các lý do khác ra channel
+            var reason = fishResult.ErrorMessage;
             if (!string.IsNullOrEmpty(reason)
                 && !reason.StartsWith("⏳")
                 && profile.AutoFishChannelId != 0)
@@ -190,7 +191,7 @@ public sealed class AutoFishScheduler : BackgroundService
             return;
         }
 
-        if (result is null) return;
+        var result = fishResult.Value!;
 
         // ── Túi đầy → auto-pause + notify ────────────────────────────────────
         if (!result.SavedToBag)
@@ -227,15 +228,14 @@ public sealed class AutoFishScheduler : BackgroundService
     {
         var poolId = profile.AutoFishSpecialPoolId!.Value;
 
-        var (success, reason, result) =
-            await specialPoolService.FishSpecialAsync(guildId, userId, poolId);
+        var specialResult = await specialPoolService.FishSpecialAsync(guildId, userId, poolId);
 
-        if (!success)
+        if (!specialResult)
         {
             // Pool không còn active → tự switch về bể thường + notify
             _logger.LogInformation(
                 "[AutoFish] Special pool failed ({Reason}) for user {UserId} — switching to regular",
-                reason, userId);
+                specialResult.ErrorMessage, userId);
 
             var freshProfile = await profileRepo.GetOrCreateFishingAsync(guildId, userId);
             freshProfile.AutoFishSpecialPoolId        = null;
@@ -243,13 +243,15 @@ public sealed class AutoFishScheduler : BackgroundService
             await profileRepo.SaveChangesAsync();
 
             if (profile.AutoFishChannelId != 0)
-                await PostSpecialPoolFallbackAsync(profile, username, reason);
+                await PostSpecialPoolFallbackAsync(profile, username, specialResult.ErrorMessage);
 
             return;
         }
 
+        var result = specialResult.Value!;
+
         // ── Túi đầy → pause ───────────────────────────────────────────────────
-        if (result is not null && !result.SavedToBag)
+        if (!result.SavedToBag)
         {
             var freshProfile = await profileRepo.GetOrCreateFishingAsync(guildId, userId);
             freshProfile.AutoFishPaused = true;
@@ -261,7 +263,7 @@ public sealed class AutoFishScheduler : BackgroundService
             return;
         }
 
-        if (profile.AutoFishChannelId == 0 || result is null) return;
+        if (profile.AutoFishChannelId == 0) return;
 
         await PostSpecialPoolEmbedAsync(profile, result, username);
     }

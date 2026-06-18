@@ -1,6 +1,8 @@
 // src/Dynamite.Modules.Economy/Services/ShopService.cs
 namespace Dynamite.Modules.Economy.Services;
 
+using Dynamite.Core.Common;
+using Dynamite.Core.Common.Results;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Microsoft.Extensions.Logging;
@@ -77,7 +79,7 @@ public class ShopService
     public Task<List<InventoryItem>> GetShopItemsAsync(ulong guildId)
         => _shopRepo.GetAvailableItemsAsync(guildId);
 
-    public async Task<(bool success, string message)> BuyAsync(
+    private async Task<(bool success, string message)> BuyAsync(
         ulong guildId, ulong userId, string itemName)
     {
         var item = await _shopRepo.GetItemByNameAsync(guildId, itemName);
@@ -109,8 +111,11 @@ public class ShopService
                     $"Không đủ coins. Nâng +10 slot hiện tại cần **{dynamicPrice:N0}** nhưng bạn chỉ có **{wallet.Coins:N0}**.");
 
             var slotsToAdd = item.UsageCount ?? BagSlotStep;
-            var (bagOk, _, oldCap, newCap) = await _bagService.AddSlotsAsync(guildId, userId, slotsToAdd);
-            if (!bagOk) return (false, $"🎒 Túi cá đã đạt tối đa **{MaxBagCap}** slot!");
+            var bagResult  = await _bagService.AddSlotsAsync(guildId, userId, slotsToAdd);
+            if (!bagResult) return (false, $"🎒 Túi cá đã đạt tối đa **{MaxBagCap}** slot!");
+
+            var oldCap = bagResult.Value!.OldCapacity;
+            var newCap = bagResult.Value.NewCapacity;
 
             wallet.Coins -= dynamicPrice;
             await _walletRepo.AddTransactionAsync(new Transaction
@@ -195,18 +200,17 @@ public class ShopService
     }
 
     /// <summary>
-    /// Mua item và trả về thêm thông tin cho InvoiceService.
-    /// Signature: (success, message, item, coinsPaid, coinsRemaining)
+    /// Mua item và trả về thông tin đầy đủ cho Command và InvoiceService.
     /// </summary>
-    public async Task<(bool success, string message, InventoryItem? item, long coinsPaid, long coinsRemaining)>
+    public async Task<ServiceResult<BuyResult>>
         BuyWithDetailsAsync(ulong guildId, ulong userId, string itemName)
     {
         var item = await _shopRepo.GetItemByNameAsync(guildId, itemName);
         if (item is null)
-            return (false, $"Không tìm thấy **{itemName}** trong cửa hàng.", null, 0, 0);
+            return ServiceResult<BuyResult>.Fail($"Không tìm thấy **{itemName}** trong cửa hàng.");
 
         if (item.Price <= 0 && item.Type != ItemType.BagUpgrade)
-            return (false, "Vật phẩm này không thể mua.", null, 0, 0);
+            return ServiceResult<BuyResult>.Fail("Vật phẩm này không thể mua.");
 
         // Snapshot coins trước khi mua để tính coinsPaid chính xác
         // (BagUpgrade dùng dynamicPrice, không phải item.Price)
@@ -214,18 +218,18 @@ public class ShopService
         var coinsBefore  = walletBefore.Coins;
 
         if (item.Type != ItemType.BagUpgrade && walletBefore.Coins < item.Price)
-            return (false,
-                $"Không đủ coins. Cần **{item.Price:N0}** nhưng bạn chỉ có **{walletBefore.Coins:N0}**.",
-                null, 0, 0);
+            return ServiceResult<BuyResult>.Fail(
+                $"Không đủ coins. Cần **{item.Price:N0}** nhưng bạn chỉ có **{walletBefore.Coins:N0}**.");
 
-        // Delegate to core BuyAsync logic, then compute remaining
+        // Delegate to private BuyAsync logic, then compute remaining
         var (success, message) = await BuyAsync(guildId, userId, itemName);
-        if (!success) return (false, message, null, 0, 0);
+        if (!success) return ServiceResult<BuyResult>.Fail(message);
 
         // coinsPaid = chênh lệch thực tế (đúng với cả BagUpgrade dynamic price)
         var updatedWallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
         var coinsPaid     = coinsBefore - updatedWallet.Coins;
-        return (true, message, item, coinsPaid, updatedWallet.Coins);
+        return ServiceResult<BuyResult>.Ok(
+            new BuyResult(item, coinsPaid, updatedWallet.Coins, message));
     }
 
     public async Task<List<UserInventory>> GetInventoryAsync(ulong guildId, ulong userId)
@@ -411,9 +415,8 @@ public class ShopService
 
     /// <summary>
     /// Sử dụng vật phẩm tiêu thụ từ túi đồ.
-    /// Trả về (success, message, coinsPaid=0, item) cho InvoiceService.
     /// </summary>
-    public async Task<(bool success, string message, InventoryItem? item)> UseItemAsync(
+    public async Task<ServiceResult<UseItemResult>> UseItemAsync(
         ulong guildId, ulong userId, string itemName)
     {
         var wallet    = await _walletRepo.GetOrCreateAsync(guildId, userId);
@@ -424,7 +427,7 @@ public class ShopService
             && i.Quantity > 0);
 
         if (userItem is null)
-            return (false, $"❌ Bạn không có **{itemName}** trong túi đồ.", null);
+            return ServiceResult<UseItemResult>.Fail($"Bạn không có **{itemName}** trong túi đồ.");
 
         var item = userItem.Item;
 
@@ -444,17 +447,16 @@ public class ShopService
                     "User {UserId} used [{Item}] → Rainy {Min}min in guild {GuildId}",
                     userId, item.Name, duration, guildId);
 
-                return (true,
+                var effect =
                     $"🌧️ **{item.Name}** kích hoạt! Thời tiết **Mưa** trong **{duration} phút**.\n" +
                     $"✅ Cá cắn câu nhiều hơn **10%** — sản lượng cao hơn\n" +
-                    $"✅ Tỉ lệ Hiếm **+15%** | Huyền Thoại **+5%**",
-                    item);
+                    $"✅ Tỉ lệ Hiếm **+15%** | Huyền Thoại **+5%**";
+                return ServiceResult<UseItemResult>.Ok(new UseItemResult(item, effect));
             }
 
             default:
-                return (false,
-                    $"❌ **{item.Name}** không thể dùng trực tiếp bằng lệnh này.",
-                    null);
+                return ServiceResult<UseItemResult>.Fail(
+                    $"**{item.Name}** không thể dùng trực tiếp bằng lệnh này.");
         }
     }
 
@@ -462,16 +464,15 @@ public class ShopService
 
     /// <summary>
     /// Sửa chữa cần câu. rodName = null → sửa cần câu hư nhất.
-    /// Trả về (success, message, coinsPaid, item, coinsRemaining).
     /// </summary>
-    public async Task<(bool success, string message, long coinsPaid, InventoryItem? item, long coinsRemaining)>
+    public async Task<ServiceResult<RepairRodResult>>
         RepairRodAsync(ulong guildId, ulong userId, string? rodName)
     {
         var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
         var rods   = await _shopRepo.GetUserRodsAsync(wallet.Id);
 
         if (rods.Count == 0)
-            return (false, "Bạn chưa có cần câu nào.", 0, null, wallet.Coins);
+            return ServiceResult<RepairRodResult>.Fail("Bạn chưa có cần câu nào.");
 
         // Tìm rod cần repair
         UserInventory? target;
@@ -480,7 +481,7 @@ public class ShopService
             target = rods.FirstOrDefault(r =>
                 string.Equals(r.Item.Name, rodName, StringComparison.OrdinalIgnoreCase));
             if (target is null)
-                return (false, $"Không tìm thấy cần câu **{rodName}** trong túi đồ.", 0, null, wallet.Coins);
+                return ServiceResult<RepairRodResult>.Fail($"Không tìm thấy cần câu **{rodName}** trong túi đồ.");
         }
         else
         {
@@ -492,22 +493,22 @@ public class ShopService
         }
 
         if (target is null)
-            return (false, "Không tìm thấy cần câu nào cần repair.", 0, null, wallet.Coins);
+            return ServiceResult<RepairRodResult>.Fail("Không tìm thấy cần câu nào cần repair.");
 
         if (!target.RodDurability.HasValue || !target.Item.MaxDurability.HasValue)
-            return (false, $"**{target.Item.Name}** không hỗ trợ durability tracking (cần câu cũ).", 0, null, wallet.Coins);
+            return ServiceResult<RepairRodResult>.Fail($"**{target.Item.Name}** không hỗ trợ durability tracking (cần câu cũ).");
 
         if (target.RodDurability >= target.Item.MaxDurability)
-            return (false, $"**{target.Item.Name}** vẫn còn nguyên vẹn (**{target.RodDurability}/{target.Item.MaxDurability}** độ bền).", 0, null, wallet.Coins);
+            return ServiceResult<RepairRodResult>.Fail($"**{target.Item.Name}** vẫn còn nguyên vẹn (**{target.RodDurability}/{target.Item.MaxDurability}** độ bền).");
 
         var cost = GetRepairCost(target.Item.Price, target.Item.MaxDurability.Value, target.RodDurability.Value);
         if (wallet.Coins < cost)
-            return (false,
-                $"Không đủ xu. Sửa **{target.Item.Name}** ({target.RodDurability}/{target.Item.MaxDurability} → {target.Item.MaxDurability}) cần **{cost:N0}** xu, bạn có **{wallet.Coins:N0}** xu.",
-                0, null, wallet.Coins);
+            return ServiceResult<RepairRodResult>.Fail(
+                $"Không đủ xu. Sửa **{target.Item.Name}** ({target.RodDurability}/{target.Item.MaxDurability} → {target.Item.MaxDurability}) cần **{cost:N0}** xu, bạn có **{wallet.Coins:N0}** xu.");
 
         var oldDur = target.RodDurability.Value;
-        target.RodDurability = target.Item.MaxDurability.Value;
+        var newDur = target.Item.MaxDurability.Value;
+        target.RodDurability = newDur;
         wallet.Coins        -= cost;
 
         await _walletRepo.AddTransactionAsync(new Transaction
@@ -516,31 +517,28 @@ public class ShopService
             FromWalletId = wallet.Id,
             Amount       = cost,
             Type         = TransactionType.Purchase,
-            Note         = $"Repair {target.Item.Name} ({oldDur} → {target.Item.MaxDurability})",
+            Note         = $"Repair {target.Item.Name} ({oldDur} → {newDur})",
             CreatedAt    = DateTime.UtcNow
         });
         await _walletRepo.SaveChangesAsync();
         await _shopRepo.SaveChangesAsync();
 
-        return (true,
-            $"🔧 **{target.Item.Emoji} {target.Item.Name}** đã được sửa chữa!\n" +
-            $"Độ bền: **{oldDur} → {target.Item.MaxDurability}** ✅\n" +
-            $"Đã trả: **{cost:N0}** xu",
-            cost, target.Item, wallet.Coins);
+        return ServiceResult<RepairRodResult>.Ok(
+            new RepairRodResult(target.Item, oldDur, newDur, cost, wallet.Coins));
     }
 
-    public async Task<(bool success, string message)> AddShopItemAsync(
+    public async Task<ServiceResult> AddShopItemAsync(
         ulong guildId, string name, string emoji, long price,
         string? description, ItemType type,
         int? cooldownSeconds, double? dropMultiplier,
         int? usageCount, int? durationMinutes)
     {
         if (price <= 0)
-            return (false, "Giá phải lớn hơn 0.");
+            return ServiceResult.Fail("Giá phải lớn hơn 0.");
 
         var existing = await _shopRepo.GetItemByNameAsync(guildId, name);
         if (existing is not null)
-            return (false, $"**{name}** đã tồn tại trong cửa hàng.");
+            return ServiceResult.Fail($"**{name}** đã tồn tại trong cửa hàng.");
 
         await _shopRepo.AddItemAsync(new InventoryItem
         {
@@ -558,6 +556,6 @@ public class ShopService
         });
         await _shopRepo.SaveChangesAsync();
 
-        return (true, $"✅ Đã thêm **{name}** vào cửa hàng.");
+        return ServiceResult.Ok();
     }
 }

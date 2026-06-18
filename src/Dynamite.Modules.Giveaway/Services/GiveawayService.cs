@@ -4,6 +4,7 @@ namespace Dynamite.Modules.Giveaway.Services;
 using Discord;
 using Discord.WebSocket;
 using Dynamite.Application.Interfaces;
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Enums;
 using Dynamite.Core.Interfaces.Repositories;
@@ -84,17 +85,17 @@ public class GiveawayService
         return giveaway;
     }
 
-    public async Task<(bool success, string message)> EnterAsync(ulong messageId, ulong userId, ulong guildId)
+    public async Task<ServiceResult> EnterAsync(ulong messageId, ulong userId, ulong guildId)
     {
         var giveaway = await _repo.GetByMessageIdAsync(messageId);
         if (giveaway is null || giveaway.IsEnded || giveaway.IsCancelled)
-            return (false, "This giveaway is no longer active.");
+            return ServiceResult.Fail("This giveaway is no longer active.");
 
         if (giveaway.HostId == userId)
-            return (false, "You cannot enter your own giveaway.");
+            return ServiceResult.Fail("You cannot enter your own giveaway.");
 
         if (await _repo.HasEnteredAsync(giveaway.Id, userId))
-            return (false, "You have already entered this giveaway!");
+            return ServiceResult.Fail("You have already entered this giveaway!");
 
         // Điều kiện tham gia — cần ngày join nếu có bất kỳ requirement nào
         if (giveaway.MinJoinDays > 0 || giveaway.JoinedBefore is not null)
@@ -117,13 +118,13 @@ public class GiveawayService
             }
 
             if (joinedAt is null)
-                return (false, "Could not verify your join date. Please try again later.");
+                return ServiceResult.Fail("Could not verify your join date. Please try again later.");
 
             if (giveaway.MinJoinDays > 0)
             {
                 var daysInServer = (DateTimeOffset.UtcNow - joinedAt.Value).TotalDays;
                 if (daysInServer < giveaway.MinJoinDays)
-                    return (false,
+                    return ServiceResult.Fail(
                         $"❌ You don't meet the requirement: you must be in this server for " +
                         $"**{giveaway.MinJoinDays} days** to enter. You've been here **{(int)daysInServer} day(s)**.");
             }
@@ -131,7 +132,7 @@ public class GiveawayService
             // Mốc ngày cố định: phải join TRƯỚC ngày này
             if (giveaway.JoinedBefore is not null
                 && joinedAt.Value.UtcDateTime >= giveaway.JoinedBefore.Value)
-                return (false,
+                return ServiceResult.Fail(
                     $"❌ This giveaway requires you to have joined the server before " +
                     $"**{giveaway.JoinedBefore.Value:dd/MM/yyyy}**. You joined on **{joinedAt.Value:dd/MM/yyyy}**.");
         }
@@ -150,30 +151,30 @@ public class GiveawayService
         var entryCount = await _repo.GetEntryCountAsync(giveaway.Id);
         await UpdateEmbedAsync(giveaway, entryCount);
 
-        return (true, "You have entered the giveaway! 🎉");
+        return ServiceResult.Ok();
     }
 
     // Server Owner pre-selects winners — giveaway vẫn chạy bình thường đến hết giờ
     // Gọi nhiều lần để add từng người, max = WinnerCount
-    public async Task<(bool success, string message)> PreSelectWinnerAsync(
+    public async Task<ServiceResult<string>> PreSelectWinnerAsync(
         Guid giveawayId, ulong winnerId, ulong requesterId, ulong guildId)
     {
         var giveaway = await _repo.GetByIdAsync(giveawayId);
-        if (giveaway is null) return (false, "Giveaway not found.");
-        if (giveaway.IsEnded) return (false, "Giveaway has already ended.");
-        if (giveaway.IsCancelled) return (false, "Giveaway has been cancelled.");
+        if (giveaway is null) return ServiceResult<string>.Fail("Giveaway not found.");
+        if (giveaway.IsEnded) return ServiceResult<string>.Fail("Giveaway has already ended.");
+        if (giveaway.IsCancelled) return ServiceResult<string>.Fail("Giveaway has been cancelled.");
 
         var guild = _client.GetGuild(guildId);
         var member = guild?.GetUser(winnerId);
-        if (member is null) return (false, "User not found in this server.");
+        if (member is null) return ServiceResult<string>.Fail("User not found in this server.");
 
         var current = giveaway.GetPreSelectedWinners();
 
         if (current.Contains(winnerId))
-            return (false, $"<@{winnerId}> is already in the pre-selected list.");
+            return ServiceResult<string>.Fail($"<@{winnerId}> is already in the pre-selected list.");
 
         if (current.Count >= giveaway.WinnerCount)
-            return (false, $"Already have {giveaway.WinnerCount} pre-selected winner(s) — matches WinnerCount. Use `/giveaway unpick` to remove someone first.");
+            return ServiceResult<string>.Fail($"Already have {giveaway.WinnerCount} pre-selected winner(s) — matches WinnerCount. Use `/giveaway unpick` to remove someone first.");
 
         current.Add(winnerId);
         giveaway.PreSelectedWinnerIds = string.Join(",", current);
@@ -195,26 +196,26 @@ public class GiveawayService
             $"**Giveaway ends:** <t:{new DateTimeOffset(giveaway.EndsAt).ToUnixTimeSeconds()}:R>\n" +
             $"*Winners will be announced when giveaway ends — participants are unaware.*");
 
-        return (true, $"Added <@{winnerId}> to pre-selected list. ({current.Count}/{giveaway.WinnerCount} slots filled)");
+        return ServiceResult<string>.Ok($"Added <@{winnerId}> to pre-selected list. ({current.Count}/{giveaway.WinnerCount} slots filled)");
     }
 
     // Clear pre-selection — truyền winnerId để remove 1 người, null để clear all
-    public async Task<(bool success, string message)> ClearPreSelectionAsync(
+    public async Task<ServiceResult> ClearPreSelectionAsync(
         Guid giveawayId, ulong requesterId, ulong guildId, ulong? winnerId = null)
     {
         var giveaway = await _repo.GetByIdAsync(giveawayId);
-        if (giveaway is null) return (false, "Giveaway not found.");
-        if (giveaway.IsEnded) return (false, "Giveaway has already ended.");
+        if (giveaway is null) return ServiceResult.Fail("Giveaway not found.");
+        if (giveaway.IsEnded) return ServiceResult.Fail("Giveaway has already ended.");
 
         var current = giveaway.GetPreSelectedWinners();
-        if (current.Count == 0) return (false, "No pre-selection to clear.");
+        if (current.Count == 0) return ServiceResult.Fail("No pre-selection to clear.");
 
         string auditDetail;
 
         if (winnerId.HasValue)
         {
             if (!current.Remove(winnerId.Value))
-                return (false, $"<@{winnerId.Value}> is not in the pre-selected list.");
+                return ServiceResult.Fail($"<@{winnerId.Value}> is not in the pre-selected list.");
 
             giveaway.PreSelectedWinnerIds = current.Count > 0
                 ? string.Join(",", current)
@@ -242,9 +243,7 @@ public class GiveawayService
             auditDetail + "\n" +
             $"**By:** <@{requesterId}>");
 
-        return winnerId.HasValue
-            ? (true, $"Removed <@{winnerId.Value}> from pre-selected list.")
-            : (true, "All pre-selections cleared. Giveaway will pick random winners.");
+        return ServiceResult.Ok();
     }
 
     public async Task EndGiveawayAsync(Giveaway giveaway)
@@ -385,14 +384,14 @@ public class GiveawayService
         }
     }
 
-    public async Task<(bool success, string message)> RerollAsync(Guid giveawayId, ulong requesterId)
+    public async Task<ServiceResult> RerollAsync(Guid giveawayId, ulong requesterId)
     {
         var giveaway = await _repo.GetByIdAsync(giveawayId);
-        if (giveaway is null) return (false, "Giveaway not found.");
-        if (!giveaway.IsEnded) return (false, "Giveaway has not ended yet.");
+        if (giveaway is null) return ServiceResult.Fail("Giveaway not found.");
+        if (!giveaway.IsEnded) return ServiceResult.Fail("Giveaway has not ended yet.");
 
         var entries = await _repo.GetEntriesAsync(giveaway.Id);
-        if (entries.Count == 0) return (false, "No entries to reroll from.");
+        if (entries.Count == 0) return ServiceResult.Fail("No entries to reroll from.");
 
         var prevWinners = giveaway.WinnerIds;
         var newWinners = PickWinners(entries, giveaway.WinnerCount);
@@ -416,7 +415,7 @@ public class GiveawayService
             $"**New winners:** {giveaway.WinnerIds}\n" +
             $"**Rerolled by:** <@{requesterId}>");
 
-        return (true, "Rerolled successfully.");
+        return ServiceResult.Ok();
     }
 
     public async Task<bool> CancelAsync(Guid giveawayId, ulong requesterId = 0)
@@ -546,16 +545,16 @@ public class GiveawayService
         }
     }
 
-    public async Task<(bool success, string message)> EndEarlyAsync(Guid giveawayId, ulong requesterId, ulong guildId)
+    public async Task<ServiceResult> EndEarlyAsync(Guid giveawayId, ulong requesterId, ulong guildId)
     {
         var giveaway = await _repo.GetByIdAsync(giveawayId);
-        if (giveaway is null || giveaway.GuildId != guildId) return (false, "Giveaway not found.");
-        if (giveaway.IsEnded) return (false, "Giveaway has already ended.");
-        if (giveaway.IsCancelled) return (false, "Giveaway has been cancelled.");
+        if (giveaway is null || giveaway.GuildId != guildId) return ServiceResult.Fail("Giveaway not found.");
+        if (giveaway.IsEnded) return ServiceResult.Fail("Giveaway has already ended.");
+        if (giveaway.IsCancelled) return ServiceResult.Fail("Giveaway has been cancelled.");
 
         _logger.LogInformation("Giveaway {Id} ended early by {RequesterId}", giveawayId, requesterId);
         await EndGiveawayAsync(giveaway);
-        return (true, "Giveaway ended early — winners announced!");
+        return ServiceResult.Ok();
     }
 
     public Task<List<Giveaway>> ListActiveAsync(ulong guildId)

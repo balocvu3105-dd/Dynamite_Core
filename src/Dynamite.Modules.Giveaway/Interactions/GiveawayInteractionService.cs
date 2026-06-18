@@ -33,10 +33,12 @@ public class GiveawayInteractionService
         var userId = interaction.User.Id;
         var guildId = ((SocketGuildChannel)interaction.Channel).Guild.Id;
 
-        var (success, message) = await service.EnterAsync(messageId, userId, guildId);
+        var result = await service.EnterAsync(messageId, userId, guildId);
 
-        await interaction.FollowupAsync(message, ephemeral: true);
+        await interaction.FollowupAsync(
+            result ? "You have entered the giveaway! 🎉" : result.ErrorMessage,
+            ephemeral: true);
 
-        _logger.LogDebug("User {UserId} attempted giveaway entry: {Result}", userId, success);
+        _logger.LogDebug("User {UserId} attempted giveaway entry: {Result}", userId, result.Success);
     }
 }

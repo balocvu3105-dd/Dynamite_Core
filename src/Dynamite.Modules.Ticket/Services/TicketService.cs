@@ -3,6 +3,7 @@ namespace Dynamite.Modules.Ticket.Services;
 
 using Discord;
 using Discord.WebSocket;
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Ticket.Helpers;
@@ -26,7 +27,7 @@ public class TicketService
 
     // ── Setup ─────────────────────────────────────────────────────────────────
 
-    public async Task<(bool success, string message)> SetupAsync(
+    public async Task<ServiceResult> SetupAsync(
         ulong guildId,
         ulong panelChannelId,
         ulong? staffRoleId,
@@ -62,7 +63,7 @@ public class TicketService
             existing.PanelMessageId = newMsg.Id;
             await _repo.SaveChangesAsync();
 
-            return (true, $"Ticket panel updated in {panelChannel.Mention}.");
+            return ServiceResult.Ok();
         }
 
         // Tạo config mới
@@ -84,24 +85,24 @@ public class TicketService
         await _repo.SaveChangesAsync();
 
         _logger.LogInformation("Ticket system setup for guild {GuildId}", guildId);
-        return (true, $"✅ Ticket panel created in {panelChannel.Mention}.");
+        return ServiceResult.Ok();
     }
 
     // ── Open Ticket ───────────────────────────────────────────────────────────
 
-    public async Task<(bool success, string message)> OpenTicketAsync(
+    public async Task<ServiceResult<ulong>> OpenTicketAsync(
         ulong guildId,
         ulong userId,
         string? topic = null)
     {
         var config = await _repo.GetConfigAsync(guildId);
         if (config is null)
-            return (false, "Ticket system is not set up in this server.");
+            return ServiceResult<ulong>.Fail("Ticket system is not set up in this server.");
 
         // One ticket per user
         var existing = await _repo.GetOpenTicketByOwnerAsync(guildId, userId);
         if (existing is not null)
-            return (false, $"You already have an open ticket: <#{existing.ChannelId}>.");
+            return ServiceResult<ulong>.Fail($"You already have an open ticket: <#{existing.ChannelId}>.");
 
         var guild = _client.GetGuild(guildId)
             ?? throw new InvalidOperationException("Guild not found.");
@@ -183,18 +184,18 @@ public class TicketService
         _logger.LogInformation("Opened ticket #{Number} for user {UserId} in guild {GuildId}",
             ticketNumber, userId, guildId);
 
-        return (true, $"Your ticket has been created: {newChannel.Mention}");
+        return ServiceResult<ulong>.Ok(newChannel.Id);
     }
 
     // ── Close Ticket ──────────────────────────────────────────────────────────
 
-    public async Task<(bool success, string message)> CloseTicketAsync(
+    public async Task<ServiceResult> CloseTicketAsync(
         ulong channelId,
         ulong closedById)
     {
         var ticket = await _repo.GetByChannelIdAsync(channelId);
         if (ticket is null || ticket.Status != TicketStatus.Open)
-            return (false, "This is not an open ticket.");
+            return ServiceResult.Fail("This is not an open ticket.");
 
         ticket.Status = TicketStatus.Closed;
         ticket.ClosedAt = DateTime.UtcNow;
@@ -202,7 +203,7 @@ public class TicketService
 
         var guild = _client.GetGuild(ticket.GuildId);
         var channel = guild?.GetTextChannel(channelId);
-        if (channel is null) return (true, "Ticket closed.");
+        if (channel is null) return ServiceResult.Ok();
 
         // Rename channel
         await channel.ModifyAsync(p => p.Name = $"closed-{ticket.Number:D4}");
@@ -222,18 +223,18 @@ public class TicketService
             components: TicketEmbedBuilder.BuildClosedComponents());
 
         _logger.LogInformation("Closed ticket #{Number} in guild {GuildId}", ticket.Number, ticket.GuildId);
-        return (true, "Ticket closed.");
+        return ServiceResult.Ok();
     }
 
     // ── Delete Ticket ─────────────────────────────────────────────────────────
 
-    public async Task<(bool success, string message)> DeleteTicketAsync(
+    public async Task<ServiceResult> DeleteTicketAsync(
         ulong channelId,
         ulong deletedById)
     {
         var ticket = await _repo.GetByChannelIdAsync(channelId);
         if (ticket is null || ticket.Status == TicketStatus.Deleted)
-            return (false, "Ticket not found or already deleted.");
+            return ServiceResult.Fail("Ticket not found or already deleted.");
 
         ticket.Status = TicketStatus.Deleted;
         await _repo.SaveChangesAsync();
@@ -250,6 +251,6 @@ public class TicketService
         }
 
         _logger.LogInformation("Deleted ticket #{Number} in guild {GuildId}", ticket.Number, ticket.GuildId);
-        return (true, "Ticket deleted.");
+        return ServiceResult.Ok();
     }
 }

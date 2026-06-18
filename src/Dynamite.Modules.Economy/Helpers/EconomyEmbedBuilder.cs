@@ -640,4 +640,35 @@ public static class EconomyEmbedBuilder
             .WithColor(new Color(0x636e72))
             .WithDescription($"🤖 **{username}** — {reason}")
             .Build();
+
+    // ── Repair Rod ───────────────────────────────────────────────────────────
+
+    public static Embed BuildRepairRodEmbed(
+        InventoryItem item, int oldDur, int newDur, long cost, long coinsRemaining)
+    {
+        var pctBefore = (double)oldDur / newDur * 100;
+        var barBefore = BuildProgressBar(pctBefore, 8);
+        var barAfter  = BuildProgressBar(100, 8);
+
+        var wasBroken    = oldDur == 0;
+        var title        = wasBroken
+            ? "🔧 Cần Câu Phục Hồi Hoàn Toàn!"
+            : "🔧 Sửa Cần Câu Thành Công!";
+        var statusBefore = wasBroken ? " 💔 **GÃY**"
+            : oldDur <= newDur * 0.2 ? " ⚠️ Sắp gãy" : "";
+
+        return new EmbedBuilder()
+            .WithTitle(title)
+            .WithDescription(
+                $"{item.Emoji} **{item.Name}**\n\n" +
+                $"**Trước:** {barBefore} {oldDur}/{newDur}{statusBefore}\n" +
+                $"**Sau:**   {barAfter} {newDur}/{newDur} ✅\n\n" +
+                $"💸 Chi phí sửa: **{cost:N0}** xu\n" +
+                $"💰 Số dư còn lại: **{coinsRemaining:N0}** xu")
+            .WithColor(new Color(0x2ECC71))
+            .WithFooter("🔧 Repair • Cần câu đã sẵn sàng câu tiếp!")
+            .WithCurrentTimestamp()
+            .Build();
+    }
+
 }

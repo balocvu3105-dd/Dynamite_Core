@@ -30,14 +30,16 @@ public class TicketCommands : InteractionModuleBase<SocketInteractionContext>
 
         try
         {
-            var (success, message) = await _service.SetupAsync(
+            var result = await _service.SetupAsync(
                 Context.Guild.Id,
                 channel.Id,
                 staffRole?.Id,
                 category?.Id,
                 description);
 
-            await FollowupAsync(success ? $"✅ {message}" : $"❌ {message}", ephemeral: true);
+            await FollowupAsync(
+                result ? $"✅ Ticket panel set up in {channel.Mention}." : $"❌ {result.ErrorMessage}",
+                ephemeral: true);
         }
         catch (Exception ex)
         {
@@ -51,11 +53,13 @@ public class TicketCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var (success, message) = await _service.CloseTicketAsync(
+        var result = await _service.CloseTicketAsync(
             Context.Channel.Id,
             Context.User.Id);
 
-        await FollowupAsync(success ? $"✅ {message}" : $"❌ {message}", ephemeral: true);
+        await FollowupAsync(
+            result ? "✅ Ticket closed." : $"❌ {result.ErrorMessage}",
+            ephemeral: true);
     }
 
     [SlashCommand("add", "Add a user to the current ticket")]

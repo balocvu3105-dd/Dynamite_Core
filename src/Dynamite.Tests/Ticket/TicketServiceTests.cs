@@ -1,6 +1,7 @@
 // src/Dynamite.Tests/Ticket/TicketServiceTests.cs
 namespace Dynamite.Tests.Ticket;
 
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Ticket.Services;
@@ -38,11 +39,11 @@ public class TicketServiceTests
         _repoMock.Setup(r => r.GetConfigAsync(GuildId)).ReturnsAsync((TicketConfig?)null);
 
         // Act
-        var (success, message) = await _sut.OpenTicketAsync(GuildId, UserId);
+        var result = await _sut.OpenTicketAsync(GuildId, UserId);
 
         // Assert
-        Assert.False(success);
-        Assert.Contains("not set up", message);
+        Assert.False(result);
+        Assert.Contains("not set up", result.ErrorMessage);
     }
 
     [Fact]
@@ -62,11 +63,11 @@ public class TicketServiceTests
         _repoMock.Setup(r => r.GetOpenTicketByOwnerAsync(GuildId, UserId)).ReturnsAsync(existingTicket);
 
         // Act
-        var (success, message) = await _sut.OpenTicketAsync(GuildId, UserId);
+        var result = await _sut.OpenTicketAsync(GuildId, UserId);
 
         // Assert
-        Assert.False(success);
-        Assert.Contains("already have", message);
+        Assert.False(result);
+        Assert.Contains("already have", result.ErrorMessage);
     }
 
     // ── Close ─────────────────────────────────────────────────────────────────
@@ -78,11 +79,11 @@ public class TicketServiceTests
         _repoMock.Setup(r => r.GetByChannelIdAsync(ChannelId)).ReturnsAsync((Core.Entities.Ticket?)null);
 
         // Act
-        var (success, message) = await _sut.CloseTicketAsync(ChannelId, UserId);
+        var result = await _sut.CloseTicketAsync(ChannelId, UserId);
 
         // Assert
-        Assert.False(success);
-        Assert.Contains("not an open ticket", message);
+        Assert.False(result);
+        Assert.Contains("not an open ticket", result.ErrorMessage);
     }
 
     [Fact]
@@ -93,10 +94,10 @@ public class TicketServiceTests
         _repoMock.Setup(r => r.GetByChannelIdAsync(ChannelId)).ReturnsAsync(ticket);
 
         // Act
-        var (success, _) = await _sut.CloseTicketAsync(ChannelId, UserId);
+        var result = await _sut.CloseTicketAsync(ChannelId, UserId);
 
         // Assert
-        Assert.False(success);
+        Assert.False(result);
     }
 
     // ── Delete ────────────────────────────────────────────────────────────────
@@ -109,10 +110,10 @@ public class TicketServiceTests
         _repoMock.Setup(r => r.GetByChannelIdAsync(ChannelId)).ReturnsAsync(ticket);
 
         // Act
-        var (success, _) = await _sut.DeleteTicketAsync(ChannelId, UserId);
+        var result = await _sut.DeleteTicketAsync(ChannelId, UserId);
 
         // Assert
-        Assert.False(success);
+        Assert.False(result);
     }
 
     [Fact]
@@ -122,10 +123,10 @@ public class TicketServiceTests
         _repoMock.Setup(r => r.GetByChannelIdAsync(ChannelId)).ReturnsAsync((Core.Entities.Ticket?)null);
 
         // Act
-        var (success, _) = await _sut.DeleteTicketAsync(ChannelId, UserId);
+        var result = await _sut.DeleteTicketAsync(ChannelId, UserId);
 
         // Assert
-        Assert.False(success);
+        Assert.False(result);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

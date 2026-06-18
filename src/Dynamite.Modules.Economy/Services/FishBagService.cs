@@ -1,6 +1,8 @@
 // src/Dynamite.Modules.Economy/Services/FishBagService.cs
 namespace Dynamite.Modules.Economy.Services;
 
+using Dynamite.Core.Common;
+using Dynamite.Core.Common.Results;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Microsoft.Extensions.Logging;
@@ -96,15 +98,14 @@ public class FishBagService
 
     /// <summary>
     /// Nâng túi thêm <paramref name="slots"/> slot (thường là 10).
-    /// Trả về (success, message, oldCap, newCap).
     /// </summary>
-    public async Task<(bool success, string message, int oldCap, int newCap)> AddSlotsAsync(
+    public async Task<ServiceResult<BagUpgradeResult>> AddSlotsAsync(
         ulong guildId, ulong userId, int slots)
     {
         var bag = await _bagRepo.GetOrCreateAsync(guildId, userId);
 
         if (bag.BagCapacity >= MaxBagCapacity)
-            return (false, $"Túi cá đã đạt tối đa **{MaxBagCapacity}** slot!", bag.BagCapacity, bag.BagCapacity);
+            return ServiceResult<BagUpgradeResult>.Fail($"Túi cá đã đạt tối đa **{MaxBagCapacity}** slot!");
 
         var oldCap = bag.BagCapacity;
         var newCap = Math.Min(oldCap + slots, MaxBagCapacity);
@@ -113,7 +114,7 @@ public class FishBagService
         await _bagRepo.SaveChangesAsync();
 
         _logger.LogInformation("User {UserId} expanded bag {Old} → {New} slots", userId, oldCap, newCap);
-        return (true, string.Empty, oldCap, newCap);
+        return ServiceResult<BagUpgradeResult>.Ok(new BagUpgradeResult(oldCap, newCap, 0));
     }
 
     public int GetMaxCapacity() => MaxBagCapacity;

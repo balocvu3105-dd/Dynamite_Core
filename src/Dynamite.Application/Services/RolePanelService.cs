@@ -1,6 +1,7 @@
 // src/Dynamite.Application/Services/RolePanelService.cs
 namespace Dynamite.Application.Services;
 using Dynamite.Application.Interfaces;
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Enums;
 using Dynamite.Core.Interfaces.Repositories;
@@ -81,15 +82,15 @@ public class RolePanelService : IRolePanelService
         Guid itemId, CancellationToken ct = default)
         => await _panelRepo.GetPanelByItemIdAsync(itemId, ct);
 
-    public async Task<(bool success, string message, RolePanel? panel)> AddItemAsync(
+    public async Task<ServiceResult<RolePanel>> AddItemAsync(
         Guid panelId, RolePanelItemDto dto, CancellationToken ct = default)
     {
         var panel = await _panelRepo.GetByIdAsync(panelId, ct);
         if (panel is null)
-            return (false, "Panel not found.", null);
+            return ServiceResult<RolePanel>.Fail("Panel not found.");
 
         if (panel.Items.Any(i => i.RoleId == dto.RoleId))
-            return (false, "Role đã có trong panel này rồi.", panel);
+            return ServiceResult<RolePanel>.Fail("Role đã có trong panel này rồi.");
 
         panel.Items.Add(new RolePanelItem
         {
@@ -102,6 +103,6 @@ public class RolePanelService : IRolePanelService
 
         await _panelRepo.SaveChangesAsync(ct);
         _logger.LogInformation("Added role {RoleId} to panel {PanelId}", dto.RoleId, panelId);
-        return (true, string.Empty, panel);
+        return ServiceResult<RolePanel>.Ok(panel);
     }
 }

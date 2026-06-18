@@ -3,6 +3,7 @@ namespace Dynamite.Modules.Economy.Services;
 
 using Discord;
 using Discord.WebSocket;
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Microsoft.Extensions.Logging;
@@ -47,7 +48,7 @@ public class PondService
     /// Thử trừ 1 cá từ bể.
     /// Returns (success, pond) — false nếu bể đang cạn và cooldown chưa hết.
     /// </summary>
-    public async Task<(bool canFish, string? reason, PondStatus status)> TryConsumeAsync(ulong guildId)
+    public async Task<ServiceResult<PondStatus>> TryConsumeAsync(ulong guildId)
     {
         var pond = await _pondRepo.GetOrCreateAsync(guildId);
 
@@ -63,9 +64,8 @@ public class PondService
             {
                 var remaining = pond.ResetAvailableAt!.Value - DateTime.UtcNow;
                 var ts = new DateTimeOffset(pond.ResetAvailableAt.Value).ToUnixTimeSeconds();
-                return (false,
-                    $"🪣 Bể cá đang trống! Cá mới sẽ về <t:{ts}:R>.",
-                    ToStatus(pond));
+                return ServiceResult<PondStatus>.Fail(
+                    $"🪣 Bể cá đang trống! Cá mới sẽ về <t:{ts}:R>.");
             }
         }
 
@@ -89,7 +89,7 @@ public class PondService
             await _pondRepo.SaveChangesAsync();
         }
 
-        return (true, null, ToStatus(pond));
+        return ServiceResult<PondStatus>.Ok(ToStatus(pond));
     }
 
     /// <summary>

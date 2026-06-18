@@ -1,6 +1,7 @@
 // src/Dynamite.Tests/Giveaway/GiveawayServiceTests.cs
 namespace Dynamite.Tests.Giveaway;
 
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Giveaway.Services;
@@ -48,10 +49,10 @@ public class GiveawayServiceTests
         _repoMock.Setup(r => r.GetEntryCountAsync(giveaway.Id)).ReturnsAsync(1);
 
         // Act
-        var (success, message) = await _sut.EnterAsync(MessageId, UserId, GuildId);
+        var result = await _sut.EnterAsync(MessageId, UserId, GuildId);
 
         // Assert
-        Assert.True(success);
+        Assert.True(result);
         _repoMock.Verify(r => r.AddEntryAsync(It.IsAny<GiveawayEntry>()), Times.Once);
     }
 
@@ -64,11 +65,11 @@ public class GiveawayServiceTests
         _repoMock.Setup(r => r.HasEnteredAsync(giveaway.Id, UserId)).ReturnsAsync(true);
 
         // Act
-        var (success, message) = await _sut.EnterAsync(MessageId, UserId, GuildId);
+        var result = await _sut.EnterAsync(MessageId, UserId, GuildId);
 
         // Assert
-        Assert.False(success);
-        Assert.Contains("already entered", message);
+        Assert.False(result);
+        Assert.Contains("already entered", result.ErrorMessage);
     }
 
     [Fact]
@@ -79,11 +80,11 @@ public class GiveawayServiceTests
         _repoMock.Setup(r => r.GetByMessageIdAsync(MessageId)).ReturnsAsync(giveaway);
 
         // Act — HostId trying to enter
-        var (success, message) = await _sut.EnterAsync(MessageId, HostId, GuildId);
+        var result = await _sut.EnterAsync(MessageId, HostId, GuildId);
 
         // Assert
-        Assert.False(success);
-        Assert.Contains("own giveaway", message);
+        Assert.False(result);
+        Assert.Contains("own giveaway", result.ErrorMessage);
     }
 
     [Fact]
@@ -95,10 +96,10 @@ public class GiveawayServiceTests
         _repoMock.Setup(r => r.GetByMessageIdAsync(MessageId)).ReturnsAsync(giveaway);
 
         // Act
-        var (success, _) = await _sut.EnterAsync(MessageId, UserId, GuildId);
+        var result = await _sut.EnterAsync(MessageId, UserId, GuildId);
 
         // Assert
-        Assert.False(success);
+        Assert.False(result);
     }
 
     [Fact]
@@ -108,10 +109,10 @@ public class GiveawayServiceTests
         _repoMock.Setup(r => r.GetByMessageIdAsync(MessageId)).ReturnsAsync((Giveaway?)null);
 
         // Act
-        var (success, _) = await _sut.EnterAsync(MessageId, UserId, GuildId);
+        var result = await _sut.EnterAsync(MessageId, UserId, GuildId);
 
         // Assert
-        Assert.False(success);
+        Assert.False(result);
     }
 
     // ── Reroll ────────────────────────────────────────────────────────────────
@@ -125,11 +126,11 @@ public class GiveawayServiceTests
         _repoMock.Setup(r => r.GetByIdAsync(giveaway.Id)).ReturnsAsync(giveaway);
 
         // Act
-        var (success, message) = await _sut.RerollAsync(giveaway.Id, HostId);
+        var result = await _sut.RerollAsync(giveaway.Id, HostId);
 
         // Assert
-        Assert.False(success);
-        Assert.Contains("not ended", message);
+        Assert.False(result);
+        Assert.Contains("not ended", result.ErrorMessage);
     }
 
     [Fact]
@@ -142,11 +143,11 @@ public class GiveawayServiceTests
         _repoMock.Setup(r => r.GetEntriesAsync(giveaway.Id)).ReturnsAsync([]);
 
         // Act
-        var (success, message) = await _sut.RerollAsync(giveaway.Id, HostId);
+        var result = await _sut.RerollAsync(giveaway.Id, HostId);
 
         // Assert
-        Assert.False(success);
-        Assert.Contains("No entries", message);
+        Assert.False(result);
+        Assert.Contains("No entries", result.ErrorMessage);
     }
 
     [Fact]
@@ -156,10 +157,10 @@ public class GiveawayServiceTests
         _repoMock.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((Giveaway?)null);
 
         // Act
-        var (success, _) = await _sut.RerollAsync(Guid.NewGuid(), HostId);
+        var result = await _sut.RerollAsync(Guid.NewGuid(), HostId);
 
         // Assert
-        Assert.False(success);
+        Assert.False(result);
     }
 
     // ── Cancel ────────────────────────────────────────────────────────────────

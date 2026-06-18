@@ -59,15 +59,15 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
-        var (success, reason, result) = await _fishing.FishAsync(guildId, userId);
+        var fishResult = await _fishing.FishAsync(guildId, userId);
 
-        if (!success)
+        if (!fishResult)
         {
-            await FollowupAsync(reason, ephemeral: true);
+            await FollowupAsync(fishResult.ErrorMessage, ephemeral: true);
             return;
         }
 
-        var embed = EconomyEmbedBuilder.BuildFishEmbed(result!);
+        var embed = EconomyEmbedBuilder.BuildFishEmbed(fishResult.Value!);
         await FollowupAsync(embed: embed);
     }
 
@@ -210,14 +210,15 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
         }
 
         // ── Fish ──────────────────────────────────────────────────────────────
-        var (success, reason, result) =
-            await _specialPool.FishSpecialAsync(guildId, userId, guid);
+        var specialResult = await _specialPool.FishSpecialAsync(guildId, userId, guid);
 
-        if (!success)
+        if (!specialResult)
         {
-            await FollowupAsync(reason ?? "❌ Đã có lỗi xảy ra.", ephemeral: true);
+            await FollowupAsync($"❌ {specialResult.ErrorMessage}", ephemeral: true);
             return;
         }
+
+        var result = specialResult.Value!;
 
         // Nếu hết session → clear
         if (profile.AutoFishSpecialPoolExpiresAt.HasValue
@@ -230,7 +231,7 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
 
         var pools = await _specialPool.GetActivePoolsAsync(guildId);
         var pool  = pools.FirstOrDefault(p => p.Id == guid);
-        var embed = EconomyEmbedBuilder.BuildSpecialFishEmbed(result!, pool?.PoolName ?? "Pool Đặc Biệt");
+        var embed = EconomyEmbedBuilder.BuildSpecialFishEmbed(result, pool?.PoolName ?? "Pool Đặc Biệt");
         await FollowupAsync(embed: embed);
     }
 }

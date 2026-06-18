@@ -22,12 +22,19 @@ public class DiscordOAuthService
         _config = config;
     }
 
-    public string BuildOAuthUrl()
+    /// <summary>
+    /// Builds the Discord OAuth2 authorization URL.
+    /// <paramref name="state"/> must be a cryptographically random, unguessable value
+    /// generated per-request (CSRF protection). The caller is responsible for storing
+    /// it (e.g. HttpOnly cookie) and verifying it matches the value Discord returns.
+    /// </summary>
+    public string BuildOAuthUrl(string state)
     {
         var clientId = _config["Discord:ClientId"]!;
         var redirectUri = Uri.EscapeDataString(_config["Discord:RedirectUri"]!);
         var scope = Uri.EscapeDataString("identify email guilds");
-        return $"https://discord.com/api/oauth2/authorize?client_id={clientId}&redirect_uri={redirectUri}&response_type=code&scope={scope}";
+        var encodedState = Uri.EscapeDataString(state);
+        return $"https://discord.com/api/oauth2/authorize?client_id={clientId}&redirect_uri={redirectUri}&response_type=code&scope={scope}&state={encodedState}";
     }
 
     public async Task<string> ExchangeCodeAsync(string code, CancellationToken ct = default)

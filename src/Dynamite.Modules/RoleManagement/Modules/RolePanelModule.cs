@@ -115,12 +115,14 @@ public class RolePanelModule : InteractionModuleBase<SocketInteractionContext>
         var finalLabel = string.IsNullOrWhiteSpace(label) ? role.Name : label;
         var dto = new RolePanelItemDto(role.Id, finalLabel, emoji, null);
 
-        var (success, message, updatedPanel) = await _panelService.AddItemAsync(panelId, dto);
-        if (!success || updatedPanel is null)
+        var result = await _panelService.AddItemAsync(panelId, dto);
+        if (!result)
         {
-            await FollowupAsync(embed: RoleManagementEmbeds.Error("Failed", message), ephemeral: true);
+            await FollowupAsync(embed: RoleManagementEmbeds.Error("Failed", result.ErrorMessage), ephemeral: true);
             return;
         }
+
+        var updatedPanel = result.Value!;
 
         // Edit message Discord để cập nhật component
         var channel = Context.Guild.GetTextChannel(updatedPanel.ChannelId);

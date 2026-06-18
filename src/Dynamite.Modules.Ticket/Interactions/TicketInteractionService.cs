@@ -40,8 +40,10 @@ public class TicketInteractionService
         using var scope = _scopeFactory.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<TicketService>();
 
-        var (success, message) = await service.OpenTicketAsync(guild.Id, interaction.User.Id);
-        await interaction.FollowupAsync(message, ephemeral: true);
+        var result = await service.OpenTicketAsync(guild.Id, interaction.User.Id);
+        await interaction.FollowupAsync(
+            result ? $"Your ticket has been created: <#{result.Value}>" : result.ErrorMessage,
+            ephemeral: true);
     }
 
     private async Task HandleCloseAsync(SocketMessageComponent interaction)
@@ -51,12 +53,12 @@ public class TicketInteractionService
         using var scope = _scopeFactory.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<TicketService>();
 
-        var (success, message) = await service.CloseTicketAsync(
+        var result = await service.CloseTicketAsync(
             interaction.Channel.Id,
             interaction.User.Id);
 
-        if (!success)
-            await interaction.FollowupAsync(message, ephemeral: true);
+        if (!result)
+            await interaction.FollowupAsync(result.ErrorMessage, ephemeral: true);
         // Nếu success thì channel đã được rename, không cần followup thêm
     }
 

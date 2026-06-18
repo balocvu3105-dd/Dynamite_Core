@@ -3,6 +3,7 @@ namespace Dynamite.Modules.Economy.Services;
 
 using Discord;
 using Discord.WebSocket;
+using Dynamite.Core.Common;
 using Dynamite.Core.Interfaces.Repositories;
 using Microsoft.Extensions.Logging;
 
@@ -27,29 +28,29 @@ public class GuideService
     }
 
     /// <summary>Set channel cẩm nang.</summary>
-    public async Task<(bool ok, string message)> SetChannelAsync(
+    public async Task<ServiceResult> SetChannelAsync(
         ulong guildId, string guildName, ITextChannel channel)
     {
         var config = await _configRepo.GetOrCreateAsync(guildId, guildName);
         config.GuideChannelId = channel.Id;
         await _configRepo.SaveChangesAsync();
-        return (true, $"✅ Đã đặt {channel.Mention} làm kênh cẩm nang hướng dẫn. Dùng `/guide post` để đăng nội dung.");
+        return ServiceResult.Ok();
     }
 
     /// <summary>
     /// Đăng tất cả embed hướng dẫn vào channel đã cấu hình.
-    /// Trả về số embed đã đăng.
+    /// Trả về số embed đã đăng khi thành công.
     /// </summary>
-    public async Task<(bool ok, string message)> PostGuideAsync(ulong guildId)
+    public async Task<ServiceResult<int>> PostGuideAsync(ulong guildId)
     {
         var config = await _configRepo.GetByGuildIdAsync(guildId);
         if (config?.GuideChannelId is null)
-            return (false, "❌ Chưa đặt kênh cẩm nang. Dùng `/guide set-channel` trước.");
+            return ServiceResult<int>.Fail("Chưa đặt kênh cẩm nang. Dùng `/guide set-channel` trước.");
 
         var guild   = _discord.GetGuild(guildId);
         var channel = guild?.GetTextChannel(config.GuideChannelId.Value);
         if (channel is null)
-            return (false, "❌ Không tìm thấy channel. Kiểm tra lại `/guide set-channel`.");
+            return ServiceResult<int>.Fail("Không tìm thấy channel. Kiểm tra lại `/guide set-channel`.");
 
         try
         {
@@ -74,13 +75,14 @@ public class GuideService
                 await Task.Delay(500);
             }
 
-            _logger.LogInformation("[Guide] Posted {Count} embeds to guild {GuildId}", sections.Count + 1, guildId);
-            return (true, $"✅ Đã đăng **{sections.Count + 1}** embed hướng dẫn vào {channel.Mention}.");
+            var total = sections.Count + 1;
+            _logger.LogInformation("[Guide] Posted {Count} embeds to guild {GuildId}", total, guildId);
+            return ServiceResult<int>.Ok(total);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[Guide] Failed to post for guild {GuildId}", guildId);
-            return (false, $"❌ Lỗi khi đăng hướng dẫn: `{ex.Message}`");
+            return ServiceResult<int>.Fail($"Lỗi khi đăng hướng dẫn: `{ex.Message}`");
         }
     }
 

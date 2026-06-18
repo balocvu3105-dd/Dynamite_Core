@@ -4,6 +4,7 @@ namespace Dynamite.Modules.Economy.Commands;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Economy.Helpers;
@@ -356,14 +357,14 @@ public class AdminFishingCommands : InteractionModuleBase<SocketInteractionConte
 
         try
         {
-            var (success, message) = await _snapshot.RestoreSnapshotAsync(
+            var result = await _snapshot.RestoreSnapshotAsync(
                 Context.Guild.Id, target.Id, snapshotId);
 
-            var embed = success
-                ? SuccessEmbed("✅ Restore thành công", $"{target.Mention} — {message}")
-                : ErrorEmbed("Restore thất bại", message);
+            var embed = result
+                ? SuccessEmbed("✅ Restore thành công", $"{target.Mention} — {result.Value}")
+                : ErrorEmbed("Restore thất bại", result.ErrorMessage);
 
-            if (success)
+            if (result)
                 _logger.LogWarning(
                     "Fishing data RESTORED for user {UserId} in guild {GuildId} from snapshot {SnapshotId} by admin {AdminId}",
                     target.Id, Context.Guild.Id, snapshotId, Context.User.Id);

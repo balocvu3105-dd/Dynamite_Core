@@ -1,6 +1,7 @@
 // src/Dynamite.Modules.Economy/Services/FishingService.cs
 namespace Dynamite.Modules.Economy.Services;
 
+using Dynamite.Core.Common;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Economy.Helpers;
@@ -80,7 +81,7 @@ public class FishingService
         _logger      = logger;
     }
 
-    public async Task<(bool success, string? reason, FishResult? result)>
+    public async Task<ServiceResult<FishResult>>
         FishAsync(ulong guildId, ulong userId, bool useBait = true)
     {
         // ── 1. Load profile + wallet + rod ───────────────────────────────────
@@ -96,7 +97,7 @@ public class FishingService
             if (elapsed < cooldownSec)
             {
                 var wait = (int)(cooldownSec - elapsed);
-                return (false, $"⏳ Chờ **{wait}s** nữa mới câu được!", null);
+                return ServiceResult<FishResult>.Fail($"⏳ Chờ **{wait}s** nữa mới câu được!");
             }
         }
 
@@ -142,22 +143,22 @@ public class FishingService
             await LogFishEventAsync(guildId, userId,
                 FishingEvent.Miss, null, bestRod?.Item.Name, currentWeather, -1);
             await _profileRepo.SaveChangesAsync();
-            return (false, "🎣 **Hụt!** Không có gì cắn câu lần này... 👉😄 lêu lêu~", null);
+            return ServiceResult<FishResult>.Fail("🎣 **Hụt!** Không có gì cắn câu lần này... 👉😄 lêu lêu~");
         }
 
         // ── 6. Pond consume (chỉ khi không miss) ─────────────────────────────
-        var (canFish, pondReason, pondStatus) = await _pond.TryConsumeAsync(guildId);
-        if (!canFish) return (false, pondReason, null);
+        var pondResult = await _pond.TryConsumeAsync(guildId);
+        if (!pondResult) return ServiceResult<FishResult>.Fail(pondResult.ErrorMessage);
 
         // ── 7. Escape ────────────────────────────────────────────────────────
         if (roll.Outcome == RollOutcome.Escape)
         {
             var escaped = roll.Fish!;
             await LogFishEventAsync(guildId, userId,
-                FishingEvent.Escape, escaped, bestRod?.Item.Name, currentWeather, pondStatus.CurrentFish);
+                FishingEvent.Escape, escaped, bestRod?.Item.Name, currentWeather, pondResult.Value!.CurrentFish);
             await _profileRepo.SaveChangesAsync();
-            return (false,
-                $"😱 **{escaped.Name}** ({escaped.Rarity}) cắn câu rồi thoát mất! Luyện thêm nhé.", null);
+            return ServiceResult<FishResult>.Fail(
+                $"😱 **{escaped.Name}** ({escaped.Rarity}) cắn câu rồi thoát mất! Luyện thêm nhé.");
         }
 
         // ── 8. Caught: track stats ────────────────────────────────────────────
@@ -235,7 +236,7 @@ public class FishingService
 
         if (shouldLog)
             await LogFishEventAsync(guildId, userId, logEvent, fishCatch,
-                bestRod?.Item.Name, currentWeather, pondStatus.CurrentFish,
+                bestRod?.Item.Name, currentWeather, pondResult.Value!.CurrentFish,
                 coinsEarned: fishCatch.Coins, xpEarned: xpGained);
 
         // ── 15. Rod Durability — trừ 1 sau mỗi lần catch thành công ────────────
@@ -250,27 +251,19 @@ public class FishingService
             if (rodJustBroke) bestRod.RodDurability = 0;
         }
 
-        // ── 16. Save ─────────────────────────────────────────────────────────
+        // ── 16. Save — tất cả repos share cùng DbContext (Scoped), 1 call là đủ ──
         await _walletRepo.SaveChangesAsync();
-        await _profileRepo.SaveChangesAsync();
-        await _bagRepo.SaveChangesAsync();
-        await _lbRepo.SaveChangesAsync();
-        if (bestRod is not null && bestRod.RodDurability.HasValue)
-            await _shopRepo.SaveChangesAsync();
-        if (shouldLog) await _fishLog.SaveChangesAsync();
-        if (fishCatch.Rarity is "Rare" or "Legendary" or "Mythic")
-            await _trophyRepo.SaveChangesAsync();
 
         _logger.LogDebug("User {UserId} fished: {Fish} ({Rarity}) = {Coins}c | Bag:{Saved} | Pond:{Remaining}",
             userId, fishCatch.Name, fishCatch.Rarity, fishCatch.Coins,
-            savedToBag ? "saved" : "dropped", pondStatus.CurrentFish);
+            savedToBag ? "saved" : "dropped", pondResult.Value!.CurrentFish);
 
-        return (true, null, new FishResult(
+        return ServiceResult<FishResult>.Ok(new FishResult(
             Catch:           fishCatch,
             TotalCoins:      wallet.Coins,
             RodName:         bestRod?.Item.Name,
             Weather:         currentWeather,
-            PondRemaining:   pondStatus.CurrentFish,
+            PondRemaining:   pondResult.Value!.CurrentFish,
             FishingXpGained: xpGained,
             FishingLevelUp:  levelUpResult,
             NewAchievements:   newAchievements,

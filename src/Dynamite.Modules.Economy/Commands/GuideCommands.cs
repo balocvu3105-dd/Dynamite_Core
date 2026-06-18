@@ -28,10 +28,11 @@ public class GuideCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var (ok, msg) = await _guide.SetChannelAsync(
-            Context.Guild.Id, Context.Guild.Name, channel);
+        await _guide.SetChannelAsync(Context.Guild.Id, Context.Guild.Name, channel);
 
-        await FollowupAsync(msg, ephemeral: true);
+        await FollowupAsync(
+            $"✅ Đã đặt {channel.Mention} làm kênh cẩm nang hướng dẫn. Dùng `/guide post` để đăng nội dung.",
+            ephemeral: true);
     }
 
     // ── /guide post ───────────────────────────────────────────────────────────
@@ -42,7 +43,11 @@ public class GuideCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var (ok, msg) = await _guide.PostGuideAsync(Context.Guild.Id);
-        await FollowupAsync(ok ? msg : $"❌ {msg}", ephemeral: true);
+        var result = await _guide.PostGuideAsync(Context.Guild.Id);
+
+        var response = result
+            ? $"✅ Đã đăng **{result.Value}** embed hướng dẫn."
+            : $"❌ {result.ErrorMessage}";
+        await FollowupAsync(response, ephemeral: true);
     }
 }
