@@ -241,13 +241,36 @@ public class OwnerCommands : InteractionModuleBase<SocketInteractionContext>
 
     [SlashCommand("set-fish-rate", "👑 [Chủ Server] Thay đổi tỉ lệ câu hụt / thoát toàn server")]
     public async Task SetFishRateAsync(
-        [Summary("miss-rate",   "Tỉ lệ câu hụt 0.0–1.0 (VD: 0.2 = 20%). Bỏ trống = reset về default 15%")]
-        [MinValue(0.0)][MaxValue(1.0)] double? missRate   = null,
-        [Summary("escape-rate", "Tỉ lệ cá thoát 0.0–1.0 (VD: 0.1 = 10%). Bỏ trống = reset về default 10%")]
-        [MinValue(0.0)][MaxValue(1.0)] double? escapeRate = null)
+        [Summary("miss-rate",   "Tỉ lệ câu hụt 0.0–1.0 (VD: 0.2 = 20%). Bỏ trống = reset về default 15%")] string? missRateStr   = null,
+        [Summary("escape-rate", "Tỉ lệ cá thoát 0.0–1.0 (VD: 0.1 = 10%). Bỏ trống = reset về default 10%")] string? escapeRateStr = null)
     {
         await DeferAsync(ephemeral: true);
         if (!await IsOwnerAsync()) return;
+
+        double? missRate   = null;
+        double? escapeRate = null;
+
+        if (missRateStr is not null)
+        {
+            if (!double.TryParse(missRateStr, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var m) || m < 0 || m > 1)
+            {
+                await FollowupAsync("❌ miss-rate phải là số từ **0.0 đến 1.0** (VD: `0.2` = 20%).", ephemeral: true);
+                return;
+            }
+            missRate = m;
+        }
+
+        if (escapeRateStr is not null)
+        {
+            if (!double.TryParse(escapeRateStr, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var e) || e < 0 || e > 1)
+            {
+                await FollowupAsync("❌ escape-rate phải là số từ **0.0 đến 1.0** (VD: `0.1` = 10%).", ephemeral: true);
+                return;
+            }
+            escapeRate = e;
+        }
 
         var pond = await _pondRepo.GetOrCreateAsync(Context.Guild.Id);
 
