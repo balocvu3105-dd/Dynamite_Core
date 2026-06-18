@@ -241,22 +241,18 @@ public class OwnerCommands : InteractionModuleBase<SocketInteractionContext>
 
     [SlashCommand("set-fish-rate", "👑 [Chủ Server] Thay đổi tỉ lệ câu hụt / thoát toàn server")]
     public async Task SetFishRateAsync(
-        [Summary("miss-rate",   "Tỉ lệ câu hụt 0.0–1.0 (default 0.15 = 15%). -1 = reset về default")] double missRate   = -1,
-        [Summary("escape-rate", "Tỉ lệ cá thoát 0.0–1.0 (default 0.10 = 10%). -1 = reset về default")] double escapeRate = -1)
+        [Summary("miss-rate",   "Tỉ lệ câu hụt 0.0–1.0 (VD: 0.2 = 20%). Bỏ trống = reset về default 15%")]
+        [MinValue(0.0)][MaxValue(1.0)] double? missRate   = null,
+        [Summary("escape-rate", "Tỉ lệ cá thoát 0.0–1.0 (VD: 0.1 = 10%). Bỏ trống = reset về default 10%")]
+        [MinValue(0.0)][MaxValue(1.0)] double? escapeRate = null)
     {
         await DeferAsync(ephemeral: true);
         if (!await IsOwnerAsync()) return;
 
-        if (missRate   != -1 && (missRate   < 0 || missRate   > 1)) { await FollowupAsync("❌ miss-rate phải từ 0.0 đến 1.0 (hoặc -1 để reset).", ephemeral: true); return; }
-        if (escapeRate != -1 && (escapeRate < 0 || escapeRate > 1)) { await FollowupAsync("❌ escape-rate phải từ 0.0 đến 1.0 (hoặc -1 để reset).", ephemeral: true); return; }
-
         var pond = await _pondRepo.GetOrCreateAsync(Context.Guild.Id);
 
-        if (missRate   == -1) pond.FishMissRateOverride   = null;
-        else                  pond.FishMissRateOverride   = missRate;
-
-        if (escapeRate == -1) pond.FishEscapeRateOverride = null;
-        else                  pond.FishEscapeRateOverride = escapeRate;
+        pond.FishMissRateOverride   = missRate;
+        pond.FishEscapeRateOverride = escapeRate;
 
         await _pondRepo.SaveChangesAsync();
 
