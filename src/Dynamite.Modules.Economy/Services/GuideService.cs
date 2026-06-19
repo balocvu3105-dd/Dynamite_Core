@@ -128,11 +128,18 @@ public class GuideService
                 "`/fishing cast` — Thả cần câu\n" +
                 "`/fishing pond` — Xem trạng thái bể + thời tiết hiện tại", inline: false)
             .AddField("Cần câu nâng cấp",
+                "🎋 **Tân Thủ** — miễn phí | 25s CD | ×1.0 *(không gãy)*\n" +
                 "Mua tại `/shop buy <tên cần>`:\n" +
-                "🪁 **Tre** — 3,000 xu | 22s CD | ×1.1\n" +
-                "🎣 **Bạc** — 20,000 xu | 19s CD | ×1.25\n" +
-                "🏆 **Vàng** — 60,000 xu | 15s CD | ×1.55\n" +
-                "💎 **Kim Cương** — 160,000 xu | 10s CD | ×2.0", inline: false)
+                "🪁 **Tre** — 3,000 xu | 22s CD | ×1.1 | độ bền 200\n" +
+                "🎣 **Bạc** — 20,000 xu | 19s CD | ×1.25 | độ bền 300\n" +
+                "🏆 **Vàng** — 60,000 xu | 15s CD | ×1.55 | độ bền 600\n" +
+                "💎 **Kim Cương** — 160,000 xu | 10s CD | ×2.0 | độ bền 1000 | 🍀 May Mắn +1", inline: false)
+            .AddField("🔧 Độ bền & Sửa cần",
+                "Cần câu mòn dần sau mỗi lần câu. Khi **gãy (0)** không thể câu tiếp.\n" +
+                "• `/shop repair-rod` — Sửa cần, chi phí = **50% giá mua** × % hao mòn\n" +
+                "• `/shop repair-rod preview:True` — Xem chi phí trước khi sửa\n" +
+                "• Autocomplete tự gợi ý cần hỏng nhất của bạn\n" +
+                "💡 **May Mắn +1** (Kim Cương): mỗi điểm → Rare +30% · Legendary +50%", inline: false)
             .AddField("Mồi câu",
                 "🪱 **Mồi Thường** — 400 xu (10 lần dùng, +10% Rare)\n" +
                 "🦗 **Mồi Cao Cấp** — 1,200 xu (30 lần dùng, +10% Rare)", inline: false)
