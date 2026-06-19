@@ -168,6 +168,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddScoped<IFishTrophyRepository, FishTrophyRepository>();
         services.AddHostedService<AutoFishScheduler>();
 
+        // Economy v2.4 — Fish Encyclopedia (/fishing dex)
+        services.AddScoped<IFishEncyclopediaRepository, FishEncyclopediaRepository>();
+        services.AddScoped<FishEncyclopediaService>();
+
         // Phase A — Channel System (Shop showcase, Invoice, Weather forecast, Guide)
         services.AddScoped<ShopShowcaseService>();
         services.AddScoped<InvoiceService>();
@@ -181,7 +185,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<TempVoiceService>();
         services.AddSingleton<TempVoiceEventHandler>();
 
-        // ─── Phase E3 — Scheduled Restart ────────────────────────────────────
+        // ─── Phase E3 — Scheduled Restart ────────────────────────────────────────
         services.AddHostedService<ScheduledRestartService>();
 
         services.AddHostedService<BotHostedService>();

@@ -21,7 +21,9 @@ public record FishResult(
     /// <summary>Độ bền còn lại sau lần câu này. null = rod không track durability.</summary>
     int? RodDurabilityLeft = null,
     /// <summary>true = lần câu này làm gãy cần câu.</summary>
-    bool RodJustBroke = false);
+    bool RodJustBroke = false,
+    /// <summary>Tên khung giờ nếu đang có bonus (vd "🌅 Bình Minh"). null = không có bonus.</summary>
+    string? TimeSlotName = null);
 
 public record AchievementUnlock(string Id, string Title, string Description, long CoinReward);
 
@@ -51,6 +53,7 @@ public class FishingService
     private readonly PondService    _pond;
     private readonly WeatherService _weather;
     private readonly XpService      _xp;
+    private readonly FishEncyclopediaService _encyclopedia;
     private readonly ILogger<FishingService> _logger;
 
     public FishingService(
@@ -65,17 +68,19 @@ public class FishingService
         PondService    pond,
         WeatherService weather,
         XpService      xp,
+        FishEncyclopediaService encyclopedia,
         ILogger<FishingService> logger)
     {
-        _walletRepo  = walletRepo;
-        _shopRepo    = shopRepo;
-        _profileRepo = profileRepo;
-        _bagRepo     = bagRepo;
-        _lbRepo      = lbRepo;
-        _fishLog     = fishLog;
-        _trophyRepo  = trophyRepo;
-        _pondRepo    = pondRepo;
-        _pond        = pond;
+        _walletRepo   = walletRepo;
+        _shopRepo     = shopRepo;
+        _profileRepo  = profileRepo;
+        _bagRepo      = bagRepo;
+        _lbRepo       = lbRepo;
+        _fishLog      = fishLog;
+        _trophyRepo   = trophyRepo;
+        _pondRepo     = pondRepo;
+        _pond         = pond;
+        _encyclopedia = encyclopedia;
         _weather     = weather;
         _xp          = xp;
         _logger      = logger;
@@ -129,13 +134,14 @@ public class FishingService
 
         // ── 5. Roll (miss check ở đây — TRƯỚC khi trừ pond) ─────────────────
         var luckBonus = bestRod?.Item.LuckBonus ?? 0;
+        var (timeDawnMod, timeNightMod) = FishingDropTable.GetTimeOfDayModifier();
 
         var roll = FishingDropTable.Roll(
             missRate:       missRate,
             escapeRate:     escapeRate,
             dropMultiplier: multiplier,
-            rareMod:        rareMod + baitMod,
-            legendaryMod:   legendaryMod,
+            rareMod:        rareMod + baitMod + timeDawnMod,
+            legendaryMod:   legendaryMod + timeNightMod,
             missMod:        missMod,
             luckBonus:      luckBonus);
 
@@ -269,6 +275,11 @@ public class FishingService
             userId, fishCatch.Name, fishCatch.Rarity, fishCatch.Coins,
             savedToBag ? "saved" : "dropped", pondResult.Value?.CurrentFish ?? -1);
 
+        // ── 17. Encyclopedia — fire-and-forget, không block response ─────────
+        _ = _encyclopedia.RecordCatchAsync(
+            guildId, userId,
+            fishCatch.Name, fishCatch.Emoji, fishCatch.Rarity, fishCatch.Coins);
+
         return ServiceResult<FishResult>.Ok(new FishResult(
             Catch:           fishCatch,
             TotalCoins:      wallet.Coins,
@@ -281,7 +292,8 @@ public class FishingService
             SavedToBag:        savedToBag,
             BagFreeSlots:      bag.IsFull ? 0 : bag.FreeSlots - 1,
             RodDurabilityLeft: rodDurabilityLeft,
-            RodJustBroke:      rodJustBroke));
+            RodJustBroke:      rodJustBroke,
+            TimeSlotName:      FishingDropTable.GetTimeSlotName()));
     }
 
     // ── Bait helpers ──────────────────────────────────────────────────────────

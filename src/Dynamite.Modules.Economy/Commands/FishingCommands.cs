@@ -12,22 +12,24 @@ using Dynamite.Modules.Economy.Services;
 [Group("fishing", "Câu cá và xem trạng thái bể")]
 public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
 {
-    private readonly FishingService        _fishing;
-    private readonly PondService           _pond;
-    private readonly SpecialPoolService    _specialPool;
-    private readonly IUserProfileRepository _profileRepo;
-    private readonly IGuildConfigRepository _configRepo;
-    private readonly IShopRepository       _shopRepo;
-    private readonly IWalletRepository     _walletRepo;
+    private readonly FishingService          _fishing;
+    private readonly PondService             _pond;
+    private readonly SpecialPoolService      _specialPool;
+    private readonly IUserProfileRepository  _profileRepo;
+    private readonly IGuildConfigRepository  _configRepo;
+    private readonly IShopRepository         _shopRepo;
+    private readonly IWalletRepository       _walletRepo;
+    private readonly FishEncyclopediaService _encyclopedia;
 
     public FishingCommands(
-        FishingService          fishing,
-        PondService             pond,
-        SpecialPoolService      specialPool,
-        IUserProfileRepository  profileRepo,
-        IGuildConfigRepository  configRepo,
-        IShopRepository         shopRepo,
-        IWalletRepository       walletRepo)
+        FishingService           fishing,
+        PondService              pond,
+        SpecialPoolService       specialPool,
+        IUserProfileRepository   profileRepo,
+        IGuildConfigRepository   configRepo,
+        IShopRepository          shopRepo,
+        IWalletRepository        walletRepo,
+        FishEncyclopediaService  encyclopedia)
     {
         _fishing     = fishing;
         _pond        = pond;
@@ -35,7 +37,8 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
         _profileRepo = profileRepo;
         _configRepo  = configRepo;
         _shopRepo    = shopRepo;
-        _walletRepo  = walletRepo;
+        _walletRepo   = walletRepo;
+        _encyclopedia = encyclopedia;
     }
 
     [SlashCommand("cast", "Thả cần câu cá!")]
@@ -231,5 +234,20 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
         var pool  = pools.FirstOrDefault(p => p.Id == guid);
         var embed = EconomyEmbedBuilder.BuildSpecialFishEmbed(result, pool?.PoolName ?? "Pool Đặc Biệt");
         await FollowupAsync(embed: embed);
+    }
+
+    // ── /fishing dex ──────────────────────────────────────────────────────────
+
+    [SlashCommand("dex", "Xem Fish Encyclopedia — tất cả loài cá bạn đã từng câu được")]
+    public async Task DexAsync(
+        [Summary("user", "Xem encyclopedia của người khác (để trống = của bạn)")]
+        IUser? targetUser = null)
+    {
+        await DeferAsync(ephemeral: true);
+
+        var target = targetUser ?? Context.User;
+        var entries = await _encyclopedia.GetDexAsync(Context.Guild.Id, target.Id);
+        var embed   = EconomyEmbedBuilder.BuildDexEmbed(entries, target.Username);
+        await FollowupAsync(embed: embed, ephemeral: true);
     }
 }

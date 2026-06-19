@@ -39,3 +39,12 @@ public record BagUpgradeResult(
     int  OldCapacity,
     int  NewCapacity,
     long CoinsPaid);
+
+/// <summary>Kết quả nâng cấp cần câu.</summary>
+public record RodUpgradeResult(
+    string FromRodName,
+    string ToRodName,
+    string ToRodEmoji,
+    long   UpgradeCost,
+    long   CoinsRemaining,
+    int    NewDurability);

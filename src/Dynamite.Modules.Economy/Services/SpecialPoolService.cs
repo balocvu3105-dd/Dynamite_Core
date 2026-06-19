@@ -34,33 +34,36 @@ public class SpecialPoolService
     private const int PearlGuildWeeklyCap = 3;
     private static readonly TimeSpan PearlWindow = TimeSpan.FromDays(7);
 
-    private readonly ISpecialPoolRepository _poolRepo;
-    private readonly IUserProfileRepository _profileRepo;
-    private readonly IWalletRepository      _walletRepo;
-    private readonly IShopRepository        _shopRepo;
-    private readonly IFishBagRepository     _bagRepo;
-    private readonly ILeaderboardRepository _lbRepo;
-    private readonly XpService              _xp;
+    private readonly ISpecialPoolRepository  _poolRepo;
+    private readonly IUserProfileRepository  _profileRepo;
+    private readonly IWalletRepository       _walletRepo;
+    private readonly IShopRepository         _shopRepo;
+    private readonly IFishBagRepository      _bagRepo;
+    private readonly ILeaderboardRepository  _lbRepo;
+    private readonly XpService               _xp;
+    private readonly FishEncyclopediaService _encyclopedia;
     private readonly ILogger<SpecialPoolService> _logger;
 
     public SpecialPoolService(
-        ISpecialPoolRepository poolRepo,
-        IUserProfileRepository profileRepo,
-        IWalletRepository      walletRepo,
-        IShopRepository        shopRepo,
-        IFishBagRepository     bagRepo,
-        ILeaderboardRepository lbRepo,
-        XpService              xp,
+        ISpecialPoolRepository  poolRepo,
+        IUserProfileRepository  profileRepo,
+        IWalletRepository       walletRepo,
+        IShopRepository         shopRepo,
+        IFishBagRepository      bagRepo,
+        ILeaderboardRepository  lbRepo,
+        XpService               xp,
+        FishEncyclopediaService encyclopedia,
         ILogger<SpecialPoolService> logger)
     {
-        _poolRepo    = poolRepo;
-        _profileRepo = profileRepo;
-        _walletRepo  = walletRepo;
-        _shopRepo    = shopRepo;
-        _bagRepo     = bagRepo;
-        _lbRepo      = lbRepo;
-        _xp          = xp;
-        _logger      = logger;
+        _poolRepo     = poolRepo;
+        _profileRepo  = profileRepo;
+        _walletRepo   = walletRepo;
+        _shopRepo     = shopRepo;
+        _bagRepo      = bagRepo;
+        _lbRepo       = lbRepo;
+        _xp           = xp;
+        _encyclopedia = encyclopedia;
+        _logger       = logger;
     }
 
     // ── Public: get available pools ───────────────────────────────────────────
@@ -104,8 +107,48 @@ public class SpecialPoolService
         // 5. Roll drop table (với weak-rod penalty nếu có)
         var catch_ = SpecialFishingDropTable.Roll(pool.DropTable, weakRodTrashRate);
 
-        // Nếu ra rác (weak-rod penalty): pool slot vẫn bị tiêu, nhưng không lưu vào túi,
-        // không tính XP, không tạm dừng session.
+        // Miss: cá không cắn — KHÔNG tiêu pool slot, không xu, không XP
+        if (catch_.IsMiss)
+        {
+            _logger.LogDebug(
+                "[SpecialPool] Miss for user {UserId} in pool {PoolId} ({Table})",
+                userId, poolId, pool.DropTable);
+
+            return ServiceResult<SpecialFishResult>.Ok(new SpecialFishResult(
+                Catch:           catch_,
+                TotalCoins:      wallet.Coins,
+                PondRemaining:   pool.RemainingFish,
+                FishingXpGained: 0,
+                FishingLevelUp:  null,
+                SavedToBag:      true,
+                BagFreeSlots:    0,
+                PearlCapReached: false,
+                IsTrashCatch:    true));
+        }
+
+        // Escape: cá cắn nhưng thoát — TIÊU pool slot, không xu, không XP
+        if (catch_.IsEscape)
+        {
+            pool.RemainingFish--;
+            await _poolRepo.SaveChangesAsync();
+
+            _logger.LogDebug(
+                "[SpecialPool] Escape ({Fish}) for user {UserId} in pool {PoolId}",
+                catch_.Name, userId, poolId);
+
+            return ServiceResult<SpecialFishResult>.Ok(new SpecialFishResult(
+                Catch:           catch_,
+                TotalCoins:      wallet.Coins,
+                PondRemaining:   pool.RemainingFish,
+                FishingXpGained: 0,
+                FishingLevelUp:  null,
+                SavedToBag:      true,
+                BagFreeSlots:    0,
+                PearlCapReached: false,
+                IsTrashCatch:    true));
+        }
+
+        // Trash: weak-rod penalty — TIÊU pool slot, không xu, không XP
         if (catch_.Rarity == "Trash")
         {
             pool.RemainingFish--;
@@ -121,7 +164,7 @@ public class SpecialPoolService
                 PondRemaining:   pool.RemainingFish,
                 FishingXpGained: 0,
                 FishingLevelUp:  null,
-                SavedToBag:      true,  // true = ngăn AutoFishScheduler trigger bag-full pause
+                SavedToBag:      true,
                 BagFreeSlots:    0,
                 PearlCapReached: false,
                 IsTrashCatch:    true));
@@ -179,43 +222,43 @@ public class SpecialPoolService
                 FishEmoji  = catch_.Emoji,
                 Rarity     = catch_.Rarity,
                 CoinValue  = catch_.Coins,
-                SourcePool = pool.PoolName,
-                IsSpecialCreature = true,
-                IsPearl    = catch_.IsPearl,
-                CreatedAt  = DateTime.UtcNow
             });
             savedToBag = true;
         }
 
-        // 10. Weekly activity
-        var activity = await _lbRepo.GetOrCreateWeeklyActivityAsync(guildId, userId);
-        activity.WeeklyFishCaught++;
-
-        // 11. Fishing XP
-        var xpGained    = XpService.FishingXpTable.GetValueOrDefault(catch_.Rarity, 20);
+        // 10. XP (reuse profile từ bước 2 — đã load ở đầu method)
+        var xpGained      = XpService.FishingXpTable.GetValueOrDefault(catch_.Rarity, 20);
         var levelUpResult = await _xp.AwardFishingXpAsync(guildId, userId, catch_.Rarity, profile);
+
+        if (catch_.Rarity is "Legendary" or "Mythic" || catch_.IsPearl)
+            profile.LegendaryCaught++;
+
+        // 11. Leaderboard weekly activity
+        var weeklyActivity = await _lbRepo.GetOrCreateWeeklyActivityAsync(guildId, userId);
+        weeklyActivity.WeeklyFishCaught++;
 
         // 12. Save
         await _walletRepo.SaveChangesAsync();
         await _poolRepo.SaveChangesAsync();
-        await _bagRepo.SaveChangesAsync();
-        await _lbRepo.SaveChangesAsync();
-        await _shopRepo.SaveChangesAsync();
 
-        // Profile được XpService save nội bộ (hoặc save cùng profileRepo)
-        // Gọi thêm để chắc chắn cooldown / stats được lưu nếu có
-        await _profileRepo.SaveChangesAsync();
+        // 13. Encyclopedia — fire-and-forget (không block response)
+        _ = _encyclopedia.RecordCatchAsync(
+            guildId, userId,
+            catch_.Name, catch_.Emoji, catch_.Rarity, catch_.Coins);
 
-        var fishResult = new SpecialFishResult(
-            Catch:          catch_,
-            TotalCoins:     wallet.Coins,
-            PondRemaining:  pool.RemainingFish,
+        _logger.LogDebug(
+            "[SpecialPool] User {UserId} caught {Fish} ({Rarity}) = {Coins}c in pool {PoolId}",
+            userId, catch_.Name, catch_.Rarity, catch_.Coins, poolId);
+
+        return ServiceResult<SpecialFishResult>.Ok(new SpecialFishResult(
+            Catch:           catch_,
+            TotalCoins:      wallet.Coins,
+            PondRemaining:   pool.RemainingFish,
             FishingXpGained: xpGained,
-            FishingLevelUp: levelUpResult,
-            SavedToBag:     savedToBag,
-            BagFreeSlots:   savedToBag ? bag.FreeSlots - 1 : 0,
-            PearlCapReached: pearlCapReached);
-
-        return ServiceResult<SpecialFishResult>.Ok(fishResult);
+            FishingLevelUp:  levelUpResult,
+            SavedToBag:      savedToBag,
+            BagFreeSlots:    bag.IsFull ? 0 : bag.FreeSlots - 1,
+            PearlCapReached: pearlCapReached,
+            IsTrashCatch:    false));
     }
 }

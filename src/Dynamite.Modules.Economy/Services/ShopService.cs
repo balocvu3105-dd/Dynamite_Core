@@ -553,13 +553,15 @@ public class ShopService
         }
     }
 
-    // ── /shop repair-rod ─────────────────────────────────────────────────────
+
+    // ── Rod Repair ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Sửa chữa cần câu. rodName = null → sửa cần câu hư nhất.
+    /// Sửa cần câu: phục hồi durability về MaxDurability, trừ xu tỉ lệ hư hỏng.
+    /// Nếu <paramref name="rodName"/> null → chọn cần hư nhất (priority: gãy → durability thấp nhất).
     /// </summary>
-    public async Task<ServiceResult<RepairRodResult>>
-        RepairRodAsync(ulong guildId, ulong userId, string? rodName)
+    public async Task<ServiceResult<RepairRodResult>> RepairRodAsync(
+        ulong guildId, ulong userId, string? rodName)
     {
         var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
         var rods   = await _shopRepo.GetUserRodsAsync(wallet.Id);
@@ -567,73 +569,74 @@ public class ShopService
         if (rods.Count == 0)
             return ServiceResult<RepairRodResult>.Fail("Bạn chưa có cần câu nào.");
 
-        // Tìm rod cần repair
-        UserInventory? target;
-        if (rodName is not null)
-        {
-            target = rods.FirstOrDefault(r =>
-                string.Equals(r.Item.Name, rodName, StringComparison.OrdinalIgnoreCase));
-            if (target is null)
-                return ServiceResult<RepairRodResult>.Fail($"Không tìm thấy cần câu **{rodName}** trong túi đồ.");
-        }
-        else
-        {
-            // Ưu tiên rod gãy, sau đó rod hư hao nhất
-            target = rods.FirstOrDefault(r => r.RodDurability == 0)
-                  ?? rods.Where(r => r.RodDurability.HasValue && r.Item.MaxDurability.HasValue)
-                         .OrderBy(r => (double)r.RodDurability!.Value / r.Item.MaxDurability!.Value)
-                         .FirstOrDefault();
-        }
+        UserInventory? target = rodName is not null
+            ? rods.FirstOrDefault(r => string.Equals(r.Item.Name, rodName, StringComparison.OrdinalIgnoreCase))
+            : rods.FirstOrDefault(r => r.RodDurability == 0)
+              ?? rods.Where(r => r.RodDurability.HasValue && r.Item.MaxDurability.HasValue)
+                     .OrderBy(r => (double)r.RodDurability!.Value / r.Item.MaxDurability!.Value)
+                     .FirstOrDefault();
 
         if (target is null)
-            return ServiceResult<RepairRodResult>.Fail("Không tìm thấy cần câu nào cần repair.");
+            return ServiceResult<RepairRodResult>.Fail(
+                rodName is not null
+                    ? $"Không tìm thấy cần câu **{rodName}** trong túi đồ."
+                    : "Không tìm thấy cần câu nào cần repair.");
 
         if (!target.RodDurability.HasValue || !target.Item.MaxDurability.HasValue)
-            return ServiceResult<RepairRodResult>.Fail($"**{target.Item.Name}** không hỗ trợ durability tracking (cần câu cũ).");
+            return ServiceResult<RepairRodResult>.Fail(
+                $"**{target.Item.Name}** không hỗ trợ durability tracking.");
 
         if (target.RodDurability >= target.Item.MaxDurability)
-            return ServiceResult<RepairRodResult>.Fail($"**{target.Item.Name}** vẫn còn nguyên vẹn (**{target.RodDurability}/{target.Item.MaxDurability}** độ bền).");
+            return ServiceResult<RepairRodResult>.Fail(
+                $"**{target.Item.Name}** vẫn còn nguyên vẹn ({target.RodDurability}/{target.Item.MaxDurability}).");
 
-        var cost = GetRepairCost(target.Item.Price, target.Item.MaxDurability.Value, target.RodDurability.Value);
+        var cost = GetRepairCost(
+            target.Item.Price,
+            target.Item.MaxDurability.Value,
+            target.RodDurability.Value);
+
         if (wallet.Coins < cost)
             return ServiceResult<RepairRodResult>.Fail(
-                $"Không đủ xu. Sửa **{target.Item.Name}** ({target.RodDurability}/{target.Item.MaxDurability} → {target.Item.MaxDurability}) cần **{cost:N0}** xu, bạn có **{wallet.Coins:N0}** xu.");
+                $"Không đủ xu. Cần **{cost:N0}** để sửa nhưng bạn chỉ có **{wallet.Coins:N0}** xu.");
 
-        var oldDur = target.RodDurability.Value;
-        var newDur = target.Item.MaxDurability.Value;
-        target.RodDurability = newDur;
+        var oldDurability = target.RodDurability.Value;
+        var maxDurability = target.Item.MaxDurability.Value;
+
+        target.RodDurability = maxDurability;
         wallet.Coins        -= cost;
 
-        await _walletRepo.AddTransactionAsync(new Transaction
-        {
-            GuildId      = guildId,
-            FromWalletId = wallet.Id,
-            Amount       = cost,
-            Type         = TransactionType.Purchase,
-            Note         = $"Repair {target.Item.Name} ({oldDur} → {newDur})",
-            CreatedAt    = DateTime.UtcNow
-        });
         await _walletRepo.SaveChangesAsync();
         await _shopRepo.SaveChangesAsync();
 
-        return ServiceResult<RepairRodResult>.Ok(
-            new RepairRodResult(target.Item, oldDur, newDur, cost, wallet.Coins));
+        _logger.LogInformation(
+            "User {UserId} repaired {Rod} ({Old}->{Max}) for {Cost} coins in guild {GuildId}",
+            userId, target.Item.Name, oldDurability, maxDurability, cost, guildId);
+
+        return ServiceResult<RepairRodResult>.Ok(new RepairRodResult(
+            Item:           target.Item,
+            OldDurability:  oldDurability,
+            NewDurability:  maxDurability,
+            CoinsPaid:      cost,
+            CoinsRemaining: wallet.Coins));
     }
 
-    public async Task<ServiceResult> AddShopItemAsync(
+    // ── Add Shop Item (Admin) ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Thêm item mới vào shop thủ công (Admin command /shop additem).
+    /// Không cho phép trùng tên trong cùng guild.
+    /// </summary>
+    public async Task<ServiceResult<bool>> AddShopItemAsync(
         ulong guildId, string name, string emoji, long price,
         string? description, ItemType type,
-        int? cooldownSeconds, double? dropMultiplier,
+        int? cooldown, double? multiplier,
         int? usageCount, int? durationMinutes)
     {
-        if (price <= 0)
-            return ServiceResult.Fail("Giá phải lớn hơn 0.");
-
         var existing = await _shopRepo.GetItemByNameAsync(guildId, name);
         if (existing is not null)
-            return ServiceResult.Fail($"**{name}** đã tồn tại trong cửa hàng.");
+            return ServiceResult<bool>.Fail($"**{name}** đã tồn tại trong cửa hàng. Dùng /shop seed để sync hoặc xóa thủ công.");
 
-        await _shopRepo.AddItemAsync(new InventoryItem
+        var item = new InventoryItem
         {
             GuildId         = guildId,
             Name            = name,
@@ -642,13 +645,120 @@ public class ShopService
             Description     = description,
             Type            = type,
             IsAvailable     = true,
-            CooldownSeconds = cooldownSeconds,
-            DropMultiplier  = dropMultiplier,
+            CooldownSeconds = cooldown,
+            DropMultiplier  = multiplier,
             UsageCount      = usageCount,
-            DurationMinutes = durationMinutes
-        });
+            DurationMinutes = durationMinutes,
+        };
+
+        await _shopRepo.AddItemAsync(item);
         await _shopRepo.SaveChangesAsync();
 
-        return ServiceResult.Ok();
+        _logger.LogInformation(
+            "Admin added shop item [{Name}] price={Price} type={Type} in guild {GuildId}",
+            name, price, type, guildId);
+
+        return ServiceResult<bool>.Ok(true);
+    }
+
+    // ── Rod Upgrade ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Nâng cấp cần câu theo path:
+    ///   Bạc → Vàng    : LegendaryCaught ≥ 10, phí 25,000 xu  (tiết kiệm 35k vs mua thẳng)
+    ///   Vàng → Kim Cương : LegendaryCaught ≥ 30, phí 80,000 xu  (tiết kiệm 80k vs mua thẳng)
+    ///
+    /// Caller truyền <paramref name="legendaryCaught"/> từ UserFishingProfile (tránh inject thêm repo).
+    /// </summary>
+    public async Task<ServiceResult<RodUpgradeResult>> UpgradeRodAsync(
+        ulong guildId, ulong userId, string fromRodName, int legendaryCaught)
+    {
+        // ── Định nghĩa upgrade paths ──────────────────────────────────────────
+        var paths = new Dictionary<string, (string ToRod, long Cost, int MinLegendary)>
+        {
+            ["Cần Câu Bạc"]  = ("Cần Câu Vàng",      25_000, 10),
+            ["Cần Câu Vàng"] = ("Cần Câu Kim Cương",  80_000, 30),
+        };
+
+        if (!paths.TryGetValue(fromRodName, out var path))
+            return ServiceResult<RodUpgradeResult>.Fail(
+                $"**{fromRodName}** không có con đường nâng cấp. (Bạc -> Vàng, Vàng -> Kim Cương)");
+
+        var (toRodName, upgradeCost, minLegendary) = path;
+
+        // ── Check LegendaryCaught ─────────────────────────────────────────────
+        if (legendaryCaught < minLegendary)
+            return ServiceResult<RodUpgradeResult>.Fail(
+                $"Cần câu được **{minLegendary} Cá Huyền Thoại** để nâng cấp lên {toRodName}. Bạn hiện có: **{legendaryCaught}/{minLegendary}** con. Cố lên!");
+
+        var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
+
+        // ── Check wallet ──────────────────────────────────────────────────────
+        if (wallet.Coins < upgradeCost)
+            return ServiceResult<RodUpgradeResult>.Fail(
+                $"Không đủ xu. Cần **{upgradeCost:N0}** để nâng cấp nhưng bạn chỉ có **{wallet.Coins:N0}** xu.");
+
+        // ── Check sở hữu cần cũ ───────────────────────────────────────────────
+        var fromItem = await _shopRepo.GetItemByNameAsync(guildId, fromRodName);
+        if (fromItem is null)
+            return ServiceResult<RodUpgradeResult>.Fail($"Không tìm thấy **{fromRodName}** trong cửa hàng.");
+
+        var fromInv = await _shopRepo.GetUserItemAsync(wallet.Id, fromItem.Id);
+        if (fromInv is null)
+            return ServiceResult<RodUpgradeResult>.Fail(
+                $"Bạn không có **{fromRodName}** trong túi đồ. Cần câu hiện tại phải là cần muốn nâng cấp.");
+
+        // ── Load cần mới ──────────────────────────────────────────────────────
+        var toItem = await _shopRepo.GetItemByNameAsync(guildId, toRodName);
+        if (toItem is null)
+            return ServiceResult<RodUpgradeResult>.Fail(
+                $"Lỗi cấu hình: không tìm thấy **{toRodName}** trong shop. Liên hệ admin.");
+
+        // ── Check chưa sở hữu cần mới (tránh dupe) ───────────────────────────
+        var existingNew = await _shopRepo.GetUserItemAsync(wallet.Id, toItem.Id);
+        if (existingNew is not null)
+            return ServiceResult<RodUpgradeResult>.Fail(
+                $"Bạn đã có **{toRodName}** rồi! Không cần nâng cấp.");
+
+        // ── Thực hiện upgrade ─────────────────────────────────────────────────
+        wallet.Coins -= upgradeCost;
+
+        // Xóa cần cũ
+        await _shopRepo.RemoveUserInventoryAsync(fromInv);
+
+        // Thêm cần mới với durability đầy
+        await _shopRepo.AddUserInventoryAsync(new UserInventory
+        {
+            WalletId      = wallet.Id,
+            ItemId        = toItem.Id,
+            Quantity      = 1,
+            RodDurability = toItem.MaxDurability,
+            AcquiredAt    = DateTime.UtcNow,
+        });
+
+        await _walletRepo.AddTransactionAsync(new Transaction
+        {
+            GuildId      = guildId,
+            FromWalletId = wallet.Id,
+            Amount       = upgradeCost,
+            Type         = TransactionType.Purchase,
+            Note         = $"Nâng cấp {fromRodName} → {toRodName}",
+            CreatedAt    = DateTime.UtcNow,
+        });
+
+        await _walletRepo.SaveChangesAsync();
+        await _shopRepo.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "User {UserId} upgraded rod {From} → {To} for {Cost} coins in guild {GuildId}",
+            userId, fromRodName, toRodName, upgradeCost, guildId);
+
+        return ServiceResult<RodUpgradeResult>.Ok(new RodUpgradeResult(
+            FromRodName:     fromRodName,
+            ToRodName:       toRodName,
+            ToRodEmoji:      toItem.Emoji,
+            UpgradeCost:     upgradeCost,
+            CoinsRemaining:  wallet.Coins,
+            NewDurability:   toItem.MaxDurability ?? 0));
     }
 }

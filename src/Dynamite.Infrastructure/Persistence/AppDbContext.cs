@@ -59,6 +59,7 @@ public class AppDbContext : DbContext
     public DbSet<LeaderboardSnapshot> LeaderboardSnapshots => Set<LeaderboardSnapshot>();
     public DbSet<LeaderboardEntry> LeaderboardEntries => Set<LeaderboardEntry>();
     public DbSet<WeeklyActivity> WeeklyActivities => Set<WeeklyActivity>();
+    public DbSet<FishEncyclopediaEntry> FishEncyclopedia => Set<FishEncyclopediaEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

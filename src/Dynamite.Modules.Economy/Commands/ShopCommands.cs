@@ -7,17 +7,19 @@ using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Economy.Helpers;
 using Dynamite.Modules.Economy.Services;
+using Dynamite.Core.Common.Results;
 
 [Group("shop", "Shop and inventory commands")]
 [RequireContext(ContextType.Guild)]
 public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
 {
-    private readonly ShopService            _shop;
-    private readonly ShopShowcaseService    _showcase;
-    private readonly InvoiceService         _invoice;
-    private readonly WeatherForecastService _weatherForecast;
-    private readonly IGuildConfigRepository _configRepo;
-    private readonly FishBagService         _bagService;
+    private readonly ShopService             _shop;
+    private readonly ShopShowcaseService     _showcase;
+    private readonly InvoiceService          _invoice;
+    private readonly WeatherForecastService  _weatherForecast;
+    private readonly IGuildConfigRepository  _configRepo;
+    private readonly FishBagService          _bagService;
+    private readonly IUserProfileRepository  _profileRepo;
 
     public ShopCommands(
         ShopService            shop,
@@ -25,7 +27,8 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
         InvoiceService         invoice,
         WeatherForecastService weatherForecast,
         IGuildConfigRepository configRepo,
-        FishBagService         bagService)
+        FishBagService         bagService,
+        IUserProfileRepository profileRepo)
     {
         _shop            = shop;
         _showcase        = showcase;
@@ -33,6 +36,7 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
         _weatherForecast = weatherForecast;
         _configRepo      = configRepo;
         _bagService      = bagService;
+        _profileRepo     = profileRepo;
     }
 
     // ── /shop view ─────────────────────────────────────────────────────────────
@@ -220,6 +224,37 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
         await FollowupAsync(response, ephemeral: true);
     }
 
+    // ── /shop upgrade-rod ─────────────────────────────────────────────────────
+
+    [SlashCommand("upgrade-rod", "Nâng cấp cần câu Bạc → Vàng hoặc Vàng → Kim Cương")]
+    public async Task UpgradeRodAsync(
+        [Summary("rod", "Cần câu muốn nâng cấp (Cần Câu Bạc / Cần Câu Vàng)")]
+        [Autocomplete(typeof(RodAutocomplete))]
+        string rodName)
+    {
+        await DeferAsync(ephemeral: true);
+
+        // Lấy LegendaryCaught từ profile (không inject thêm repo vào ShopService)
+        var profile = await _profileRepo.GetOrCreateFishingAsync(
+            Context.Guild.Id, Context.User.Id);
+
+        var result = await _shop.UpgradeRodAsync(
+            Context.Guild.Id, Context.User.Id,
+            rodName, profile.LegendaryCaught);
+
+        if (!result)
+        {
+            await FollowupAsync($"❌ {result.ErrorMessage}", ephemeral: true);
+            return;
+        }
+
+        var r     = result.Value!;
+        var embed = EconomyEmbedBuilder.BuildRodUpgradeEmbed(r);
+        await FollowupAsync(embed: embed, ephemeral: true);
+    }
+
+    // ── Admin: channel setup ──────────────────────────────────────────────────
+
     [SlashCommand("set-invoice-channel", "Đặt kênh hóa đơn giao dịch (Admin)")]
     [DefaultMemberPermissions(GuildPermission.ManageGuild)]
     public async Task SetInvoiceChannelAsync(
@@ -241,7 +276,8 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync(ephemeral: true);
 
-        var result = await _weatherForecast.SetChannelAsync(Context.Guild.Id, Context.Guild.Name, channel);
+        var result = await _weatherForecast.SetChannelAsync(
+            Context.Guild.Id, Context.Guild.Name, channel);
 
         var response = result
             ? $"✅ Đã đặt {channel.Mention} làm kênh dự báo thời tiết."

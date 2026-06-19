@@ -3,6 +3,7 @@ namespace Dynamite.Modules.Economy.Helpers;
 
 using Discord;
 using Discord.WebSocket;
+using Dynamite.Core.Common.Results;
 using Dynamite.Core.Entities;
 using Dynamite.Modules.Economy.Services;
 
@@ -496,6 +497,16 @@ public static class EconomyEmbedBuilder
             .Build();
     }
 
+    public static Embed BuildAutoFishMissEmbed(string reason, string username = "")
+    {
+        return new EmbedBuilder()
+            .WithAuthor(string.IsNullOrEmpty(username) ? "[AutoFish]" : $"[AutoFish] {username}")
+            .WithTitle(reason.StartsWith("Escape") ? "🐟 Cá Trốn Thoát!" : "🎣 Hụt!")
+            .WithDescription(reason)
+            .WithColor(new Color(0x95a5a6))
+            .Build();
+    }
+
     // ── Special Pool ──────────────────────────────────────────────────────────
 
     public static Embed BuildSpecialPoolListEmbed(List<SpecialPool> pools)
@@ -662,128 +673,187 @@ public static class EconomyEmbedBuilder
         "Common"    => new Color(0x95a5a6),
         "Uncommon"  => new Color(0x2ecc71),
         "Rare"      => new Color(0x3498db),
-        "Legendary" => new Color(0x9b59b6),
-        "Mythic"    => new Color(0xF5A623),
-        "Bronze"    => new Color(0xCD7F32),
-        "Gold"      => new Color(0xFFD700),
-        "Diamond"   => new Color(0xB9F2FF),
-        "Trash"     => new Color(0x5d4037),
-        _           => new Color(0x95a5a6)
+         "Legendary" => new Color(0xf39c12),
+        "Mythic"    => new Color(0xe74c3c),
+        "Trash"     => new Color(0x7f8c8d),
+        _           => new Color(0x95a5a6),
+    };
+
+
+    private static int RarityOrder(string rarity) => rarity switch
+    {
+        "Mythic"    => 0,
+        "Legendary" => 1,
+        "Rare"      => 2,
+        "Uncommon"  => 3,
+        "Common"    => 4,
+        "Diamond"   => 5,
+        "Gold"      => 6,
+        "Bronze"    => 7,
+        _           => 99,
+    };
+
+    private static string RarityEmoji(string rarity) => rarity switch
+    {
+        "Mythic"    => "🐉",
+        "Legendary" => "🦈",
+        "Rare"      => "🐡",
+        "Uncommon"  => "🐠",
+        "Common"    => "🐟",
+        "Diamond"   => "💎",
+        "Gold"      => "🪙",
+        "Bronze"    => "📦",
+        _           => "🗑️",
     };
 
     private static string RarityVi(string rarity) => rarity switch
     {
-        "Common"    => "Thường",
-        "Uncommon"  => "Hiếm Vừa",
-        "Rare"      => "Hiếm",
+        "Mythic"    => "Thần Thoại",
         "Legendary" => "Huyền Thoại",
-        "Mythic"    => "Thần",
-        "Bronze"    => "Đồng",
-        "Gold"      => "Vàng",
+        "Rare"      => "Hiếm",
+        "Uncommon"  => "Không Phổ Biến",
+        "Common"    => "Phổ Biến",
         "Diamond"   => "Kim Cương",
+        "Gold"      => "Vàng",
+        "Bronze"    => "Đồng",
         "Trash"     => "Rác",
-        _           => rarity
+        _           => rarity,
     };
+
+    private static string BuildProgressBar(double percentage, int length)
+    {
+        var filled = (int)Math.Round(percentage / 100.0 * length);
+        filled = Math.Clamp(filled, 0, length);
+        return new string('█', filled) + new string('░', length - filled) + $" {percentage:F0}%";
+    }
 
     private static string RankEmoji(int rank) => rank switch
     {
-        1 => "🥇", 2 => "🥈", 3 => "🥉", _ => $"#{rank}"
+        1 => "🥇",
+        2 => "🥈",
+        3 => "🥉",
+        _ => $"`#{rank}`",
     };
 
-    private static string BuildProgressBar(double pct, int length)
-    {
-        var filled = (int)(pct / 100 * length);
-        return "[" + new string('█', filled) + new string('░', length - filled) + "]";
-    }
 
-    private static string RarityEmoji(string rarity) => rarity switch
-    {
-        "Common"    => "⬜",
-        "Uncommon"  => "🟩",
-        "Rare"      => "🟦",
-        "Legendary" => "🟪",
-        "Mythic"    => "🟧",
-        "Trash"     => "🟫",
-        _           => "❓"
-    };
+    // ── Rod Repair embeds ─────────────────────────────────────────────────────
 
-    private static int RarityOrder(string rarity) => rarity switch
-    {
-        "Common"    => 1,
-        "Uncommon"  => 2,
-        "Rare"      => 3,
-        "Legendary" => 4,
-        "Mythic"    => 5,
-        "Trash"     => 6,
-        _           => 9
-    };
-
-    /// <summary>
-    /// Embed nhỏ cho auto-fish khi bị miss hoặc cá thoát — post ra channel.
-    /// </summary>
-    public static Embed BuildAutoFishMissEmbed(string reason, string username)
-        => new EmbedBuilder()
-            .WithColor(new Color(0x636e72))
-            .WithDescription($"🤖 **{username}** — {reason}")
-            .Build();
-
-    // ── Repair Rod ───────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Preview chi phí sửa — hiển thị trước khi user xác nhận, không trừ xu.
-    /// </summary>
     public static Embed BuildRepairPreviewEmbed(
-        InventoryItem item, int currentDur, int maxDur, long cost, long userCoins)
+        InventoryItem item, int currentDur, int maxDur, long cost, long coins)
     {
-        var pct        = (double)currentDur / maxDur * 100;
-        var bar        = BuildProgressBar(pct, 8);
-        var canAfford  = userCoins >= cost;
-        var status     = currentDur == 0 ? " 💔 **GÃY**"
-                       : currentDur <= maxDur * 0.2 ? " ⚠️ Sắp gãy" : "";
-        var affordText = canAfford
-            ? $"✅ Bạn đủ xu để sửa! (còn lại: **{userCoins - cost:N0}** xu)"
-            : $"❌ Không đủ xu! Thiếu **{cost - userCoins:N0}** xu.";
-
+        var pct = maxDur > 0 ? (double)currentDur / maxDur * 100 : 0;
+        var bar = BuildProgressBar(pct, 10);
+        var desc = $"**Độ bền:** {currentDur}/{maxDur} {bar}\n\n"
+            + $"💰 **Chi phí sửa:** {cost:N0} xu\n"
+            + $"💳 **Số dư:** {coins:N0} xu\n\n"
+            + "_Dùng `/shop repair-rod` không kèm `preview:True` để thực hiện._";
         return new EmbedBuilder()
-            .WithTitle("🔍 Xem Trước Chi Phí Sửa Cần")
-            .WithDescription(
-                $"{item.Emoji} **{item.Name}**\n\n" +
-                $"**Độ bền hiện tại:** {bar} {currentDur}/{maxDur}{status}\n" +
-                $"**Sau khi sửa:**  {BuildProgressBar(100, 8)} {maxDur}/{maxDur} ✅\n\n" +
-                $"💸 **Chi phí:** {cost:N0} xu\n" +
-                $"💰 **Ví của bạn:** {userCoins:N0} xu\n\n" +
-                affordText)
-            .WithColor(canAfford ? new Color(0x3498DB) : new Color(0xE74C3C))
-            .WithFooter("Dùng /shop repair-rod (không chọn preview) để xác nhận sửa")
+            .WithTitle($"🔍 Dự Toán Sửa: {item.Emoji} {item.Name}")
+            .WithDescription(desc)
+            .WithColor(new Color(0x3498db))
             .Build();
     }
 
     public static Embed BuildRepairRodEmbed(
-        InventoryItem item, int oldDur, int newDur, long cost, long coinsRemaining)
+        InventoryItem item, int oldDur, int newDur, long coinsPaid, long coinsRemaining)
     {
-        var pctBefore = (double)oldDur / newDur * 100;
-        var barBefore = BuildProgressBar(pctBefore, 8);
-        var barAfter  = BuildProgressBar(100, 8);
+        var desc = $"{item.Emoji} **{item.Name}**\n\n"
+            + $"🔩 Độ bền: **{oldDur} -> {newDur}**\n"
+            + $"💰 Chi phí: **-{coinsPaid:N0}** xu\n"
+            + $"💳 Còn lại: **{coinsRemaining:N0}** xu";
+        return new EmbedBuilder()
+            .WithTitle($"🔧 Sửa Cần Thành Công!")
+            .WithDescription(desc)
+            .WithColor(new Color(0x2ecc71))
+            .Build();
+    }
 
-        var wasBroken    = oldDur == 0;
-        var title        = wasBroken
-            ? "🔧 Cần Câu Phục Hồi Hoàn Toàn!"
-            : "🔧 Sửa Cần Câu Thành Công!";
-        var statusBefore = wasBroken ? " 💔 **GÃY**"
-            : oldDur <= newDur * 0.2 ? " ⚠️ Sắp gãy" : "";
+    // ── Rod Upgrade embed ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Embed kết quả nâng cấp cần câu thành công.
+    /// Màu vàng kim loại (#f39c12) — cảm giác achievement.
+    /// </summary>
+    public static Embed BuildRodUpgradeEmbed(RodUpgradeResult r)
+    {
+        var desc = $"""
+            ✨ Nâng cấp thành công!
+
+            {r.FromRodName} → **{r.ToRodEmoji} {r.ToRodName}**
+
+            💰 Chi phí: **{r.UpgradeCost:N0}** xu
+            💳 Còn lại: **{r.CoinsRemaining:N0}** xu
+            🔧 Độ bền mới: **{r.NewDurability}/{r.NewDurability}**
+            """;
 
         return new EmbedBuilder()
-            .WithTitle(title)
-            .WithDescription(
-                $"{item.Emoji} **{item.Name}**\n\n" +
-                $"**Trước:** {barBefore} {oldDur}/{newDur}{statusBefore}\n" +
-                $"**Sau:**   {barAfter} {newDur}/{newDur} ✅\n\n" +
-                $"💸 Chi phí sửa: **{cost:N0}** xu\n" +
-                $"💰 Số dư còn lại: **{coinsRemaining:N0}** xu")
-            .WithColor(new Color(0x2ECC71))
-            .WithFooter("🔧 Repair • Cần câu đã sẵn sàng câu tiếp!")
-            .WithCurrentTimestamp()
+            .WithTitle("🔨 Nâng Cấp Cần Câu")
+            .WithDescription(desc)
+            .WithColor(new Color(0xf39c12))
+            .WithFooter("Độ bền đã được reset về tối đa!")
             .Build();
+    }
+
+    // ── Fish Encyclopedia embed ───────────────────────────────────────────────
+
+
+
+    /// <summary>
+    /// Embed cho /fishing dex — hiển thị toàn bộ loài cá đã câu.
+    /// Mỗi rarity = 1 field. Mỗi dòng = "Emoji Name × count (best: Xk xu)".
+    /// Tối đa 25 fields (Discord limit) — thực tế có ≤9 rarity nên không bao giờ hit.
+    /// </summary>
+    public static Embed BuildDexEmbed(List<FishEncyclopediaEntry> entries, string username)
+    {
+        var builder = new EmbedBuilder()
+            .WithTitle($"📖 Fish Encyclopedia của {username}")
+            .WithColor(new Color(0x1abc9c));
+
+        if (entries.Count == 0)
+        {
+            builder.WithDescription("Chưa có loài nào được ghi nhận. Hãy ra câu vài con đầu tiên! 🎣");
+            return builder.Build();
+        }
+
+        // Group by rarity, hiển thị theo thứ tự
+        var grouped = entries
+            .GroupBy(e => e.Rarity)
+            .OrderBy(g => RarityOrder(g.Key));
+
+        int totalSpecies = entries.Count;
+        int totalCaught  = entries.Sum(e => e.TimesCaught);
+
+        foreach (var group in grouped)
+        {
+            var rarityEmoji = group.Key switch
+            {
+                "Mythic"    => "🐉",
+                "Legendary" => "🦈",
+                "Rare"      => "🐡",
+                "Uncommon"  => "🐠",
+                "Common"    => "🐟",
+                "Diamond"   => "💎",
+                "Gold"      => "🪙",
+                "Bronze"    => "📦",
+                _           => "🗑️",
+            };
+
+            var lines = group
+                .OrderByDescending(e => e.TimesCaught)
+                .Select(e =>
+                {
+                    var best = e.BestCoins > 0 ? $" _(best {e.BestCoins:N0}xu)_" : "";
+                    return $"{e.Emoji} **{e.FishName}** ×{e.TimesCaught}{best}";
+                });
+
+            builder.AddField(
+                $"{rarityEmoji} {group.Key} ({group.Count()} loài)",
+                string.Join("\n", lines),
+                inline: false);
+        }
+
+        builder.WithFooter($"📊 {totalSpecies} loài · {totalCaught:N0} lần câu tổng cộng");
+        return builder.Build();
     }
 
 }
