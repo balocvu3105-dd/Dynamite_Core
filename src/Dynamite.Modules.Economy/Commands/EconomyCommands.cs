@@ -66,7 +66,15 @@ public class EconomyCommands : InteractionModuleBase<SocketInteractionContext>
     {
         await DeferAsync();
 
-        var entries = await _wallet.GetLeaderboardAsync(Context.Guild.Id);
+        var excluded = new HashSet<ulong> { Context.Guild.OwnerId };
+        foreach (var member in Context.Guild.Users)
+            if (member.GuildPermissions.Administrator)
+                excluded.Add(member.Id);
+
+        var entries = (await _wallet.GetLeaderboardAsync(Context.Guild.Id))
+            .Where(e => !excluded.Contains(e.userId))
+            .ToList();
+
         var embed = EconomyEmbedBuilder.BuildLeaderboardEmbed(entries, Context.Guild.Id);
         await FollowupAsync(embed: embed);
     }

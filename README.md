@@ -169,4 +169,78 @@ Each module is an independent class library. Zero coupling between modules — c
 ## Getting Started
 
 ### Prerequisites
-- [Docker Desktop](https
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- A Discord bot token from the [Discord Developer Portal](https://discord.com/developers/applications)
+
+### Run with Docker Compose
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/balocvu3105-dd/Dynamite_Core.git
+cd Dynamite_Core
+
+# 2. Set up environment variables
+cp .env.example .env
+# Edit .env — fill in your Discord token, client ID/secret, DB password, and JWT secret
+
+# 3. Start everything
+docker compose up --build
+```
+
+Docker Compose will automatically:
+1. Start PostgreSQL and wait for it to be healthy
+2. Run database migrations via `Dynamite.Migrator`
+3. Start the Bot and API once migrations complete
+
+| Service | URL |
+|---|---|
+| REST API | http://localhost:5000 |
+| Swagger UI | http://localhost:5000/swagger |
+| Dashboard | http://localhost:3000 |
+
+### Run Tests
+
+```bash
+dotnet test src/Dynamite.Tests --verbosity normal
+```
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in your values:
+
+| Variable | Description |
+|---|---|
+| `DISCORD_TOKEN` | Bot token from the Discord Developer Portal |
+| `DISCORD_CLIENT_ID` | OAuth2 application client ID |
+| `DISCORD_CLIENT_SECRET` | OAuth2 application client secret |
+| `DISCORD_TEST_GUILD_ID` | Guild ID for debug slash command registration |
+| `POSTGRES_DB` | PostgreSQL database name |
+| `POSTGRES_USER` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | PostgreSQL password |
+| `JWT_SECRET` | JWT signing secret (minimum 32 characters) |
+| `JWT_ISSUER` | JWT issuer (e.g. `dynamite-api`) |
+| `JWT_AUDIENCE` | JWT audience (e.g. `dynamite-dashboard`) |
+| `API_PORT` | API port (default: `5000`) |
+| `DASHBOARD_PORT` | Dashboard port (default: `3000`) |
+| `VITE_API_URL` | API base URL for the React dashboard |
+
+---
+
+## Roadmap
+
+- [x] Economy & Fishing system (drop table, rods, durability, weather, pond, auto-fish, special pool, achievements)
+- [x] Giveaway system with background timer and reroll
+- [x] Ticket system (panel-based, full lifecycle)
+- [ ] Full dashboard coverage for all modules (Moderation, Economy, Tickets)
+- [ ] Temp Voice system (auto voice rooms, ownership transfer, cleanup)
+- [ ] Alt detection and trust scoring system
+- [ ] Plugin system for community-contributed modules
+- [ ] Prometheus metrics + Grafana dashboard
+
+---
+
+## License
+
+MIT
