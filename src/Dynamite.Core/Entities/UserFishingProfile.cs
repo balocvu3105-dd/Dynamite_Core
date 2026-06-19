@@ -76,6 +76,20 @@ public class UserFishingProfile : BaseEntity
     /// </summary>
     public DateTime? AutoFishSpecialPoolExpiresAt { get; set; } = null;
 
+    // ── Auto-fish daily cast cap ─────────────────────────────────────────────
+    /// <summary>
+    /// Số lần auto-fish đã cast trong ngày UTC hiện tại.
+    /// Reset tự động khi AutoFishDailyResetAt < ngày UTC hôm nay.
+    /// Manual fishing KHÔNG tính vào counter này.
+    /// </summary>
+    public int AutoFishCastsToday { get; set; } = 0;
+
+    /// <summary>
+    /// Ngày UTC mà counter AutoFishCastsToday cuối cùng được reset.
+    /// null = chưa từng dùng auto-fish hoặc đã qua ngày mới.
+    /// </summary>
+    public DateTime? AutoFishDailyResetAt { get; set; }
+
     // ── Trade throttle ───────────────────────────────────────────────────────
     public int TradesThisWeek { get; set; } = 0;
     public DateTime? TradeWeekResetAt { get; set; }

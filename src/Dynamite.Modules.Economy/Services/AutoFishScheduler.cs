@@ -13,18 +13,22 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// BackgroundService chạy auto-câu cho tất cả user/admin đang có session hoạt động.
 ///
-/// Tick mỗi 27 giây (cooldown DB là 25s → buffer 2s):
+/// Tick mỗi 60 giây:
 ///   • Câu cá → lưu vào túi (KHÔNG tự bán).
 ///   • Khi túi đầy → tự động pause session + ping user vào channel.
 ///   • User mode (AutoFishSellAll = true):  post embed kết quả vào channel.
 ///   • Admin mode (AutoFishSellAll = false): post embed kiểu admin (không có countdown).
+///   • Daily cast cap = 800 lần/ngày UTC (user thường).
+///     Admin/owner KHÔNG bị giới hạn.
+///     Manual /fishing cast KHÔNG tính vào cap này.
 ///
 /// Channel được lưu trong AutoFishChannelId tại thời điểm user bấm /fish-auto buy.
 /// Nếu channel đã xoá hoặc bot không có quyền → bỏ qua lặng lẽ.
 /// </summary>
 public sealed class AutoFishScheduler : BackgroundService
 {
-    private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(27);
+    private static readonly TimeSpan TickInterval     = TimeSpan.FromSeconds(60);
+    private const int                DailyCastCap     = 800;   // user thường, per UTC day
 
     private readonly IServiceScopeFactory      _scopeFactory;
     private readonly DiscordSocketClient       _discord;
@@ -134,6 +138,44 @@ public sealed class AutoFishScheduler : BackgroundService
         var username = _discord.GetGuild(guildId)?.GetUser(userId)?.DisplayName
                     ?? _discord.GetUser(userId)?.Username
                     ?? userId.ToString();
+
+        // ── Daily cast cap (user thường only, admin bypass) ──────────────────
+        if (!isAdmin)
+        {
+            var todayUtc = DateTime.UtcNow.Date;
+
+            // Reset counter nếu qua ngày mới
+            if (profile.AutoFishDailyResetAt?.Date < todayUtc)
+            {
+                profile.AutoFishCastsToday   = 0;
+                profile.AutoFishDailyResetAt = DateTime.UtcNow;
+                await profileRepo.SaveChangesAsync();
+            }
+
+            if (profile.AutoFishCastsToday >= DailyCastCap)
+            {
+                // Đã đạt cap → pause cho đến ngày mai
+                var freshProfile = await profileRepo.GetOrCreateFishingAsync(guildId, userId);
+                if (!freshProfile.AutoFishPaused)
+                {
+                    freshProfile.AutoFishPaused = true;
+                    await profileRepo.SaveChangesAsync();
+
+                    _logger.LogInformation(
+                        "[AutoFish] Daily cap ({Cap}) reached — paused session for user {UserId} in guild {GuildId}",
+                        DailyCastCap, userId, guildId);
+
+                    if (profile.AutoFishChannelId != 0)
+                        await PostDailyCapNotificationAsync(profile, username);
+                }
+                return;
+            }
+
+            // Increment counter ngay bây giờ (trước khi cast, tránh race condition)
+            profile.AutoFishCastsToday++;
+            profile.AutoFishDailyResetAt ??= DateTime.UtcNow;
+            await profileRepo.SaveChangesAsync();
+        }
 
         // ── Route: Special Pool hay bể thường? ───────────────────────────────
         var now = DateTime.UtcNow;
@@ -435,6 +477,36 @@ public sealed class AutoFishScheduler : BackgroundService
         catch (Exception ex)
         {
             _logger.LogDebug("[AutoFish] Failed to post miss/escape embed to channel {Id}: {Msg}",
+                profile.AutoFishChannelId, ex.Message);
+        }
+    }
+
+    private async Task PostDailyCapNotificationAsync(UserFishingProfile profile, string username)
+    {
+        try
+        {
+            if (_discord.GetChannel(profile.AutoFishChannelId) is not IMessageChannel channel)
+                return;
+
+            var resetUnix = new DateTimeOffset(DateTime.UtcNow.Date.AddDays(1)).ToUnixTimeSeconds();
+
+            var embed = new EmbedBuilder()
+                .WithColor(new Color(0x9B59B6))
+                .WithTitle("📅 Đã Đạt Giới Hạn Auto-Fish Hôm Nay!")
+                .WithDescription(
+                    $"**{username}** — Bạn đã đạt **{DailyCastCap} lần** auto-fish trong ngày!\n\n" +
+                    $"Bot đã **tạm dừng** session. Giới hạn sẽ reset lúc <t:{resetUnix}:T> (nửa đêm UTC).\n\n" +
+                    "Dùng `/fish-auto resume` sau khi reset để tiếp tục.\n" +
+                    "💡 _Manual `/fishing cast` vẫn hoạt động bình thường — không bị giới hạn._")
+                .WithFooter($"Auto-Fish Daily Cap: {DailyCastCap} lần/ngày • Reset lúc <t:{resetUnix}:R>")
+                .WithCurrentTimestamp()
+                .Build();
+
+            await channel.SendMessageAsync($"<@{profile.UserId}>", embed: embed);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug("[AutoFish] Failed to post daily-cap notification to channel {Id}: {Msg}",
                 profile.AutoFishChannelId, ex.Message);
         }
     }

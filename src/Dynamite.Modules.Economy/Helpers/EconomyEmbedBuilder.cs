@@ -200,6 +200,36 @@ public static class EconomyEmbedBuilder
     {
         var c = result.Catch;
 
+        var remaining    = expiresAt - DateTime.UtcNow;
+        var countdownStr = remaining.TotalSeconds > 0 ? FormatRemaining(remaining) : "Hết hạn";
+        var footer       = $"⏱️ Auto-fish còn lại: {countdownStr} • 🎟️ -1 vé";
+
+        // ── Miss: cá không cắn — slot KHÔNG bị tiêu ──────────────────────────
+        if (c.IsMiss)
+        {
+            return new EmbedBuilder()
+                .WithTitle($"💨 [Auto Pool] {username} — Cá Không Cắn!")
+                .WithDescription(
+                    $"Lần này cá chưa chịu đến... thử lại tick sau!\n" +
+                    $"🪣 Pool còn: **{result.PondRemaining:N0}** con")
+                .WithColor(new Color(0x95a5a6u))
+                .WithFooter(footer)
+                .Build();
+        }
+
+        // ── Escape: cá cắn rồi thoát — slot bị tiêu ─────────────────────────
+        if (c.IsEscape)
+        {
+            return new EmbedBuilder()
+                .WithTitle($"🌊 [Auto Pool] {username} — {c.Emoji} {c.Name} Đã Thoát!")
+                .WithDescription(
+                    $"Cá đã cắn nhưng sổng mất trước khi kéo lên!\n" +
+                    $"🪣 Pool còn: **{result.PondRemaining:N0}** con _(slot đã bị tiêu)_")
+                .WithColor(new Color(0x3498dbu))
+                .WithFooter(footer)
+                .Build();
+        }
+
         var pearlCapMsg = result.PearlCapReached
             ? "\n⚠️ _Ngọc quý đã đạt giới hạn tuần — nhận cá thay thế._"
             : "";
@@ -211,18 +241,14 @@ public static class EconomyEmbedBuilder
                   : "")
             : "";
 
-        var isTrash      = c.Rarity == "Trash";
-        var catchVerb    = isTrash ? "Vớt được" : "Bắt được";
-        var coinLine     = isTrash
+        var isTrash  = c.Rarity == "Trash";
+        var coinLine = isTrash
             ? "💸 Giá trị: **0 coins** _(cần câu yếu — nâng cấp để câu pool hiệu quả hơn!)_\n"
             : $"💰 Giá trị: **~{c.Coins:N0} coins** _(bán cá để nhận)_\n";
-        var xpLine       = result.FishingXpGained > 0 ? $"✨ +{result.FishingXpGained} Fishing XP\n" : "";
-
-        var remaining    = expiresAt - DateTime.UtcNow;
-        var countdownStr = remaining.TotalSeconds > 0 ? FormatRemaining(remaining) : "Hết hạn";
+        var xpLine   = result.FishingXpGained > 0 ? $"✨ +{result.FishingXpGained} Fishing XP\n" : "";
 
         return new EmbedBuilder()
-            .WithTitle($"⭐ [Auto Pool] {username} {c.Emoji} {catchVerb}: {c.Name}!")
+            .WithTitle($"⭐ [Auto Pool] {username} {c.Emoji} {(isTrash ? "Vớt được" : "Bắt được")}: {c.Name}!")
             .WithDescription(
                 $"**Độ hiếm:** {RarityVi(c.Rarity)}\n" +
                 coinLine +
@@ -230,7 +256,7 @@ public static class EconomyEmbedBuilder
                 $"🪣 Pool còn: **{result.PondRemaining:N0}** con" +
                 pearlCapMsg + levelUpText)
             .WithColor(isTrash ? new Color(0x636e72u) : new Color(c.IsPearl ? 0xFFD700u : 0xF39C12u))
-            .WithFooter($"⏱️ Auto-fish còn lại: {countdownStr} • 🎟️ -1 vé")
+            .WithFooter(footer)
             .Build();
     }
 
@@ -502,6 +528,46 @@ public static class EconomyEmbedBuilder
     public static Embed BuildSpecialFishEmbed(SpecialFishResult result, string poolName)
     {
         var c = result.Catch;
+
+        // ── Miss: cá không cắn — slot KHÔNG bị tiêu ──────────────────────────
+        if (c.IsMiss)
+        {
+            return new EmbedBuilder()
+                .WithTitle("💨 [Pool Đặc Biệt] Cá Không Cắn!")
+                .WithDescription(
+                    $"📍 Pool: **{poolName}**\n" +
+                    $"Lần này không có cá nào chịu cắn — slot KHÔNG bị tiêu.\n" +
+                    $"🪣 Pool còn: **{result.PondRemaining:N0}** con")
+                .WithColor(new Color(0x95a5a6u))
+                .Build();
+        }
+
+        // ── Escape: cá cắn rồi thoát — slot bị tiêu ─────────────────────────
+        if (c.IsEscape)
+        {
+            return new EmbedBuilder()
+                .WithTitle($"🌊 [Pool Đặc Biệt] {c.Emoji} {c.Name} Đã Thoát!")
+                .WithDescription(
+                    $"📍 Pool: **{poolName}**\n" +
+                    $"Cá đã cắn nhưng sổng mất trước khi kéo lên!\n" +
+                    $"🪣 Pool còn: **{result.PondRemaining:N0}** con _(slot đã bị tiêu)_")
+                .WithColor(new Color(0x3498dbu))
+                .Build();
+        }
+
+        // ── Trash: weak-rod penalty ────────────────────────────────────────────
+        if (c.Rarity == "Trash")
+        {
+            return new EmbedBuilder()
+                .WithTitle("🗑️ [Pool Đặc Biệt] Vớt Được Rác!")
+                .WithDescription(
+                    $"📍 Pool: **{poolName}**\n" +
+                    $"Cần câu yếu quá — chỉ vớt được rác biển!\n" +
+                    $"💡 Nâng cấp lên **Cần Câu Vàng** để câu pool đặc biệt hiệu quả hơn.\n" +
+                    $"🪣 Pool còn: **{result.PondRemaining:N0}** con")
+                .WithColor(new Color(0x636e72u))
+                .Build();
+        }
 
         var pearlCapMsg = result.PearlCapReached
             ? "\n⚠️ _Ngọc quý đã đạt giới hạn tuần — nhận cá thay thế._"
