@@ -3,6 +3,10 @@ namespace Dynamite.Modules.Economy.Helpers;
 
 public record FishCatch(string Name, string Emoji, long Coins, string Rarity, bool IsChest = false);
 
+public enum RollOutcome { Miss, Escape, Caught }
+
+public record RollResult(RollOutcome Outcome, FishCatch? Fish);
+
 /// <summary>
 /// Drop table cho câu cá v2:
 /// - Miss/Escape mechanic: rod tốt giảm cả hai tỉ lệ
@@ -182,53 +186,27 @@ public static class FishingDropTable
         return table;
     }
 
-    public static (long Min, long Max) GetCoinRange(string rarity)
-        => CoinRanges.GetValueOrDefault(rarity, (10, 40));
-
-    // ── Time-of-day bonus ─────────────────────────────────────────────────────
-    /// <summary>
-    /// Trả về bonus rareMod/legendaryMod theo giờ UTC hiện tại.
-    ///
-    /// Dawn  (05–09 UTC): cá hiếm dễ cắn sáng sớm  → Rare    +10%
-    /// Night (20–00 UTC): biển đêm kéo huyền thoại  → Legendary +10%
-    /// Các khung giờ còn lại: không có bonus.
-    ///
-    /// Tích hợp vào FishingService.FishAsync — cộng vào rareMod/legendaryMod
-    /// trước khi truyền cho Roll().
-    /// </summary>
     public static (double RareMod, double LegendaryMod) GetTimeOfDayModifier()
     {
-        var hour = DateTime.UtcNow.Hour; // 0–23
-
-        // Sáng bình minh: 05:00–09:59 UTC
-        if (hour is >= 5 and <= 9)
-            return (0.10, 0.0);
-
-        // Đêm khuya: 20:00–23:59 UTC (giờ 0 = nửa đêm, không tính)
-        if (hour is >= 20 and <= 23)
-            return (0.0, 0.10);
-
-        return (0.0, 0.0);
+        var hour = DateTime.UtcNow.Hour;
+        // Bình minh 05-08 UTC: cá hiếm nổi lên mặt nước → Rare +10%
+        // Đêm khuya 20-23 UTC: cá huyền thoại ra ăn sâu → Legendary +10%
+        return hour switch
+        {
+            >= 5 and <= 8   => (0.10, 0.00),
+            >= 20 and <= 23 => (0.00, 0.10),
+            _               => (0.00, 0.00),
+        };
     }
 
-    /// <summary>Tên khung giờ hiện tại để hiển thị trong embed.</summary>
     public static string? GetTimeSlotName()
     {
         var hour = DateTime.UtcNow.Hour;
-        if (hour is >= 5  and <= 9)  return "🌅 Bình Minh";
-        if (hour is >= 20 and <= 23) return "🌙 Đêm Khuya";
-        return null;
+        return hour switch
+        {
+            >= 5 and <= 8   => "🌅 Bình Minh",
+            >= 20 and <= 23 => "🌙 Đêm Khuya",
+            _               => null,
+        };
     }
 }
-
-// ── Result types ──────────────────────────────────────────────────────────────
-
-public enum RollOutcome { Caught, Miss, Escape }
-
-/// <summary>
-/// Kết quả một lần roll.
-/// - Caught: bắt được cá (Fish != null)
-/// - Miss:   không cắn câu (Fish == null, không tốn fish pool)
-/// - Escape: cá cắn rồi thoát (Fish = loại cá đã roll, tốn fish pool)
-/// </summary>
-public record RollResult(RollOutcome Outcome, FishCatch? Fish);
