@@ -56,9 +56,15 @@ public static class FishingDropTable
         ["Trash"]     = (0,    0),   // rác — 0 coins
     };
 
+    // ── Luck modifier per LuckBonus point ────────────────────────────────────
+    private const double LuckRareModPerPoint      = 0.30;
+    private const double LuckLegendaryModPerPoint = 0.50;
+
     /// <summary>
     /// Trả về kết quả câu sau khi đã qua miss/escape check.
-    /// Caller phải truyền miss/escape rate của rod hiện tại.
+    /// Caller phải truyền miss/escape rate và luckBonus của rod hiện tại.
+    /// <paramref name="luckBonus"/> — điểm may mắn từ rod (Cần Câu Kim Cương = 1).
+    /// Mỗi điểm tăng: rareMod += 0.3, legendaryMod += 0.5.
     /// </summary>
     public static RollResult Roll(
         double missRate       = DefaultMissRate,
@@ -66,8 +72,12 @@ public static class FishingDropTable
         double dropMultiplier = 1.0,
         double rareMod        = 0.0,
         double legendaryMod   = 0.0,
-        double missMod        = 0.0)   // weather miss modifier (âm = ít miss, dương = nhiều miss)
+        double missMod        = 0.0,   // weather miss modifier (âm = ít miss, dương = nhiều miss)
+        int    luckBonus      = 0)     // điểm may mắn từ rod
     {
+        // Áp dụng luck vào rareMod/legendaryMod trước khi roll
+        rareMod      += luckBonus * LuckRareModPerPoint;
+        legendaryMod += luckBonus * LuckLegendaryModPerPoint;
         // ── 1. Miss check (TRƯỚC pond consumption — không tốn cá pond) ───────
         var effectiveMiss = Math.Clamp(missRate + missMod, 0.0, 0.60); // cap tổng miss [0%, 60%]
         if (Random.Shared.NextDouble() < effectiveMiss)

@@ -241,10 +241,84 @@ public class ShopService
     }
 
     /// <summary>
-    /// Seed danh sách vật phẩm mặc định vào shop của guild.
-    /// Bỏ qua item đã tồn tại (idempotent).
-    /// Trả về số lượng item được thêm mới.
+    /// Trả về danh sách cần câu của user dưới dạng (Name, Label) để dùng trong RodAutocomplete.
+    /// Ưu tiên cần gãy → mòn → còn tốt.
+    /// Label format: "{emoji} {name} — {dur}/{max}" hoặc "💔 {name} — GÃY" nếu dur == 0.
     /// </summary>
+    public async Task<List<(string Name, string Label)>>
+        GetUserRodsForAutocompleteAsync(ulong guildId, ulong userId)
+    {
+        var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
+        var rods   = await _shopRepo.GetUserRodsAsync(wallet.Id);
+
+        return rods
+            // Include broken rods too (durability == 0) — user cần biết để repair
+            .OrderBy(r =>
+            {
+                if (r.RodDurability == 0) return 0;                  // gãy → lên trước
+                if (r.RodDurability.HasValue && r.Item.MaxDurability.HasValue
+                    && r.RodDurability.Value <= (int)(r.Item.MaxDurability.Value * 0.2))
+                    return 1;                                         // mòn nặng ≤ 20%
+                return 2;                                             // còn tốt
+            })
+            .ThenByDescending(r => r.Item.DropMultiplier)
+            .Select(r =>
+            {
+                var dur    = r.RodDurability;
+                var max    = r.Item.MaxDurability;
+                var label  = dur.HasValue && max.HasValue
+                    ? dur.Value == 0
+                        ? $"💔 {r.Item.Emoji} {r.Item.Name} — GÃY"
+                        : dur.Value <= (int)(max.Value * 0.2)
+                            ? $"⚠️ {r.Item.Emoji} {r.Item.Name} — {dur.Value}/{max.Value} (mòn)"
+                            : $"{r.Item.Emoji} {r.Item.Name} — {dur.Value}/{max.Value}"
+                    : $"{r.Item.Emoji} {r.Item.Name}";
+                return (r.Item.Name, label);
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Xem trước chi phí sửa mà KHÔNG thực hiện repair. Dùng cho preview mode.
+    /// </summary>
+    public async Task<ServiceResult<(UserInventory Rod, long Cost, long Coins)>>
+        PreviewRepairAsync(ulong guildId, ulong userId, string? rodName)
+    {
+        var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
+        var rods   = await _shopRepo.GetUserRodsAsync(wallet.Id);
+
+        if (rods.Count == 0)
+            return ServiceResult<(UserInventory Rod, long Cost, long Coins)>.Fail("Bạn chưa có cần câu nào.");
+
+        UserInventory? target = rodName is not null
+            ? rods.FirstOrDefault(r => string.Equals(r.Item.Name, rodName, StringComparison.OrdinalIgnoreCase))
+            : rods.FirstOrDefault(r => r.RodDurability == 0)
+              ?? rods.Where(r => r.RodDurability.HasValue && r.Item.MaxDurability.HasValue)
+                     .OrderBy(r => (double)r.RodDurability!.Value / r.Item.MaxDurability!.Value)
+                     .FirstOrDefault();
+
+        if (target is null)
+            return ServiceResult<(UserInventory Rod, long Cost, long Coins)>.Fail(
+                rodName is not null
+                    ? $"Không tìm thấy cần câu **{rodName}** trong túi đồ."
+                    : "Không tìm thấy cần câu nào cần repair.");
+
+        if (!target.RodDurability.HasValue || !target.Item.MaxDurability.HasValue)
+            return ServiceResult<(UserInventory Rod, long Cost, long Coins)>.Fail(
+                $"**{target.Item.Name}** không hỗ trợ durability tracking.");
+
+        if (target.RodDurability >= target.Item.MaxDurability)
+            return ServiceResult<(UserInventory Rod, long Cost, long Coins)>.Fail(
+                $"**{target.Item.Name}** vẫn còn nguyên vẹn ({target.RodDurability}/{target.Item.MaxDurability}).");
+
+        var cost = GetRepairCost(
+            target.Item.Price,
+            target.Item.MaxDurability.Value,
+            target.RodDurability.Value);
+
+        return ServiceResult<(UserInventory Rod, long Cost, long Coins)>.Ok((target, cost, wallet.Coins));
+    }
+
     /// <summary>
     /// Seed items mặc định: thêm mới nếu chưa tồn tại, update stats/giá nếu đã có.
     /// Trả về (added, updated).
@@ -277,6 +351,7 @@ public class ShopService
                 existing.UsageCount      = item.UsageCount;
                 existing.DurationMinutes = item.DurationMinutes;
                 existing.MaxDurability   = item.MaxDurability;
+                existing.LuckBonus       = item.LuckBonus;
                 updated++;
             }
         }
@@ -293,17 +368,32 @@ public class ShopService
         new InventoryItem
         {
             GuildId         = guildId,
+            Name            = "Cần Câu Tân Thủ",
+            Emoji           = "🎋",
+            Price           = 0,
+            Description     = "Cần câu miễn phí cho người mới. Stats mặc định — điểm khởi đầu trước khi nâng cấp. Không theo dõi độ bền.",
+            Type            = ItemType.FishingRod,
+            IsAvailable     = true,
+            CooldownSeconds = 25,
+            DropMultiplier  = 1.0,
+            MissRate        = 0.15,
+            EscapeRate      = 0.10,
+            MaxDurability   = null,  // không gãy — không khuyến khích nâng cấp bằng durability
+        },
+        new InventoryItem
+        {
+            GuildId         = guildId,
             Name            = "Cần Câu Tre",
             Emoji           = "🪁",
             Price           = 3_000,
-            Description     = "Cần câu cơ bản. Giảm nhẹ tỉ lệ hụt, tăng nhẹ giá trị cá. Độ bền 150 lần câu.",
+            Description     = "Cần câu cơ bản. Giảm nhẹ tỉ lệ hụt, tăng nhẹ giá trị cá. Độ bền 200 lần câu.",
             Type            = ItemType.FishingRod,
             IsAvailable     = true,
             CooldownSeconds = 22,
             DropMultiplier  = 1.1,
             MissRate        = 0.13,
             EscapeRate      = 0.09,
-            MaxDurability   = 150,
+            MaxDurability   = 200,
         },
         new InventoryItem
         {
@@ -311,14 +401,14 @@ public class ShopService
             Name            = "Cần Câu Bạc",
             Emoji           = "🎣",
             Price           = 20_000,
-            Description     = "Cần câu nâng cấp. Tăng giá trị cá và giảm tỉ lệ hụt đáng kể. Độ bền 250 lần câu.",
+            Description     = "Cần câu nâng cấp. Tăng giá trị cá và giảm tỉ lệ hụt đáng kể. Độ bền 300 lần câu.",
             Type            = ItemType.FishingRod,
             IsAvailable     = true,
             CooldownSeconds = 19,
             DropMultiplier  = 1.25,
             MissRate        = 0.11,
             EscapeRate      = 0.08,
-            MaxDurability   = 250,
+            MaxDurability   = 300,
         },
         new InventoryItem
         {
@@ -326,14 +416,14 @@ public class ShopService
             Name            = "Cần Câu Vàng",
             Emoji           = "🏆",
             Price           = 60_000,
-            Description     = "Cần câu cao cấp. Hiệu quả rõ rệt — đầu tư cho người chơi nghiêm túc. Độ bền 400 lần câu.",
+            Description     = "Cần câu cao cấp. Hiệu quả rõ rệt — đầu tư cho người chơi nghiêm túc. Độ bền 600 lần câu.",
             Type            = ItemType.FishingRod,
             IsAvailable     = true,
             CooldownSeconds = 15,
             DropMultiplier  = 1.55,
             MissRate        = 0.08,
             EscapeRate      = 0.06,
-            MaxDurability   = 400,
+            MaxDurability   = 600,
         },
         new InventoryItem
         {
@@ -341,14 +431,15 @@ public class ShopService
             Name            = "Cần Câu Kim Cương",
             Emoji           = "💎",
             Price           = 160_000,
-            Description     = "Cần câu huyền thoại. Mục tiêu end-game — sản lượng và giá trị vượt trội. Độ bền 600 lần câu.",
+            Description     = "Cần câu huyền thoại. End-game — sản lượng và giá trị vượt trội. +1 Điểm May Mắn (Rare+Legendary tăng đáng kể). Độ bền 1000 lần câu.",
             Type            = ItemType.FishingRod,
             IsAvailable     = true,
             CooldownSeconds = 10,
             DropMultiplier  = 2.0,
             MissRate        = 0.05,
             EscapeRate      = 0.04,
-            MaxDurability   = 600,
+            MaxDurability   = 1000,
+            LuckBonus       = 1,
         },
 
         // ── Mồi Câu ──────────────────────────────────────────────────────────

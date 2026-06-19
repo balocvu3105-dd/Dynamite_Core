@@ -15,7 +15,12 @@ public record SpecialFishResult(
     LevelUpResult? FishingLevelUp,
     bool     SavedToBag,
     int      BagFreeSlots,
-    bool     PearlCapReached);   // true → pearl rolled, cap già đầy → không nhận
+    bool     PearlCapReached,    // true → pearl rolled, cap già đầy → không nhận
+    /// <summary>
+    /// true = weak-rod penalty khiến ra rác, không lưu túi, không tính XP.
+    /// AutoFishScheduler dùng field này để phân biệt với bag-full (SavedToBag=false).
+    /// </summary>
+    bool     IsTrashCatch = false);
 
 /// <summary>
 /// Xử lý việc câu cá tại Special Pool:
@@ -116,9 +121,10 @@ public class SpecialPoolService
                 PondRemaining:   pool.RemainingFish,
                 FishingXpGained: 0,
                 FishingLevelUp:  null,
-                SavedToBag:      true,  // true = không trigger bag-full pause
+                SavedToBag:      true,  // true = ngăn AutoFishScheduler trigger bag-full pause
                 BagFreeSlots:    0,
-                PearlCapReached: false));
+                PearlCapReached: false,
+                IsTrashCatch:    true));
         }
 
         // 6. Pearl cap enforcement

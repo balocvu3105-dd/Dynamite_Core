@@ -128,13 +128,16 @@ public class FishingService
         }
 
         // ── 5. Roll (miss check ở đây — TRƯỚC khi trừ pond) ─────────────────
+        var luckBonus = bestRod?.Item.LuckBonus ?? 0;
+
         var roll = FishingDropTable.Roll(
             missRate:       missRate,
             escapeRate:     escapeRate,
             dropMultiplier: multiplier,
             rareMod:        rareMod + baitMod,
             legendaryMod:   legendaryMod,
-            missMod:        missMod);
+            missMod:        missMod,
+            luckBonus:      luckBonus);
 
         profile.LastFishedAt = DateTime.UtcNow;
 
@@ -269,7 +272,7 @@ public class FishingService
         return ServiceResult<FishResult>.Ok(new FishResult(
             Catch:           fishCatch,
             TotalCoins:      wallet.Coins,
-            RodName:         bestRod?.Item.Name,
+            RodName:         bestRod?.Item.Name ?? "🎋 Cần Câu Tân Thủ",
             Weather:         currentWeather,
             PondRemaining:   pondResult.Value?.CurrentFish ?? -1,
             FishingXpGained: xpGained,

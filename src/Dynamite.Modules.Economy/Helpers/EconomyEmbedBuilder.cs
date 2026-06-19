@@ -342,11 +342,12 @@ public static class EconomyEmbedBuilder
 
         return i.Type switch
         {
-            ItemType.FishingRod  => line + $"\n🎣 Cooldown: {i.CooldownSeconds}s | Nhân: ×{i.DropMultiplier:F1}",
+            ItemType.FishingRod  => line + $"\n🎣 Cooldown: {i.CooldownSeconds}s | Nhân: ×{i.DropMultiplier:F1}" +
+                                           (i.LuckBonus is > 0 ? $" | 🍀 May Mắn +{i.LuckBonus}" : ""),
             ItemType.Bait        => line + $"\n🪱 +10% Rare | {i.UsageCount} lần dùng",
             ItemType.AutoFish    => line + $"\n🤖 Auto câu {i.DurationMinutes} phút",
             ItemType.WeatherItem => line + $"\n☔ Force Rainy {i.DurationMinutes} phút",
-            ItemType.PoolTicket  => line + $"\n🎟️ 2 tiếng câu pool đặc biệt | Yêu cầu Level 20+",
+            ItemType.PoolTicket  => line + $"\n🎟️ 1 vé = 1 lần câu pool đặc biệt | Yêu cầu Level 20+",
             ItemType.BagUpgrade  => line + $"\n🎒 +10 slot | Túi đầy: hiển thị Đã đầy",
             _                    => line
         };
@@ -661,6 +662,35 @@ public static class EconomyEmbedBuilder
             .Build();
 
     // ── Repair Rod ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Preview chi phí sửa — hiển thị trước khi user xác nhận, không trừ xu.
+    /// </summary>
+    public static Embed BuildRepairPreviewEmbed(
+        InventoryItem item, int currentDur, int maxDur, long cost, long userCoins)
+    {
+        var pct        = (double)currentDur / maxDur * 100;
+        var bar        = BuildProgressBar(pct, 8);
+        var canAfford  = userCoins >= cost;
+        var status     = currentDur == 0 ? " 💔 **GÃY**"
+                       : currentDur <= maxDur * 0.2 ? " ⚠️ Sắp gãy" : "";
+        var affordText = canAfford
+            ? $"✅ Bạn đủ xu để sửa! (còn lại: **{userCoins - cost:N0}** xu)"
+            : $"❌ Không đủ xu! Thiếu **{cost - userCoins:N0}** xu.";
+
+        return new EmbedBuilder()
+            .WithTitle("🔍 Xem Trước Chi Phí Sửa Cần")
+            .WithDescription(
+                $"{item.Emoji} **{item.Name}**\n\n" +
+                $"**Độ bền hiện tại:** {bar} {currentDur}/{maxDur}{status}\n" +
+                $"**Sau khi sửa:**  {BuildProgressBar(100, 8)} {maxDur}/{maxDur} ✅\n\n" +
+                $"💸 **Chi phí:** {cost:N0} xu\n" +
+                $"💰 **Ví của bạn:** {userCoins:N0} xu\n\n" +
+                affordText)
+            .WithColor(canAfford ? new Color(0x3498DB) : new Color(0xE74C3C))
+            .WithFooter("Dùng /shop repair-rod (không chọn preview) để xác nhận sửa")
+            .Build();
+    }
 
     public static Embed BuildRepairRodEmbed(
         InventoryItem item, int oldDur, int newDur, long cost, long coinsRemaining)

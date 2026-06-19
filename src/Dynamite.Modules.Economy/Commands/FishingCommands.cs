@@ -135,7 +135,7 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
         await FollowupAsync(embed: embed, ephemeral: true);
     }
 
-    [SlashCommand("pool-cast", "Câu cá trong pool đặc biệt (Level 20+ | cần Vé Pool Đặc Biệt)")]
+    [SlashCommand("pool-cast", "Câu cá trong pool đặc biệt (Level 20+ | 1 vé = 1 lần câu)")]
     public async Task PoolCastAsync(
         [Summary("pool", "Chọn pool đặc biệt")]
         [Autocomplete(typeof(SpecialPoolAutocomplete))]
@@ -153,61 +153,53 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
 
         var guildId = Context.Guild.Id;
         var userId  = Context.User.Id;
-        var now     = DateTime.UtcNow;
 
-        // ── Ticket check ──────────────────────────────────────────────────────
-        var profile = await _profileRepo.GetOrCreateFishingAsync(guildId, userId);
+        // ── Pre-flight: kiểm tra pool + level trước khi tiêu vé ─────────────
+        var pools = await _specialPool.GetActivePoolsAsync(guildId);
+        var pool  = pools.FirstOrDefault(p => p.Id == guid);
 
-        var hasActiveSession = profile.AutoFishSpecialPoolId == guid
-                            && profile.AutoFishSpecialPoolExpiresAt.HasValue
-                            && profile.AutoFishSpecialPoolExpiresAt.Value > now;
-
-        if (!hasActiveSession)
+        if (pool is null)
         {
-            // Tìm vé trong inventory
-            var wallet = await _walletRepo.GetOrCreateAsync(guildId, userId);
-            var ticketItem = await _shopRepo.GetItemByTypeAsync(guildId, ItemType.PoolTicket);
-            UserInventory? ticket = ticketItem is null
-                ? null
-                : await _shopRepo.GetUserItemAsync(wallet.Id, ticketItem.Id);
+            await FollowupAsync("❌ Pool này không còn hoạt động.", ephemeral: true);
+            return;
+        }
 
-            if (ticket is null || ticket.Quantity <= 0)
-            {
-                await FollowupAsync(
-                    embed: new EmbedBuilder()
-                        .WithColor(new Color(0xE74C3C))
-                        .WithTitle("❌ Cần Vé Pool Đặc Biệt")
-                        .WithDescription(
-                            "Bạn cần **🎟️ Vé Pool Đặc Biệt** để vào pool này.\n\n" +
-                            "**1 vé = 2 tiếng câu thoải mái trong pool**\n" +
-                            $"Mua tại: `/shop buy Vé Pool Đặc Biệt` — **15,000 xu**")
-                        .Build(),
-                    ephemeral: true);
-                return;
-            }
+        var fishingProfile = await _profileRepo.GetOrCreateFishingAsync(guildId, userId);
+        if (fishingProfile.FishingLevel < pool.MinLevel)
+        {
+            await FollowupAsync(
+                $"❌ Cần **Fishing Level {pool.MinLevel}** để vào pool này. " +
+                $"Bạn đang ở Level **{fishingProfile.FishingLevel}**.",
+                ephemeral: true);
+            return;
+        }
 
-            // Tiêu 1 vé, set session 2 tiếng
-            ticket.Quantity--;
-            if (ticket.Quantity <= 0)
-                await _shopRepo.RemoveUserInventoryAsync(ticket);
+        // ── Ticket check: 1 vé = 1 cast ──────────────────────────────────────
+        var wallet     = await _walletRepo.GetOrCreateAsync(guildId, userId);
+        var ticketItem = await _shopRepo.GetItemByTypeAsync(guildId, ItemType.PoolTicket);
+        var ticket     = ticketItem is null ? null
+                       : await _shopRepo.GetUserItemAsync(wallet.Id, ticketItem.Id);
 
-            profile.AutoFishSpecialPoolId        = guid;
-            profile.AutoFishSpecialPoolExpiresAt = now.AddHours(2);
-            await _shopRepo.SaveChangesAsync();
-            await _profileRepo.SaveChangesAsync();
-
-            var expiresUnix = new DateTimeOffset(profile.AutoFishSpecialPoolExpiresAt.Value).ToUnixTimeSeconds();
-            // Thông báo kích hoạt vé (ephemeral)
-            await Context.Interaction.FollowupAsync(
+        if (ticket is null || ticket.Quantity <= 0)
+        {
+            await FollowupAsync(
                 embed: new EmbedBuilder()
-                    .WithColor(new Color(0x2ECC71))
-                    .WithTitle("🎟️ Vé Đã Kích Hoạt!")
+                    .WithColor(new Color(0xE74C3C))
+                    .WithTitle("❌ Cần Vé Pool Đặc Biệt")
                     .WithDescription(
-                        $"Session pool đặc biệt mở đến <t:{expiresUnix}:F> (<t:{expiresUnix}:R>)\n" +
-                        "Câu thoải mái trong 2 tiếng!")
+                        "Bạn cần **🎟️ Vé Pool Đặc Biệt** để câu tại pool này.\n" +
+                        "**1 vé = 1 lần câu**\n\n" +
+                        "Mua tại: `/shop buy Vé Pool Đặc Biệt` — **15,000 xu**")
                     .Build(),
                 ephemeral: true);
+            return;
         }
+
+        // Tiêu 1 vé TRƯỚC khi fish (pre-flight đã pass — lỗi sau này là edge case hiếm)
+        ticket.Quantity--;
+        if (ticket.Quantity <= 0)
+            await _shopRepo.RemoveUserInventoryAsync(ticket);
+        await _shopRepo.SaveChangesAsync();
 
         // ── Fish ──────────────────────────────────────────────────────────────
         var specialResult = await _specialPool.FishSpecialAsync(guildId, userId, guid);
@@ -218,20 +210,7 @@ public class FishingCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
-        var result = specialResult.Value!;
-
-        // Nếu hết session → clear
-        if (profile.AutoFishSpecialPoolExpiresAt.HasValue
-            && profile.AutoFishSpecialPoolExpiresAt.Value <= DateTime.UtcNow)
-        {
-            profile.AutoFishSpecialPoolId        = null;
-            profile.AutoFishSpecialPoolExpiresAt = null;
-            await _profileRepo.SaveChangesAsync();
-        }
-
-        var pools = await _specialPool.GetActivePoolsAsync(guildId);
-        var pool  = pools.FirstOrDefault(p => p.Id == guid);
-        var embed = EconomyEmbedBuilder.BuildSpecialFishEmbed(result, pool?.PoolName ?? "Pool Đặc Biệt");
+        var embed = EconomyEmbedBuilder.BuildSpecialFishEmbed(specialResult.Value!, pool.PoolName);
         await FollowupAsync(embed: embed);
     }
 }

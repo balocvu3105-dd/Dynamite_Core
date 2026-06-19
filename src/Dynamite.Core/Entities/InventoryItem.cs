@@ -41,5 +41,12 @@ public class InventoryItem : BaseEntity
     /// </summary>
     public int? MaxDurability { get; set; }
 
+    /// <summary>
+    /// Điểm may mắn (chỉ FishingRod cao cấp). null / 0 = không có hiệu ứng.
+    /// Mỗi điểm tăng: rareMod +0.3, legendaryMod +0.5 trong drop table.
+    /// Cần Câu Kim Cương: LuckBonus = 1.
+    /// </summary>
+    public int? LuckBonus { get; set; }
+
     public ICollection<UserInventory> Owners { get; set; } = [];
 }

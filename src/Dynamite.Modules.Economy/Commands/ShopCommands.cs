@@ -102,10 +102,38 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
 
     [SlashCommand("repair-rod", "Sửa chữa cần câu bị mòn hoặc gãy")]
     public async Task RepairRodAsync(
-        [Summary("rod", "Tên cần câu muốn sửa (để trống = tự chọn cần hư nhất)")] string? rodName = null)
+        [Summary("rod", "Tên cần câu muốn sửa (để trống = tự chọn cần hư nhất)")]
+        [Autocomplete(typeof(RodAutocomplete))]
+        string? rodName = null,
+        [Summary("preview", "Xem chi phí trước khi sửa — không trừ xu (mặc định: false)")]
+        bool preview = false)
     {
         await DeferAsync(ephemeral: true);
 
+        // ── Preview mode: tính chi phí, không sửa ────────────────────────────
+        if (preview)
+        {
+            var previewResult = await _shop.PreviewRepairAsync(
+                Context.Guild.Id, Context.User.Id, rodName);
+
+            if (!previewResult)
+            {
+                await FollowupAsync($"❌ {previewResult.ErrorMessage}", ephemeral: true);
+                return;
+            }
+
+            var pv = previewResult.Value!;
+            var previewEmbed = EconomyEmbedBuilder.BuildRepairPreviewEmbed(
+                pv.Rod.Item,
+                pv.Rod.RodDurability!.Value,
+                pv.Rod.Item.MaxDurability!.Value,
+                pv.Cost, pv.Coins);
+
+            await FollowupAsync(embed: previewEmbed, ephemeral: true);
+            return;
+        }
+
+        // ── Repair mode: thực hiện sửa, trừ xu ───────────────────────────────
         var result = await _shop.RepairRodAsync(Context.Guild.Id, Context.User.Id, rodName);
 
         if (!result)
@@ -115,7 +143,8 @@ public class ShopCommands : InteractionModuleBase<SocketInteractionContext>
         }
 
         var r     = result.Value!;
-        var embed = EconomyEmbedBuilder.BuildRepairRodEmbed(r.Item, r.OldDurability, r.NewDurability, r.CoinsPaid, r.CoinsRemaining);
+        var embed = EconomyEmbedBuilder.BuildRepairRodEmbed(
+            r.Item, r.OldDurability, r.NewDurability, r.CoinsPaid, r.CoinsRemaining);
         await FollowupAsync(embed: embed, ephemeral: true);
 
         await _invoice.SendAsync(Context.Guild.Id, Context.User.Id,
