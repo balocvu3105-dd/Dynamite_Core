@@ -139,7 +139,7 @@ public class GuideService
                 "• `/shop repair-rod` — Sửa cần, chi phí = **50% giá mua** × % hao mòn\n" +
                 "• `/shop repair-rod preview:True` — Xem chi phí trước khi sửa\n" +
                 "• Autocomplete tự gợi ý cần hỏng nhất của bạn\n" +
-                "💡 **May Mắn +1** (Kim Cương): mỗi điểm → Rare +30% · Legendary +50%", inline: false)
+                "💡 **May Mắn +1** (Kim Cương): mỗi điểm → Rare +10% · Legendary +15%", inline: false)
             .AddField("Mồi câu",
                 "🪱 **Mồi Thường** — 400 xu (10 lần dùng, +10% Rare)\n" +
                 "🦗 **Mồi Cao Cấp** — 1,200 xu (30 lần dùng, +10% Rare)", inline: false)

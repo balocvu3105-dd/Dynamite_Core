@@ -90,4 +90,49 @@ public class FishingDropTableTests
 
         Assert.Contains(RollOutcome.Miss, outcomes);
     }
+
+    // ── LuckBonus tests (Kim Cuong = luckBonus 1) ─────────────────────────────
+
+    [Fact]
+    public void Roll_WithLuckBonus_ShouldNotBreakRollMechanic()
+    {
+        // luckBonus=1 khong duoc gay exception hoac null fish
+        for (var i = 0; i < 200; i++)
+        {
+            var result = FishingDropTable.Roll(missRate: 0, escapeRate: 0, luckBonus: 1);
+            Assert.Equal(RollOutcome.Caught, result.Outcome);
+            Assert.NotNull(result.Fish);
+        }
+    }
+
+    [Fact]
+    public void Roll_WithLuckBonus_RareRateShouldBeHigherThanBaseline()
+    {
+        // 5000 rolls baseline vs 5000 rolls voi luckBonus=1
+        const int N = 5000;
+        var highTiers = new[] { "Rare", "Legendary", "Mythic" };
+
+        var baseCount = Enumerable.Range(0, N)
+            .Select(_ => FishingDropTable.Roll(missRate: 0, escapeRate: 0, luckBonus: 0))
+            .Count(r => r.Fish is not null && highTiers.Contains(r.Fish.Rarity));
+
+        var luckCount = Enumerable.Range(0, N)
+            .Select(_ => FishingDropTable.Roll(missRate: 0, escapeRate: 0, luckBonus: 1))
+            .Count(r => r.Fish is not null && highTiers.Contains(r.Fish.Rarity));
+
+        Assert.True(luckCount >= baseCount,
+            $"LuckBonus=1 produced {luckCount} high-tier catches vs baseline {baseCount}");
+    }
+
+    [Fact]
+    public void Roll_WithLuckBonus_CoinsShouldNeverBeNegative()
+    {
+        for (var i = 0; i < 300; i++)
+        {
+            var result = FishingDropTable.Roll(missRate: 0, escapeRate: 0, luckBonus: 1);
+            if (result.Fish is not null)
+                Assert.True(result.Fish.Coins >= 0,
+                    $"Coins should be non-negative, got {result.Fish.Coins} (rarity={result.Fish.Rarity})");
+        }
+    }
 }

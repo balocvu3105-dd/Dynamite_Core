@@ -57,8 +57,8 @@ public static class FishingDropTable
     };
 
     // ── Luck modifier per LuckBonus point ────────────────────────────────────
-    private const double LuckRareModPerPoint      = 0.30;
-    private const double LuckLegendaryModPerPoint = 0.50;
+    private const double LuckRareModPerPoint      = 0.10;
+    private const double LuckLegendaryModPerPoint = 0.15;
 
     /// <summary>
     /// Trả về kết quả câu sau khi đã qua miss/escape check.
