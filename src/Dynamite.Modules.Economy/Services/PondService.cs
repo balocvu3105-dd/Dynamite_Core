@@ -14,7 +14,8 @@ public record PondStatus(
     bool IsEmpty,
     DateTime? ResetAvailableAt,
     PondWeather Weather,
-    DateTime WeatherExpiresAt);
+    DateTime WeatherExpiresAt,
+    double MarketMultiplier = 1.0);
 
 /// <summary>
 /// Quản lý pool cá của guild (DB-backed, persistent qua restart).
@@ -191,11 +192,20 @@ public class PondService
         catch { /* ignore */ }
     }
 
-    private static PondStatus ToStatus(GuildPond pond) => new(
-        pond.CurrentFish,
-        pond.MaxFish,
-        pond.IsEmpty,
-        pond.ResetAvailableAt,
-        pond.CurrentWeather,
-        pond.WeatherExpiresAt);
+    private static PondStatus ToStatus(GuildPond pond)
+    {
+        var fillRatio  = pond.MaxFish > 0
+            ? Math.Clamp((double)pond.CurrentFish / pond.MaxFish, 0.0, 1.0)
+            : 0.0;
+        var multiplier = Math.Round(0.6 + (1.0 - fillRatio) * 1.4, 2);
+
+        return new(
+            pond.CurrentFish,
+            pond.MaxFish,
+            pond.IsEmpty,
+            pond.ResetAvailableAt,
+            pond.CurrentWeather,
+            pond.WeatherExpiresAt,
+            multiplier);
+    }
 }

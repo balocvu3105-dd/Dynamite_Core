@@ -313,6 +313,18 @@ public static class EconomyEmbedBuilder
             _                  => status.IsEmpty ? new Color(0xED4245) : new Color(0x1abc9c)
         };
 
+        var marketBar = status.MarketMultiplier switch
+        {
+            >= 1.8 => "🟢🟢🟢🟢🟢",
+            >= 1.4 => "🟢🟢🟢🟢⚫",
+            >= 1.0 => "🟡🟡🟡⚫⚫",
+            >= 0.8 => "🔴🔴⚫⚫⚫",
+            _      => "🔴⚫⚫⚫⚫"
+        };
+        var marketDesc = status.MaxFish > 0
+            ? $"{marketBar} **×{status.MarketMultiplier:F2}** — {(status.MarketMultiplier >= 1.0 ? "nên bán" : "chờ bể vắng hơn")}"
+            : "*(chưa cấu hình bể)*";
+
         return new EmbedBuilder()
             .WithTitle("🌊 Trạng Thái Bể Cá")
             .WithDescription(
@@ -320,6 +332,7 @@ public static class EconomyEmbedBuilder
                 $"**Thời tiết:** {weatherEmoji} {status.Weather}\n" +
                 $"Thay đổi: <t:{weatherExp}:R>" +
                 effectStr)
+            .AddField("📈 Chợ Cá", marketDesc, inline: false)
             .WithColor(color)
             .Build();
     }
