@@ -140,6 +140,15 @@ public class GuideService
                 "• `/shop repair-rod preview:True` — Xem chi phí trước khi sửa\n" +
                 "• Autocomplete tự gợi ý cần hỏng nhất của bạn\n" +
                 "💡 **May Mắn +1** (Kim Cương): mỗi điểm → Rare +10% · Legendary +15%", inline: false)
+            .AddField("⏰ Thời điểm vàng",
+                "🌅 **Bình Minh** (05:00–08:00 UTC): Rare **+10%**\n" +
+                "🌙 **Đêm Khuya** (20:00–23:00 UTC): Legendary **+10%**\n" +
+                "Bonus cộng thêm vào hệ số drop hiện tại — stack với thời tiết và mồi!", inline: false)
+            .AddField("⬆️ Nâng Cấp Cần",
+                "`/fishing upgrade` — Nâng cấp cần mà không cần mua lại\n" +
+                "🎣 **Bạc → Vàng**: 10 Legendary + 25,000 xu\n" +
+                "🏆 **Vàng → Kim Cương**: 30 Legendary + 80,000 xu\n" +
+                "💡 Tiết kiệm hơn mua mới — độ bền được giữ nguyên tỉ lệ!", inline: false)
             .AddField("Mồi câu",
                 "🪱 **Mồi Thường** — 400 xu (10 lần dùng, +10% Rare)\n" +
                 "🦗 **Mồi Cao Cấp** — 1,200 xu (30 lần dùng, +10% Rare)", inline: false)
@@ -167,6 +176,15 @@ public class GuideService
                 "80→90: **185,000** xu\n" +
                 "90→100: **230,000** xu\n" +
                 "⚠️ Tối đa **100 slot** — giá hiển thị đúng trong `/shop view`", inline: false)
+            .AddField("📈 Chợ Cá — Giá Động",
+                "Giá bán cá **dao động ×0.6 đến ×2.0** theo mức lấp đầy bể:\n" +
+                "🟢 Bể vắng (ít người bán) → giá **cao** (tối đa ×2.0)\n" +
+                "🔴 Bể đầy (nhiều người bán) → giá **thấp** (tối thiểu ×0.6)\n" +
+                "💡 Xem hệ số hiện tại tại `/fishing pond` → chờ giá cao rồi mới bán!", inline: false)
+            .AddField("📖 Bách Khoa Cá",
+                "`/fishing dex` — Xem danh sách tất cả loài cá đã câu được\n" +
+                "Theo dõi: số lần câu · xu cao nhất · ngày đầu tiên · ngày gần nhất\n" +
+                "Cá được ghi nhận tự động sau mỗi lần câu thành công!", inline: false)
             .AddField("Bảo tàng cá",
                 "`/fishing trophy` — Xem tủ trưng bày cá Rare+ của bạn\n" +
                 "Cá Rare trở lên được lưu vĩnh viễn vào tủ khi bán!", inline: false)
