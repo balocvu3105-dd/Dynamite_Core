@@ -66,30 +66,53 @@ public class ModerationService : IModerationService
         return action;
     }
 
+    /// <inheritdoc/>
     public async Task<ModerationAction> BanAsync(
         ulong guildId, string guildName, ulong targetId, ulong moderatorId,
         string reason, CancellationToken ct = default)
     {
+        RequireReason(reason, nameof(BanAsync));
+
         var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
         var action = await LogActionAsync(guildId, targetId, moderatorId,
             ModerationActionType.Ban, reason, config.Id, ct: ct);
 
-        _logger.LogInformation("User {TargetId} banned from guild {GuildId} by {ModId}",
-            targetId, guildId, moderatorId);
+        _logger.LogInformation("User {TargetId} banned from guild {GuildId} by {ModId}: {Reason}",
+            targetId, guildId, moderatorId, reason);
 
         return action;
     }
 
+    /// <inheritdoc/>
+    public async Task<ModerationAction> BanByIdAsync(
+        ulong guildId, string guildName, ulong targetId, ulong moderatorId,
+        string reason, CancellationToken ct = default)
+    {
+        RequireReason(reason, nameof(BanByIdAsync));
+
+        var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
+        var action = await LogActionAsync(guildId, targetId, moderatorId,
+            ModerationActionType.BanId, reason, config.Id, ct: ct);
+
+        _logger.LogInformation("User {TargetId} banned by ID from guild {GuildId} by {ModId}: {Reason}",
+            targetId, guildId, moderatorId, reason);
+
+        return action;
+    }
+
+    /// <inheritdoc/>
     public async Task<ModerationAction> UnbanAsync(
         ulong guildId, string guildName, ulong targetId, ulong moderatorId,
         string reason, CancellationToken ct = default)
     {
+        RequireReason(reason, nameof(UnbanAsync));
+
         var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
         var action = await LogActionAsync(guildId, targetId, moderatorId,
             ModerationActionType.Unban, reason, config.Id, ct: ct);
 
-        _logger.LogInformation("User {TargetId} unbanned from guild {GuildId} by {ModId}",
-            targetId, guildId, moderatorId);
+        _logger.LogInformation("User {TargetId} unbanned from guild {GuildId} by {ModId}: {Reason}",
+            targetId, guildId, moderatorId, reason);
 
         return action;
     }
@@ -124,19 +147,24 @@ public class ModerationService : IModerationService
     }
 
     public async Task<IEnumerable<Warning>> GetWarningsAsync(
-    ulong guildId, ulong userId, CancellationToken ct = default)
-    => userId == 0UL
-        ? await _warningRepo.GetAllActiveWarningsAsync(guildId, ct)
-        : await _warningRepo.GetActiveWarningsAsync(guildId, userId, ct);
+        ulong guildId, ulong userId, CancellationToken ct = default)
+        => userId == 0UL
+            ? await _warningRepo.GetAllActiveWarningsAsync(guildId, ct)
+            : await _warningRepo.GetActiveWarningsAsync(guildId, userId, ct);
 
     public async Task<IEnumerable<ModerationAction>> GetHistoryAsync(
         ulong guildId, ulong userId, CancellationToken ct = default)
         => await _moderationRepo.GetUserHistoryAsync(guildId, userId, ct: ct);
 
+    /// <inheritdoc/>
+    public async Task<IEnumerable<ModerationAction>> GetBanHistoryAsync(
+        ulong guildId, ulong userId, CancellationToken ct = default)
+        => await _moderationRepo.GetBanHistoryAsync(guildId, userId, ct);
+
     /// <summary>
     /// Soft-delete a warning (IsActive = false) scoped to a guild.
-    /// Throws KeyNotFoundException if the warning doesn't exist in this guild.
     /// We soft-delete rather than hard-delete to preserve audit trail integrity.
+    /// NOTE: This does NOT apply to ModerationAction records — those are immutable.
     /// </summary>
     public async Task DeleteWarningAsync(
         ulong guildId, Guid warningId, CancellationToken ct = default)
@@ -146,14 +174,28 @@ public class ModerationService : IModerationService
         if (warning is null)
             throw new KeyNotFoundException($"Warning {warningId} not found in guild {guildId}.");
 
-        // Soft delete: keep the record for audit trail, just mark inactive
         warning.IsActive = false;
         warning.UpdatedAt = DateTime.UtcNow;
 
         await _warningRepo.UpdateAsync(warning, ct);
         await _warningRepo.SaveChangesAsync(ct);
 
-        _logger.LogInformation("Warning {WarningId} deleted in guild {GuildId}", warningId, guildId);
+        _logger.LogInformation("Warning {WarningId} soft-deleted in guild {GuildId}", warningId, guildId);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Throws if reason is null or whitespace.
+    /// Ban-related actions require a documented reason — this is enforced at the
+    /// service layer so it cannot be bypassed regardless of which caller invokes it.
+    /// </summary>
+    private static void RequireReason(string reason, string callerName)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException(
+                $"Ban reason cannot be empty. A documented reason is required for {callerName}.",
+                nameof(reason));
     }
 
     private async Task<ModerationAction> LogActionAsync(
@@ -172,6 +214,7 @@ public class ModerationService : IModerationService
             GuildConfigId = guildConfigId
         };
 
+        // APPEND ONLY — never call UpdateAsync or DeleteAsync on ModerationAction.
         await _moderationRepo.AddAsync(action, ct);
         await _moderationRepo.SaveChangesAsync(ct);
         return action;

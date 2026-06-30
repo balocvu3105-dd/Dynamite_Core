@@ -8,6 +8,15 @@ using Microsoft.EntityFrameworkCore;
 
 public class ModerationRepository : BaseRepository<ModerationAction>, IModerationRepository
 {
+    private static readonly ModerationActionType[] BanTypes =
+    [
+        ModerationActionType.Ban,
+        ModerationActionType.BanId,
+        ModerationActionType.Unban,
+        ModerationActionType.Blacklist,
+        ModerationActionType.Unblacklist
+    ];
+
     public ModerationRepository(AppDbContext context) : base(context) { }
 
     public async Task<IEnumerable<ModerationAction>> GetUserHistoryAsync(
@@ -41,4 +50,14 @@ public class ModerationRepository : BaseRepository<ModerationAction>, IModeratio
             .Take(count)
             .ToListAsync(ct);
     }
+
+    public async Task<IEnumerable<ModerationAction>> GetBanHistoryAsync(
+        ulong guildId, ulong userId,
+        CancellationToken ct = default)
+        => await DbSet
+            .Where(a => a.GuildId == guildId
+                     && a.TargetUserId == userId
+                     && BanTypes.Contains(a.ActionType))
+            .OrderByDescending(a => a.CreatedAt)
+            .ToListAsync(ct);
 }

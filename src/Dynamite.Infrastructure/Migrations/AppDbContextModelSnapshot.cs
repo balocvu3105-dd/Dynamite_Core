@@ -1667,6 +1667,75 @@ namespace Dynamite.Infrastructure.Migrations
                     b.ToTable("WeeklyActivities", (string)null);
                 });
 
+            modelBuilder.Entity("Dynamite.Core.Entities.UserBlacklist", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("GuildId")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("GuildConfigId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("ModeratorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("RemoveReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<long?>("RemovedByModeratorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("RemovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("TargetAvatarUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<long>("TargetUserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TargetUsername")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildConfigId");
+
+                    b.HasIndex(new[] { "GuildId", "TargetUserId" })
+                        .HasDatabaseName("IX_UserBlacklists_GuildId_TargetUserId");
+
+                    b.HasIndex(new[] { "GuildId", "TargetUserId", "IsActive" })
+                        .HasDatabaseName("IX_UserBlacklists_GuildId_TargetUserId_IsActive");
+
+                    b.ToTable("UserBlacklists");
+                });
+
+
             modelBuilder.Entity("Dynamite.Core.Entities.AntiSpamConfig", b =>
                 {
                     b.HasOne("Dynamite.Core.Entities.GuildConfig", "GuildConfig")
@@ -1847,6 +1916,8 @@ namespace Dynamite.Infrastructure.Migrations
 
                     b.Navigation("AutoRoles");
 
+                    b.Navigation("Blacklist");
+
                     b.Navigation("ModerationActions");
 
                     b.Navigation("RolePanels");
@@ -1894,6 +1965,17 @@ namespace Dynamite.Infrastructure.Migrations
 
                     b.Navigation("SentTransactions");
                 });
+            modelBuilder.Entity("Dynamite.Core.Entities.UserBlacklist", b =>
+                {
+                    b.HasOne("Dynamite.Core.Entities.GuildConfig", "GuildConfig")
+                        .WithMany("Blacklist")
+                        .HasForeignKey("GuildConfigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GuildConfig");
+                });
+
 #pragma warning restore 612, 618
         }
     }

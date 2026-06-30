@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<IGuildConfigRepository, GuildConfigRepository>();
         services.AddScoped<IWarningRepository, WarningRepository>();
         services.AddScoped<IModerationRepository, ModerationRepository>();
+        services.AddScoped<IBlacklistRepository, BlacklistRepository>();
         services.AddScoped<IAntiSpamRepository, AntiSpamRepository>();
 
         // Phase 9b

@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
     public DbSet<GuildConfig> GuildConfigs => Set<GuildConfig>();
     public DbSet<Warning> Warnings => Set<Warning>();
     public DbSet<ModerationAction> ModerationActions => Set<ModerationAction>();
+    public DbSet<UserBlacklist> UserBlacklists => Set<UserBlacklist>();
     public DbSet<AutoRoleConfig> AutoRoleConfigs => Set<AutoRoleConfig>();
     public DbSet<RolePanel> RolePanels => Set<RolePanel>();
     public DbSet<RolePanelItem> RolePanelItems => Set<RolePanelItem>();

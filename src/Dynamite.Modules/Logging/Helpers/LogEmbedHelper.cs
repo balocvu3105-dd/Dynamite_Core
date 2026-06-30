@@ -233,6 +233,35 @@ public static class LogEmbedHelper
             .WithFooter("Audit Log — immutable record")
             .Build();
 
+    // ── MOD COMMAND AUDIT ────────────────────────────────────
+
+    /// <summary>
+    /// Logged every time a mod-level slash command executes (success or failure).
+    /// This is the primary source of truth for "what did this mod do?"
+    /// </summary>
+    public static Embed ModCommandExecuted(
+        string fullCommandName,
+        string modTag, ulong modId,
+        string channelName,
+        string formattedArgs,
+        bool success,
+        string? failReason = null)
+    {
+        var statusIcon = success ? "✅" : "❌";
+        var color = success ? new Color(0x57F287) : new Color(0xED4245);
+
+        var builder = Build($"{statusIcon} [MOD AUDIT] /{fullCommandName}", color)
+            .AddField("Moderator", $"{modTag} (`{modId}`)", inline: true)
+            .AddField("Channel", $"#{channelName}", inline: true)
+            .AddField("Status", success ? "✅ Success" : $"❌ {failReason ?? "Unknown error"}", inline: true);
+
+        if (!string.IsNullOrWhiteSpace(formattedArgs))
+            builder.AddField("Arguments", Truncate(formattedArgs, 1024));
+
+        builder.WithFooter("Mod Command Audit — immutable record");
+        return builder.Build();
+    }
+
     // ── BOT ERRORS ───────────────────────────────────────────
 
     public static Embed BotError(string commandName, string error, string reason)

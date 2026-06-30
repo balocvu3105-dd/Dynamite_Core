@@ -34,6 +34,7 @@ public class GuildConfig : BaseEntity
     public ICollection<RolePanel> RolePanels { get; set; } = [];
     // Phase 8
     public AntiSpamConfig? AntiSpamConfig { get; set; }
+    public ICollection<UserBlacklist> Blacklist { get; set; } = [];
 
     // Phase 5 — Temp Voice
     public TempVoiceConfig? TempVoiceConfig { get; set; }

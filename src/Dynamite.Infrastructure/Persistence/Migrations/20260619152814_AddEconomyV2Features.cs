@@ -10,40 +10,17 @@ namespace Dynamite.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // GuildPonds — per-pond miss/escape override (dùng bởi SpecialPool)
-            // V30-V34 đã cover các columns khác; V35 cover AutoFishDailyCap; V36 cover FishEncyclopedia.
-            migrationBuilder.AddColumn<double>(
-                name: "FishEscapeRateOverride",
-                table: "GuildPonds",
-                type: "double precision",
-                nullable: true);
+            // Idempotent: IF NOT EXISTS guards prevent failure when columns were
+            // already added by earlier manual migrations (EconomyV22–V29).
 
-            migrationBuilder.AddColumn<double>(
-                name: "FishMissRateOverride",
-                table: "GuildPonds",
-                type: "double precision",
-                nullable: true);
+            migrationBuilder.Sql(@"
+                ALTER TABLE ""GuildPonds""
+                    ADD COLUMN IF NOT EXISTS ""FishEscapeRateOverride"" double precision;
+                ALTER TABLE ""GuildPonds""
+                    ADD COLUMN IF NOT EXISTS ""FishMissRateOverride"" double precision;
+            ");
 
-            // RefreshTokens — nới lỏng max-length (varchar → text)
-            migrationBuilder.AlterColumn<string>(
-                name: "Username",
-                table: "RefreshTokens",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "character varying(100)",
-                oldMaxLength: 100,
-                oldDefaultValue: "");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "Avatar",
-                table: "RefreshTokens",
-                type: "text",
-                nullable: true,
-                oldClrType: typeof(string),
-                oldType: "character varying(256)",
-                oldMaxLength: 256,
-                oldNullable: true);
+            // RefreshTokens AlterColumn skipped — columns already have correct types in DB.
         }
 
         /// <inheritdoc />

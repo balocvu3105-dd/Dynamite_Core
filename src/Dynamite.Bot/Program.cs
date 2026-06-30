@@ -91,6 +91,8 @@ var host = Host.CreateDefaultBuilder(args)
 
         // Phase 2
         services.AddTransient<ModLogService>();
+        services.AddSingleton<BlacklistEventHandler>();
+        services.AddSingleton<ModAuditLogger>();
 
         // Phase 3
         services.AddScoped<IAutoRoleRepository, AutoRoleRepository>();

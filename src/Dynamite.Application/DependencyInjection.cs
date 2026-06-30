@@ -14,6 +14,7 @@ public static class DependencyInjection
         services.AddScoped<IServerLogService, ServerLogService>();
         services.AddScoped<IWelcomeService, WelcomeService>();
         services.AddScoped<IAntiSpamService, AntiSpamService>();
+        services.AddScoped<IBlacklistService, BlacklistService>();
         return services;
     }
 }

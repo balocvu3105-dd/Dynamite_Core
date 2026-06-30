@@ -16,6 +16,8 @@ using Dynamite.Modules.Security;
 using Dynamite.Modules.Ticket.Interactions;
 using Dynamite.Modules.Economy.Handlers;
 using Dynamite.Modules.Voice;
+using Dynamite.Modules.Logging.Loggers;
+using Dynamite.Modules.Moderation.Services;
 using Dynamite.Modules.Welcome;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -32,6 +34,7 @@ public class BotHostedService : IHostedService
     private readonly BotStatusProvider _statusProvider;
     private readonly ILogger<BotHostedService> _logger;
 
+    private readonly ModAuditLogger _modAuditLogger;
     private bool _modulesLoaded = false;
 
     private static readonly IReadOnlyList<Assembly> ModuleAssemblies =
@@ -57,6 +60,7 @@ public class BotHostedService : IHostedService
         IOptions<DiscordSettings> settings,
         GuildPresenceSyncService presenceSync,
         BotStatusProvider statusProvider,
+        ModAuditLogger modAuditLogger,
         ILogger<BotHostedService> logger)
     {
         _client = client;
@@ -65,6 +69,7 @@ public class BotHostedService : IHostedService
         _settings = settings.Value;
         _presenceSync = presenceSync;
         _statusProvider = statusProvider;
+        _modAuditLogger = modAuditLogger;
         _logger = logger;
     }
 
@@ -172,6 +177,7 @@ public class BotHostedService : IHostedService
                 _services.GetRequiredService<SecurityEventHandler>().Subscribe();
                 _services.GetRequiredService<TempVoiceEventHandler>().Subscribe();
                 _services.GetRequiredService<EconomyEventHandler>().Subscribe();
+                _services.GetRequiredService<BlacklistEventHandler>().Subscribe();
 
                 _modulesLoaded = true;
             }
@@ -323,6 +329,14 @@ public class BotHostedService : IHostedService
     private Task OnInteractionExecutedAsync(
         ICommandInfo? command, IInteractionContext context, IResult result)
     {
+        // Always log mod-level commands to the audit channel (success + failure).
+        // ModAuditLogger filters by root command name — non-mod commands are skipped cheaply.
+        _ = Task.Run(async () =>
+        {
+            try { await _modAuditLogger.LogAsync(command, context, result); }
+            catch (Exception ex) { _logger.LogError(ex, "ModAuditLogger threw unexpectedly"); }
+        });
+
         if (result.IsSuccess) return Task.CompletedTask;
 
         // UnmetPrecondition = user thiếu quyền — hành vi bình thường, không phải lỗi bot

@@ -191,23 +191,29 @@ public class ModLogModule : InteractionModuleBase<SocketInteractionContext>
 
     private static string ActionEmoji(ModerationActionType type) => type switch
     {
-        ModerationActionType.Warn      => "⚠️",
-        ModerationActionType.Kick      => "👢",
-        ModerationActionType.Ban       => "🔨",
-        ModerationActionType.Unban     => "✅",
-        ModerationActionType.Timeout   => "⏱️",
-        ModerationActionType.Untimeout => "🔓",
-        _                              => "📌"
+        ModerationActionType.Warn        => "⚠️",
+        ModerationActionType.Kick        => "👢",
+        ModerationActionType.Ban         => "🔨",
+        ModerationActionType.Unban       => "✅",
+        ModerationActionType.Timeout     => "⏱️",
+        ModerationActionType.Untimeout   => "🔓",
+        ModerationActionType.BanId       => "🔨",   // ban by ID (user not in server)
+        ModerationActionType.Blacklist   => "🚫",
+        ModerationActionType.Unblacklist => "✅",
+        _                                => "📌"
     };
 
     private static string ActionLabel(ModerationActionType type) => type switch
     {
-        ModerationActionType.Warn      => "Warn",
-        ModerationActionType.Kick      => "Kick",
-        ModerationActionType.Ban       => "Ban",
-        ModerationActionType.Unban     => "Unban",
-        ModerationActionType.Timeout   => "Timeout",
-        ModerationActionType.Untimeout => "Untimeout",
-        _                              => type.ToString()
+        ModerationActionType.Warn        => "Warn",
+        ModerationActionType.Kick        => "Kick",
+        ModerationActionType.Ban         => "Ban",
+        ModerationActionType.Unban       => "Unban",
+        ModerationActionType.Timeout     => "Timeout",
+        ModerationActionType.Untimeout   => "Untimeout",
+        ModerationActionType.BanId       => "Ban by ID",
+        ModerationActionType.Blacklist   => "Blacklist",
+        ModerationActionType.Unblacklist => "Unblacklist",
+        _                                => type.ToString()
     };
 }
