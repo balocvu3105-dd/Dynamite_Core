@@ -5,6 +5,7 @@ using Discord;
 using Discord.WebSocket;
 using Dynamite.Core.Entities;
 using Dynamite.Core.Interfaces.Repositories;
+using Dynamite.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -26,17 +27,20 @@ public sealed class WeatherChangeNotifier : BackgroundService
     private readonly IServiceScopeFactory           _scopeFactory;
     private readonly DiscordSocketClient            _discord;
     private readonly WeatherForecastService         _forecast;
+    private readonly IBotStatusProvider             _botStatus;
     private readonly ILogger<WeatherChangeNotifier> _logger;
 
     public WeatherChangeNotifier(
         IServiceScopeFactory           scopeFactory,
         DiscordSocketClient            discord,
         WeatherForecastService         forecast,
+        IBotStatusProvider             botStatus,
         ILogger<WeatherChangeNotifier> logger)
     {
         _scopeFactory = scopeFactory;
         _discord      = discord;
         _forecast     = forecast;
+        _botStatus    = botStatus;
         _logger       = logger;
     }
 
@@ -44,8 +48,8 @@ public sealed class WeatherChangeNotifier : BackgroundService
     {
         _logger.LogInformation("[WeatherNotifier] Started.");
 
-        // Chờ bot login xong
-        while (_discord.ConnectionState != ConnectionState.Connected && !stoppingToken.IsCancellationRequested)
+        // Chờ bot ready xong
+        while (!_botStatus.IsReady && !stoppingToken.IsCancellationRequested)
             await Task.Delay(5_000, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)

@@ -428,13 +428,4 @@ public class BotHostedService : IHostedService
         return Task.CompletedTask;
     }
 
-    private static Task SafeRun(Func<Task> handler)
-    {
-        _ = Task.Run(async () =>
-        {
-            try { await handler(); }
-            catch { /* swallow */ }
-        });
-        return Task.CompletedTask;
-    }
 }

@@ -58,6 +58,14 @@ public class ShopRepository : IShopRepository
             .OrderByDescending(u => u.Item.DropMultiplier)
             .FirstOrDefaultAsync();
 
+    public Task<UserInventory?> GetActiveBaitAsync(Guid walletId)
+        => _db.UserInventories
+            .Include(u => u.Item)
+            .Where(u => u.WalletId == walletId
+                     && u.Item.Type == ItemType.Bait
+                     && u.Quantity > 0)
+            .FirstOrDefaultAsync();
+
     public Task<List<UserInventory>> GetUserRodsAsync(Guid walletId)
         => _db.UserInventories
             .Include(u => u.Item)

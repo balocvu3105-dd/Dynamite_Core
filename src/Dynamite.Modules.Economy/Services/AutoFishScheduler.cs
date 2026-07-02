@@ -71,44 +71,55 @@ public sealed class AutoFishScheduler : BackgroundService
 
     private async Task TickAsync(CancellationToken ct)
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-
-        var profileRepo    = scope.ServiceProvider.GetRequiredService<IUserProfileRepository>();
-        var fishingService = scope.ServiceProvider.GetRequiredService<FishingService>();
-        var specialPool    = scope.ServiceProvider.GetRequiredService<SpecialPoolService>();
-        var configRepo     = scope.ServiceProvider.GetRequiredService<IGuildConfigRepository>();
-
-        var activeProfiles = await profileRepo.GetAllActiveAutoFishProfilesAsync();
-
-        if (activeProfiles.Count == 0) return;
-
-        _logger.LogDebug("[AutoFish] Ticking {Count} active session(s).", activeProfiles.Count);
-
-        // Cache guild fishing-enabled state per tick (tránh query DB lặp cho cùng guild)
+        List<UserFishingProfile> activeProfiles;
         var guildEnabledCache = new Dictionary<ulong, bool>();
 
-        foreach (var profile in activeProfiles)
+        await using (var scope = _scopeFactory.CreateAsyncScope())
         {
-            if (ct.IsCancellationRequested) break;
+            var profileRepo = scope.ServiceProvider.GetRequiredService<IUserProfileRepository>();
+            var configRepo  = scope.ServiceProvider.GetRequiredService<IGuildConfigRepository>();
 
-            // Bãi câu đóng → bỏ qua toàn bộ user trong guild đó
-            if (!guildEnabledCache.TryGetValue(profile.GuildId, out var enabled))
+            activeProfiles = await profileRepo.GetAllActiveAutoFishProfilesAsync();
+            if (activeProfiles.Count == 0) return;
+
+            _logger.LogDebug("[AutoFish] Ticking {Count} active session(s).", activeProfiles.Count);
+
+            // Cache guild fishing-enabled state per tick (tránh query DB lặp cho cùng guild)
+            var guildIds = activeProfiles.Select(p => p.GuildId).Distinct();
+            foreach (var gId in guildIds)
             {
-                var cfg = await configRepo.GetByGuildIdAsync(profile.GuildId);
-                enabled = cfg?.FishingEnabled ?? true;
-                guildEnabledCache[profile.GuildId] = enabled;
+                var cfg = await configRepo.GetByGuildIdAsync(gId);
+                guildEnabledCache[gId] = cfg?.FishingEnabled ?? true;
             }
+        }
 
-            if (!enabled)
+        using var semaphore = new SemaphoreSlim(5);
+        var tasks = activeProfiles.Select(async profile =>
+        {
+            if (ct.IsCancellationRequested) return;
+
+            if (guildEnabledCache.TryGetValue(profile.GuildId, out var enabled) && !enabled)
             {
                 _logger.LogDebug("[AutoFish] Fishing closed in guild {GuildId} — skipping user {UserId}.",
                     profile.GuildId, profile.UserId);
-                continue;
+                return;
             }
 
+            await semaphore.WaitAsync(ct);
             try
             {
+                if (ct.IsCancellationRequested) return;
+
+                await using var userScope = _scopeFactory.CreateAsyncScope();
+                var profileRepo    = userScope.ServiceProvider.GetRequiredService<IUserProfileRepository>();
+                var fishingService = userScope.ServiceProvider.GetRequiredService<FishingService>();
+                var specialPool    = userScope.ServiceProvider.GetRequiredService<SpecialPoolService>();
+
                 await ProcessUserAsync(profile, fishingService, specialPool, profileRepo);
+            }
+            catch (OperationCanceledException)
+            {
+                // Shutdown requested
             }
             catch (Exception ex)
             {
@@ -116,10 +127,13 @@ public sealed class AutoFishScheduler : BackgroundService
                     "[AutoFish] Error processing user {UserId} in guild {GuildId}.",
                     profile.UserId, profile.GuildId);
             }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
 
-            // Nhường CPU giữa các user để tránh spike
-            await Task.Delay(200, ct);
-        }
+        await Task.WhenAll(tasks);
     }
 
     private async Task ProcessUserAsync(
@@ -144,21 +158,30 @@ public sealed class AutoFishScheduler : BackgroundService
         {
             var todayUtc = DateTime.UtcNow.Date;
 
+            // BUG FIX (AsNoTracking write):  profile được load bởi
+            // GetAllActiveAutoFishProfilesAsync() với .AsNoTracking(). EF Core
+            // không theo dõi entity đó, nên SaveChangesAsync() trên nó là no-op
+            // hoàn toàn — daily counter không bao giờ thực sự được ghi vào DB.
+            //
+            // Fix: luôn fetch một tracked instance trước khi thực hiện bất kỳ
+            // write nào. GetOrCreateFishingAsync() dùng DbContext có tracking bật.
+            var tracked = await profileRepo.GetOrCreateFishingAsync(guildId, userId);
+
             // Reset counter nếu qua ngày mới
-            if (profile.AutoFishDailyResetAt?.Date < todayUtc)
+            if (tracked.AutoFishDailyResetAt?.Date < todayUtc)
             {
-                profile.AutoFishCastsToday   = 0;
-                profile.AutoFishDailyResetAt = DateTime.UtcNow;
+                tracked.AutoFishCastsToday   = 0;
+                tracked.AutoFishDailyResetAt = DateTime.UtcNow;
                 await profileRepo.SaveChangesAsync();
             }
 
-            if (profile.AutoFishCastsToday >= DailyCastCap)
+            if (tracked.AutoFishCastsToday >= DailyCastCap)
             {
                 // Đã đạt cap → pause cho đến ngày mai
-                var freshProfile = await profileRepo.GetOrCreateFishingAsync(guildId, userId);
-                if (!freshProfile.AutoFishPaused)
+                // Dùng lại tracked thay vì fetch freshProfile riêng (cùng scope)
+                if (!tracked.AutoFishPaused)
                 {
-                    freshProfile.AutoFishPaused = true;
+                    tracked.AutoFishPaused = true;
                     await profileRepo.SaveChangesAsync();
 
                     _logger.LogInformation(
@@ -172,8 +195,8 @@ public sealed class AutoFishScheduler : BackgroundService
             }
 
             // Increment counter ngay bây giờ (trước khi cast, tránh race condition)
-            profile.AutoFishCastsToday++;
-            profile.AutoFishDailyResetAt ??= DateTime.UtcNow;
+            tracked.AutoFishCastsToday++;
+            tracked.AutoFishDailyResetAt ??= DateTime.UtcNow;
             await profileRepo.SaveChangesAsync();
         }
 

@@ -66,8 +66,14 @@ public sealed class ScheduledRestartService : BackgroundService
 
             _lifetime.StopApplication();
 
-            // Đợi host thực sự stop — tránh loop lại trong khi đang shutdown
-            await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
+            // BUG FIX: Task.Delay(60s, stoppingToken) trước đây bị cancel ngay
+            // lập tức vì StopApplication() sẽ signal stoppingToken cancel.
+            // Kết quả: delay không thực sự chờ — OperationCanceledException bị throw,
+            // while loop thoát mà không chờ được 60 giây như comment gợi ý.
+            //
+            // Fix: return ngay sau StopApplication(). while loop sẽ không chạy
+            // lại vì stoppingToken.IsCancellationRequested sẽ là true.
+            return;
         }
     }
 

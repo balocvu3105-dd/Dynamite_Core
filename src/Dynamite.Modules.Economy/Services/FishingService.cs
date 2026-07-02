@@ -298,11 +298,8 @@ public class FishingService
 
     // ── Bait helpers ──────────────────────────────────────────────────────────
 
-    private async Task<UserInventory?> GetActiveBaitAsync(Guid walletId)
-    {
-        var inventory = await _shopRepo.GetUserInventoryAsync(walletId);
-        return inventory.FirstOrDefault(i => i.Item.Type == ItemType.Bait && i.Quantity > 0);
-    }
+    private Task<UserInventory?> GetActiveBaitAsync(Guid walletId)
+        => _shopRepo.GetActiveBaitAsync(walletId);
 
     private async Task ConsumeBaitChargeAsync(UserInventory bait)
     {
