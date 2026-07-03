@@ -45,11 +45,12 @@ public class ModerationController : ControllerBase
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(w => new WarningDto(
-                Id:          w.Id.ToString(),
-                UserId:      w.TargetUserId.ToString(),
-                ModeratorId: w.ModeratorId.ToString(),
-                Reason:      w.Reason,
-                CreatedAt:   w.CreatedAt));
+                Id:             w.Id.ToString(),
+                UserId:         w.TargetUserId.ToString(),
+                TargetUsername: string.IsNullOrEmpty(w.TargetUsername) ? null : w.TargetUsername,
+                ModeratorId:    w.ModeratorId.ToString(),
+                Reason:         w.Reason,
+                CreatedAt:      w.CreatedAt));
 
         return Ok(new PagedResult<WarningDto>(
             Items:    items,
@@ -123,12 +124,13 @@ public class ModerationController : ControllerBase
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(a => new ModLogDto(
-                Id:           a.Id.ToString(),
-                Action:       a.ActionType.ToString().ToLowerInvariant(),
-                TargetUserId: a.TargetUserId.ToString(),
-                ModeratorId:  a.ModeratorId.ToString(),
-                Reason:       a.Reason,
-                CreatedAt:    a.CreatedAt));
+                Id:             a.Id.ToString(),
+                Action:         a.ActionType.ToString().ToLowerInvariant(),
+                TargetUserId:   a.TargetUserId.ToString(),
+                TargetUsername: string.IsNullOrEmpty(a.TargetUsername) ? null : a.TargetUsername,
+                ModeratorId:    a.ModeratorId.ToString(),
+                Reason:         a.Reason,
+                CreatedAt:      a.CreatedAt));
 
         return Ok(new PagedResult<ModLogDto>(
             Items:    items,

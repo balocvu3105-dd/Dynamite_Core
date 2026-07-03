@@ -4,19 +4,21 @@ import { loggingApi, guildsApi } from '@/api'
 import { Card, Select, Button, Spinner } from '@/components/ui'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/hooks/useToast'
+import { useLangStore } from '@/i18n'
 import type { LoggingConfig } from '@/types'
-
-const LOG_FIELDS: { key: keyof LoggingConfig; label: string; desc: string }[] = [
-    { key: 'messageLogChannelId', label: 'Message Logs', desc: 'Deleted and edited messages' },
-    { key: 'memberLogChannelId', label: 'Member Logs', desc: 'Joins, leaves, role changes' },
-    { key: 'voiceLogChannelId', label: 'Voice Logs', desc: 'Voice channel activity' },
-    { key: 'serverLogChannelId', label: 'Server Logs', desc: 'Channel and role changes' },
-]
 
 export default function LoggingPage() {
     const { guildId } = useParams<{ guildId: string }>()
     const qc = useQueryClient()
     const toast = useToast()
+    const { t } = useLangStore()
+
+    const logFields: { key: keyof LoggingConfig; label: string; desc: string }[] = [
+        { key: 'messageLogChannelId', label: t.logging.msgLog, desc: t.logging.msgLogDesc },
+        { key: 'memberLogChannelId', label: t.logging.memberLog, desc: t.logging.memberLogDesc },
+        { key: 'voiceLogChannelId', label: t.logging.voiceLog, desc: t.logging.voiceLogDesc },
+        { key: 'serverLogChannelId', label: t.logging.serverLog, desc: t.logging.serverLogDesc },
+    ]
 
     const { data: config, isLoading: loadingConfig } = useQuery({
         queryKey: ['logging', guildId],
@@ -43,9 +45,9 @@ export default function LoggingPage() {
         mutationFn: () => loggingApi.update(guildId!, form),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['logging', guildId] })
-            toast.success('Logging channels saved.')
+            toast.success(t.common.savedSuccess)
         },
-        onError: () => toast.error('Failed to save logging channels.'),
+        onError: () => toast.error(t.common.error),
     })
 
     const textChannels = guildInfo?.channels.filter((c) => c.type === 'text') ?? []
@@ -55,14 +57,14 @@ export default function LoggingPage() {
     return (
         <div className="max-w-2xl space-y-6">
             <div>
-                <h2 className="text-lg font-semibold text-[--color-text]">Logging Channels</h2>
+                <h2 className="text-lg font-semibold text-[--color-text]">{t.logging.title}</h2>
                 <p className="text-sm text-[--color-text-muted] mt-1">
-                    Set which channel each log category is sent to.
+                    {t.logging.subtitle}
                 </p>
             </div>
 
             <Card className="space-y-5">
-                {LOG_FIELDS.map(({ key, label, desc }) => (
+                {logFields.map(({ key, label, desc }) => (
                     <div key={key}>
                         <Select
                             id={key}
@@ -72,9 +74,9 @@ export default function LoggingPage() {
                                 setForm((f) => ({ ...f, [key]: e.target.value || null }))
                             }
                         >
-                            <option value="">— Not set —</option>
+                            <option value="" className="bg-[--color-surface-alt] text-[--color-text]">{t.common.selectChannel}</option>
                             {textChannels.map((ch) => (
-                                <option key={ch.id} value={ch.id}>#{ch.name}</option>
+                                <option key={ch.id} value={ch.id} className="bg-[--color-surface-alt] text-[--color-text]">#{ch.name}</option>
                             ))}
                         </Select>
                         <p className="mt-1 text-xs text-[--color-text-muted]">{desc}</p>
@@ -82,7 +84,7 @@ export default function LoggingPage() {
                 ))}
             </Card>
 
-            <Button onClick={() => save()} loading={isPending}>Save changes</Button>
+            <Button onClick={() => save()} loading={isPending} className="cursor-pointer">{t.common.save}</Button>
         </div>
     )
 }

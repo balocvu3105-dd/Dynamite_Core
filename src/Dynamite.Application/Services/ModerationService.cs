@@ -28,7 +28,7 @@ public class ModerationService : IModerationService
 
     public async Task<ModerationAction> WarnAsync(
         ulong guildId, string guildName, ulong targetId, ulong moderatorId,
-        string reason, CancellationToken ct = default)
+        string reason, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default)
     {
         var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
 
@@ -36,7 +36,9 @@ public class ModerationService : IModerationService
         {
             GuildId = guildId,
             TargetUserId = targetId,
+            TargetUsername = targetUsername,
             ModeratorId = moderatorId,
+            ModeratorUsername = moderatorUsername,
             Reason = reason,
             GuildConfigId = config.Id
         };
@@ -44,7 +46,7 @@ public class ModerationService : IModerationService
         await _warningRepo.SaveChangesAsync(ct);
 
         var action = await LogActionAsync(guildId, targetId, moderatorId,
-            ModerationActionType.Warn, reason, config.Id, ct: ct);
+            ModerationActionType.Warn, reason, config.Id, ct: ct, targetUsername: targetUsername, moderatorUsername: moderatorUsername);
 
         _logger.LogInformation("User {TargetId} warned in guild {GuildId} by {ModId}",
             targetId, guildId, moderatorId);
@@ -54,11 +56,11 @@ public class ModerationService : IModerationService
 
     public async Task<ModerationAction> KickAsync(
         ulong guildId, string guildName, ulong targetId, ulong moderatorId,
-        string reason, CancellationToken ct = default)
+        string reason, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default)
     {
         var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
         var action = await LogActionAsync(guildId, targetId, moderatorId,
-            ModerationActionType.Kick, reason, config.Id, ct: ct);
+            ModerationActionType.Kick, reason, config.Id, ct: ct, targetUsername: targetUsername, moderatorUsername: moderatorUsername);
 
         _logger.LogInformation("User {TargetId} kicked from guild {GuildId} by {ModId}",
             targetId, guildId, moderatorId);
@@ -69,13 +71,13 @@ public class ModerationService : IModerationService
     /// <inheritdoc/>
     public async Task<ModerationAction> BanAsync(
         ulong guildId, string guildName, ulong targetId, ulong moderatorId,
-        string reason, CancellationToken ct = default)
+        string reason, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default)
     {
         RequireReason(reason, nameof(BanAsync));
 
         var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
         var action = await LogActionAsync(guildId, targetId, moderatorId,
-            ModerationActionType.Ban, reason, config.Id, ct: ct);
+            ModerationActionType.Ban, reason, config.Id, ct: ct, targetUsername: targetUsername, moderatorUsername: moderatorUsername);
 
         _logger.LogInformation("User {TargetId} banned from guild {GuildId} by {ModId}: {Reason}",
             targetId, guildId, moderatorId, reason);
@@ -86,13 +88,13 @@ public class ModerationService : IModerationService
     /// <inheritdoc/>
     public async Task<ModerationAction> BanByIdAsync(
         ulong guildId, string guildName, ulong targetId, ulong moderatorId,
-        string reason, CancellationToken ct = default)
+        string reason, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default)
     {
         RequireReason(reason, nameof(BanByIdAsync));
 
         var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
         var action = await LogActionAsync(guildId, targetId, moderatorId,
-            ModerationActionType.BanId, reason, config.Id, ct: ct);
+            ModerationActionType.BanId, reason, config.Id, ct: ct, targetUsername: targetUsername, moderatorUsername: moderatorUsername);
 
         _logger.LogInformation("User {TargetId} banned by ID from guild {GuildId} by {ModId}: {Reason}",
             targetId, guildId, moderatorId, reason);
@@ -103,13 +105,13 @@ public class ModerationService : IModerationService
     /// <inheritdoc/>
     public async Task<ModerationAction> UnbanAsync(
         ulong guildId, string guildName, ulong targetId, ulong moderatorId,
-        string reason, CancellationToken ct = default)
+        string reason, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default)
     {
         RequireReason(reason, nameof(UnbanAsync));
 
         var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
         var action = await LogActionAsync(guildId, targetId, moderatorId,
-            ModerationActionType.Unban, reason, config.Id, ct: ct);
+            ModerationActionType.Unban, reason, config.Id, ct: ct, targetUsername: targetUsername, moderatorUsername: moderatorUsername);
 
         _logger.LogInformation("User {TargetId} unbanned from guild {GuildId} by {ModId}: {Reason}",
             targetId, guildId, moderatorId, reason);
@@ -119,7 +121,7 @@ public class ModerationService : IModerationService
 
     public async Task<ModerationAction> TimeoutAsync(
         ulong guildId, string guildName, ulong targetId, ulong moderatorId,
-        string reason, TimeSpan duration, CancellationToken ct = default)
+        string reason, TimeSpan duration, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default)
     {
         if (duration.TotalSeconds < 5 || duration.TotalDays > 28)
             throw new ArgumentException("Timeout duration must be between 5 seconds and 28 days.");
@@ -127,7 +129,7 @@ public class ModerationService : IModerationService
         var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
         var action = await LogActionAsync(guildId, targetId, moderatorId,
             ModerationActionType.Timeout, reason, config.Id,
-            expiresAt: DateTime.UtcNow.Add(duration), ct: ct);
+            expiresAt: DateTime.UtcNow.Add(duration), ct: ct, targetUsername: targetUsername, moderatorUsername: moderatorUsername);
 
         _logger.LogInformation("User {TargetId} timed out in guild {GuildId} for {Duration}",
             targetId, guildId, duration);
@@ -137,11 +139,11 @@ public class ModerationService : IModerationService
 
     public async Task<ModerationAction> UntimeoutAsync(
         ulong guildId, string guildName, ulong targetId, ulong moderatorId,
-        CancellationToken ct = default)
+        string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default)
     {
         var config = await _guildConfigRepo.GetOrCreateAsync(guildId, guildName, ct);
         var action = await LogActionAsync(guildId, targetId, moderatorId,
-            ModerationActionType.Untimeout, "Timeout removed", config.Id, ct: ct);
+            ModerationActionType.Untimeout, "Timeout removed", config.Id, ct: ct, targetUsername: targetUsername, moderatorUsername: moderatorUsername);
 
         return action;
     }
@@ -201,13 +203,15 @@ public class ModerationService : IModerationService
     private async Task<ModerationAction> LogActionAsync(
         ulong guildId, ulong targetId, ulong moderatorId,
         ModerationActionType actionType, string reason, Guid guildConfigId,
-        DateTime? expiresAt = null, CancellationToken ct = default)
+        DateTime? expiresAt = null, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default)
     {
         var action = new ModerationAction
         {
             GuildId = guildId,
             TargetUserId = targetId,
+            TargetUsername = targetUsername,
             ModeratorId = moderatorId,
+            ModeratorUsername = moderatorUsername,
             ActionType = actionType,
             Reason = reason,
             ExpiresAt = expiresAt,

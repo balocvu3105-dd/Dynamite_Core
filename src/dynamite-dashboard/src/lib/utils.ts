@@ -6,11 +6,18 @@ export function cn(...inputs: ClassValue[]) {
 
 export function avatarUrl(user: { id: string; avatar: string | null }) {
   if (!user.avatar) return `https://cdn.discordapp.com/embed/avatars/0.png`
+  if (user.avatar.startsWith('http://') || user.avatar.startsWith('https://')) {
+    return user.avatar
+  }
   return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
 }
 
 export function guildIconUrl(guild: { id: string; iconUrl: string | null }) {
-  return guild.iconUrl ?? `https://cdn.discordapp.com/embed/avatars/0.png`
+  if (!guild.iconUrl) return `https://cdn.discordapp.com/embed/avatars/0.png`
+  if (guild.iconUrl.startsWith('http://') || guild.iconUrl.startsWith('https://')) {
+    return guild.iconUrl
+  }
+  return `https://cdn.discordapp.com/icons/${guild.id}/${guild.iconUrl}.png`
 }
 
 export function formatDate(iso: string) {
@@ -21,8 +28,8 @@ export function formatDate(iso: string) {
 }
 
 export function discordOAuthUrl() {
-  const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID as string
-  const redirectUri = encodeURIComponent(import.meta.env.VITE_DISCORD_REDIRECT_URI as string)
-  const scope = encodeURIComponent('identify email guilds')
-  return `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}`
+  const clientId = "1514609829610782862"
+  const redirectUri = encodeURIComponent("http://localhost:5173/auth/callback")
+  const scope = encodeURIComponent("identify email guilds")
+  return `https://discord.com/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}`
 }

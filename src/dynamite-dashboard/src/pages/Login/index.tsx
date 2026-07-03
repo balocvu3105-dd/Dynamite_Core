@@ -18,7 +18,7 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-[--color-text] tracking-tight">
-              Dynamite
+              Dynamite <span className="text-[--color-brand]">Core</span>
             </h1>
             <p className="text-[--color-text-muted] text-sm mt-1">
               Discord Bot Dashboard

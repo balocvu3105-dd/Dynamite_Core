@@ -22,12 +22,25 @@ public static class DependencyInjection
         services.AddScoped<IModerationRepository, ModerationRepository>();
         services.AddScoped<IBlacklistRepository, BlacklistRepository>();
         services.AddScoped<IAntiSpamRepository, AntiSpamRepository>();
-
-        // Phase 9b
+        services.AddScoped<IAutoRoleRepository, AutoRoleRepository>();
+        services.AddScoped<IRolePanelRepository, RolePanelRepository>();
+        services.AddScoped<IGiveawayRepository, GiveawayRepository>();
+        services.AddScoped<ITicketRepository, TicketRepository>();
         services.AddScoped<IGuildPresenceRepository, GuildPresenceRepository>();
-
-        // Phase 5 — Temp Voice
         services.AddScoped<ITempVoiceRepository, TempVoiceRepository>();
+
+        // Economy repositories
+        services.AddScoped<IWalletRepository, WalletRepository>();
+        services.AddScoped<IShopRepository, ShopRepository>();
+        services.AddScoped<IPondRepository, PondRepository>();
+        services.AddScoped<IUserProfileRepository, UserProfileRepository>();
+        services.AddScoped<IFishBagRepository, FishBagRepository>();
+        services.AddScoped<ISpecialPoolRepository, SpecialPoolRepository>();
+        services.AddScoped<ILeaderboardRepository, LeaderboardRepository>();
+        services.AddScoped<IFishingLogRepository, FishingLogRepository>();
+        services.AddScoped<IFishingSnapshotRepository, FishingSnapshotRepository>();
+        services.AddScoped<IFishTrophyRepository, FishTrophyRepository>();
+        services.AddScoped<IFishEncyclopediaRepository, FishEncyclopediaRepository>();
 
         return services;
     }

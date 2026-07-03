@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Dynamite.Infrastructure.Persistence;
 
 #nullable disable
 
@@ -8,6 +10,8 @@ namespace Dynamite.Infrastructure.Migrations
     /// Adds Username and Avatar columns to RefreshTokens so the refresh
     /// endpoint can rebuild access token claims without calling Discord API.
     /// </summary>
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260619000000_AddRefreshTokenClaims")]
     public partial class AddRefreshTokenClaims : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

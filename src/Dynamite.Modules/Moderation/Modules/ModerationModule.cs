@@ -51,7 +51,7 @@ public class ModerationModule : InteractionModuleBase<SocketInteractionContext>
 
         await _moderationService.WarnAsync(
             Context.Guild.Id, Context.Guild.Name,
-            target.Id, Context.User.Id, reason);
+            target.Id, Context.User.Id, reason, target.Username, Context.User.Username);
 
         await FollowupAsync(embed: EmbedHelper.Success(
             "Warning issued",
@@ -83,7 +83,7 @@ public class ModerationModule : InteractionModuleBase<SocketInteractionContext>
 
         await _moderationService.KickAsync(
             Context.Guild.Id, Context.Guild.Name,
-            target.Id, Context.User.Id, reason);
+            target.Id, Context.User.Id, reason, target.Username, Context.User.Username);
 
         await target.KickAsync(reason);
 
@@ -124,7 +124,7 @@ public class ModerationModule : InteractionModuleBase<SocketInteractionContext>
 
         await _moderationService.BanAsync(
             Context.Guild.Id, Context.Guild.Name,
-            target.Id, Context.User.Id, reason);
+            target.Id, Context.User.Id, reason, target.Username, Context.User.Username);
 
         await Context.Guild.AddBanAsync(target, deleteDays, reason);
 
@@ -180,7 +180,7 @@ public class ModerationModule : InteractionModuleBase<SocketInteractionContext>
 
         await _moderationService.BanByIdAsync(
             Context.Guild.Id, Context.Guild.Name,
-            userId, Context.User.Id, reason);
+            userId, Context.User.Id, reason, displayName, Context.User.Username);
 
         if (addToBlacklist)
         {
@@ -242,7 +242,7 @@ public class ModerationModule : InteractionModuleBase<SocketInteractionContext>
 
         await _moderationService.UnbanAsync(
             Context.Guild.Id, Context.Guild.Name,
-            userId, Context.User.Id, reason);
+            userId, Context.User.Id, reason, ban.User.Username, Context.User.Username);
 
         await FollowupAsync(embed: EmbedHelper.Success(
             "User unbanned",
@@ -283,7 +283,7 @@ public class ModerationModule : InteractionModuleBase<SocketInteractionContext>
 
         await _moderationService.TimeoutAsync(
             Context.Guild.Id, Context.Guild.Name,
-            target.Id, Context.User.Id, reason, duration);
+            target.Id, Context.User.Id, reason, duration, target.Username, Context.User.Username);
 
         await target.SetTimeOutAsync(duration);
 
@@ -318,7 +318,7 @@ public class ModerationModule : InteractionModuleBase<SocketInteractionContext>
 
         await _moderationService.UntimeoutAsync(
             Context.Guild.Id, Context.Guild.Name,
-            target.Id, Context.User.Id);
+            target.Id, Context.User.Id, target.Username, Context.User.Username);
 
         await FollowupAsync(embed: EmbedHelper.Success(
             "Timeout removed",

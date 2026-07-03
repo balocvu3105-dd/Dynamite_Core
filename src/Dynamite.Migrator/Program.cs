@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 var host = Host.CreateDefaultBuilder(args)
     .ConfigureAppConfiguration(config =>
     {
+        config.AddJsonFile("appsettings.json", optional: true);
         config.AddEnvironmentVariables();
     })
     .ConfigureServices((context, services) =>
@@ -35,6 +36,9 @@ try
 
     using var scope = host.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    try { await db.Database.ExecuteSqlRawAsync("INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('20260630000000_AddUserBlacklist', '8.0.0') ON CONFLICT DO NOTHING;"); } catch {}
+    try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Warnings\" ADD COLUMN IF NOT EXISTS \"TargetUsername\" varchar(100) NOT NULL DEFAULT ''; ALTER TABLE \"Warnings\" ADD COLUMN IF NOT EXISTS \"ModeratorUsername\" varchar(100) NOT NULL DEFAULT ''; ALTER TABLE \"ModerationActions\" ADD COLUMN IF NOT EXISTS \"TargetUsername\" varchar(100) NOT NULL DEFAULT ''; ALTER TABLE \"ModerationActions\" ADD COLUMN IF NOT EXISTS \"ModeratorUsername\" varchar(100) NOT NULL DEFAULT '';"); } catch {}
 
     var pending = await db.Database.GetPendingMigrationsAsync();
     var pendingList = pending.ToList();

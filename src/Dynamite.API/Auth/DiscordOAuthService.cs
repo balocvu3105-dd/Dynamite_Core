@@ -49,7 +49,11 @@ public class DiscordOAuthService
         });
 
         var response = await _http.PostAsync(TokenEndpoint, body, ct);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var errJson = await response.Content.ReadAsStringAsync(ct);
+            throw new InvalidOperationException($"Discord Token API Error: {response.StatusCode} - {errJson}");
+        }
 
         var json = await response.Content.ReadAsStringAsync(ct);
         var result = JsonSerializer.Deserialize<DiscordTokenResponse>(json)

@@ -104,6 +104,7 @@ var host = Host.CreateDefaultBuilder(args)
 
         // Phase 4
         services.AddTransient<SetupExecutor>();
+        services.AddTransient<Dynamite.Modules.Setup.Services.SmartSetupEngine>();
 
         // Phase 6
         services.AddSingleton<MessageLogger>();

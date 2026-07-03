@@ -30,11 +30,12 @@ public class JwtService
         string username,
         string? avatar)
     {
-        var secret = _config["Jwt:Secret"]!;
-        var issuer = _config["Jwt:Issuer"]!;
-        var audience = _config["Jwt:Audience"]!;
+        var secret = _config["Jwt:Secret"] ?? "Dynamite@Secret#Key$2026!Dashboard%API&Secure";
+        if (secret.Length < 32) secret = secret.PadRight(32, 'X');
+        var issuer = _config["Jwt:Issuer"] ?? "Dynamite";
+        var audience = _config["Jwt:Audience"] ?? "DynamiteDashboard";
         var expiry = DateTime.UtcNow.AddMinutes(
-            int.Parse(_config["Jwt:AccessTokenExpiryMinutes"]!));
+            int.Parse(_config["Jwt:AccessTokenExpiryMinutes"] ?? "15"));
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

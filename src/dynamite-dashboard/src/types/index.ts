@@ -15,6 +15,10 @@ export interface DiscordUser {
   email: string
 }
 
+// Alias — UserProfile is the same shape as DiscordUser but semantically
+// represents the currently-authenticated user's profile across the dashboard.
+export type UserProfile = DiscordUser
+
 // ── Guild ─────────────────────────────────────────────────────────────────────
 export interface GuildSummary {
   id: string
@@ -54,6 +58,7 @@ export interface ModuleStatus {
 export interface Warning {
   id: string
   userId: string
+  targetUsername?: string
   moderatorId: string
   reason: string
   createdAt: string
@@ -63,6 +68,7 @@ export interface ModLog {
   id: string
   action: string
   targetUserId: string
+  targetUsername?: string
   moderatorId: string
   reason: string | null
   createdAt: string

@@ -19,6 +19,9 @@ public class WarningConfiguration : IEntityTypeConfiguration<Warning>
         builder.Property(w => w.ModeratorId)
             .HasConversion<long>();
 
+        builder.Property(w => w.TargetUsername).HasMaxLength(100);
+        builder.Property(w => w.ModeratorUsername).HasMaxLength(100);
+
         builder.Property(w => w.Reason)
             .HasMaxLength(500)
             .IsRequired();

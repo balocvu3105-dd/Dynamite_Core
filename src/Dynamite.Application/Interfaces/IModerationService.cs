@@ -10,29 +10,29 @@ using Dynamite.Core.Entities;
 /// </summary>
 public interface IModerationService
 {
-    Task<ModerationAction> WarnAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string reason, CancellationToken ct = default);
-    Task<ModerationAction> KickAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string reason, CancellationToken ct = default);
+    Task<ModerationAction> WarnAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string reason, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default);
+    Task<ModerationAction> KickAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string reason, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default);
 
     /// <summary>
     /// Ban a member who is currently in the server.
     /// Reason is mandatory — throws ArgumentException if null or whitespace.
     /// </summary>
-    Task<ModerationAction> BanAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string reason, CancellationToken ct = default);
+    Task<ModerationAction> BanAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string reason, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default);
 
     /// <summary>
     /// Ban a user by Discord ID (user does not need to be in the server).
     /// Reason is mandatory — throws ArgumentException if null or whitespace.
     /// </summary>
-    Task<ModerationAction> BanByIdAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string reason, CancellationToken ct = default);
+    Task<ModerationAction> BanByIdAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string reason, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default);
 
     /// <summary>
     /// Unban a previously banned user.
     /// Reason is mandatory — throws ArgumentException if null or whitespace.
     /// </summary>
-    Task<ModerationAction> UnbanAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string reason, CancellationToken ct = default);
+    Task<ModerationAction> UnbanAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string reason, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default);
 
-    Task<ModerationAction> TimeoutAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string reason, TimeSpan duration, CancellationToken ct = default);
-    Task<ModerationAction> UntimeoutAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, CancellationToken ct = default);
+    Task<ModerationAction> TimeoutAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string reason, TimeSpan duration, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default);
+    Task<ModerationAction> UntimeoutAsync(ulong guildId, string guildName, ulong targetId, ulong moderatorId, string targetUsername = "", string moderatorUsername = "", CancellationToken ct = default);
     Task<IEnumerable<Warning>> GetWarningsAsync(ulong guildId, ulong userId, CancellationToken ct = default);
     Task<IEnumerable<ModerationAction>> GetHistoryAsync(ulong guildId, ulong userId, CancellationToken ct = default);
 

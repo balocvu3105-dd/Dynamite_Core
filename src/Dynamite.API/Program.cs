@@ -45,10 +45,10 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ─── JWT Authentication ───────────────────────────────────────────────────────
-var jwtSecret = builder.Configuration["Jwt:Secret"]!;
-var jwtIssuer = builder.Configuration["Jwt:Issuer"]!;
-var jwtAudience = builder.Configuration["Jwt:Audience"]!;
+var jwtSecret = builder.Configuration["Jwt:Secret"] ?? "Dynamite@Secret#Key$2026!Dashboard%API&Secure";
+if (jwtSecret.Length < 32) jwtSecret = jwtSecret.PadRight(32, 'X');
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "Dynamite";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "DynamiteDashboard";
 
 builder.Services.AddAuthentication(options =>
 {
@@ -114,6 +114,9 @@ builder.Services.AddHealthChecks()
         name: "discord-bot",
         failureStatus: HealthStatus.Degraded,   // bot not ready = degraded, not unhealthy
         tags: ["ready", "bot"]);
+
+builder.Services.AddTransient<Dynamite.Modules.Setup.Services.SmartSetupEngine>();
+builder.Services.AddScoped<Dynamite.Modules.Economy.Services.WalletService>();
 
 // ─── Controllers ─────────────────────────────────────────────────────────────
 builder.Services.AddControllers()

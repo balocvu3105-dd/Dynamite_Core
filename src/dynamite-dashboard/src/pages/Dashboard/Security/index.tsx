@@ -4,18 +4,20 @@ import { securityApi } from '@/api'
 import { Card, Toggle, Input, Button, Spinner } from '@/components/ui'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/hooks/useToast'
+import { useLangStore } from '@/i18n'
 import type { SecurityConfig } from '@/types'
-
-const FEATURE_TOGGLES: { key: keyof SecurityConfig; label: string; desc: string }[] = [
-    { key: 'antiInvite', label: 'Anti Invite', desc: 'Block Discord server invite links' },
-    { key: 'antiScamLink', label: 'Anti Scam Link', desc: 'Detect and remove known scam URLs' },
-    { key: 'antiRaid', label: 'Anti Raid', desc: 'Slow or lock server during join spikes' },
-]
 
 export default function SecurityPage() {
     const { guildId } = useParams<{ guildId: string }>()
     const qc = useQueryClient()
     const toast = useToast()
+    const { t, lang } = useLangStore()
+
+    const featureToggles: { key: keyof SecurityConfig; label: string; desc: string }[] = [
+        { key: 'antiInvite', label: t.security.antiInvite, desc: t.security.antiInviteDesc },
+        { key: 'antiScamLink', label: t.security.antiScam, desc: t.security.antiScamDesc },
+        { key: 'antiRaid', label: t.security.antiRaid, desc: t.security.antiRaidDesc },
+    ]
 
     const { data: config, isLoading } = useQuery({
         queryKey: ['security', guildId],
@@ -40,9 +42,9 @@ export default function SecurityPage() {
         mutationFn: () => securityApi.update(guildId!, form),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['security', guildId] })
-            toast.success('Security settings saved.')
+            toast.success(t.common.savedSuccess)
         },
-        onError: () => toast.error('Failed to save security settings.'),
+        onError: () => toast.error(t.common.error),
     })
 
     if (isLoading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>
@@ -50,18 +52,18 @@ export default function SecurityPage() {
     return (
         <div className="max-w-2xl space-y-6">
             <div>
-                <h2 className="text-lg font-semibold text-[--color-text]">Security & Anti-Spam</h2>
+                <h2 className="text-lg font-semibold text-[--color-text]">{t.security.title}</h2>
                 <p className="text-sm text-[--color-text-muted] mt-1">
-                    Protect your server from spam, raids, and malicious content.
+                    {t.security.subtitle}
                 </p>
             </div>
 
             {/* Master toggle */}
             <Card className="flex items-center justify-between">
                 <div>
-                    <p className="text-sm font-medium text-[--color-text]">Enable security module</p>
+                    <p className="text-sm font-medium text-[--color-text]">{t.security.enableSecurity}</p>
                     <p className="text-xs text-[--color-text-muted] mt-0.5">
-                        Activates all configured security rules
+                        {lang === 'vi' ? 'Kích hoạt toàn bộ các luật bảo vệ đã cài đặt bên dưới' : 'Activates all configured security rules'}
                     </p>
                 </div>
                 <Toggle
@@ -74,11 +76,11 @@ export default function SecurityPage() {
                 <>
                     {/* Spam thresholds */}
                     <Card className="space-y-5">
-                        <p className="text-sm font-medium text-[--color-text]">Spam thresholds</p>
+                        <p className="text-sm font-medium text-[--color-text]">{t.security.antiSpam}</p>
                         <div className="grid grid-cols-2 gap-4">
                             <Input
                                 id="messageThreshold"
-                                label="Messages per window"
+                                label={t.security.msgThreshold}
                                 type="number"
                                 min={2} max={30}
                                 value={form.messageThreshold}
@@ -86,7 +88,7 @@ export default function SecurityPage() {
                             />
                             <Input
                                 id="messageWindowSeconds"
-                                label="Window (seconds)"
+                                label={t.security.msgWindow}
                                 type="number"
                                 min={1} max={30}
                                 value={form.messageWindowSeconds}
@@ -95,7 +97,7 @@ export default function SecurityPage() {
                         </div>
                         <Input
                             id="mentionThreshold"
-                            label="Max mentions per message"
+                            label={lang === 'vi' ? 'Giới hạn nhắc tên (@mention) tối đa' : 'Max mentions per message'}
                             type="number"
                             min={1} max={20}
                             value={form.mentionThreshold}
@@ -105,7 +107,7 @@ export default function SecurityPage() {
 
                     {/* Feature toggles */}
                     <Card className="space-y-4">
-                        {FEATURE_TOGGLES.map(({ key, label, desc }) => (
+                        {featureToggles.map(({ key, label, desc }) => (
                             <div key={key} className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm text-[--color-text]">{label}</p>
@@ -124,7 +126,7 @@ export default function SecurityPage() {
                         <Card>
                             <Input
                                 id="raidThreshold"
-                                label="Raid threshold (joins per 10s)"
+                                label={t.security.raidThreshold}
                                 type="number"
                                 min={3} max={50}
                                 value={form.raidThreshold}
@@ -135,7 +137,7 @@ export default function SecurityPage() {
                 </>
             )}
 
-            <Button onClick={() => save()} loading={isPending}>Save changes</Button>
+            <Button onClick={() => save()} loading={isPending} className="cursor-pointer">{t.common.save}</Button>
         </div>
     )
 }

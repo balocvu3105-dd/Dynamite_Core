@@ -13,6 +13,8 @@ public class ModerationActionConfiguration : IEntityTypeConfiguration<Moderation
         builder.Property(a => a.GuildId).HasConversion<long>();
         builder.Property(a => a.TargetUserId).HasConversion<long>();
         builder.Property(a => a.ModeratorId).HasConversion<long>();
+        builder.Property(a => a.TargetUsername).HasMaxLength(100);
+        builder.Property(a => a.ModeratorUsername).HasMaxLength(100);
 
         builder.Property(a => a.Reason)
             .HasMaxLength(500)

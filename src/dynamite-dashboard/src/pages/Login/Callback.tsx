@@ -29,7 +29,10 @@ export default function AuthCallbackPage() {
         login(res.user, res.accessToken, res.discordToken ?? res.accessToken)
         navigate('/servers', { replace: true })
       })
-      .catch(() => navigate('/login', { replace: true }))
+      .catch((err) => {
+        console.error('Auth error:', err)
+        document.body.innerHTML = `<div style="padding: 20px; color: white;"><h1>Login Failed</h1><pre>${err.message}</pre><pre>${JSON.stringify(err.response?.data, null, 2)}</pre></div>`
+      })
   }, [login, navigate])
 
   return (

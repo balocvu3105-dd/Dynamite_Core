@@ -4,11 +4,12 @@ namespace Dynamite.Modules.Setup;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
+using Dynamite.Modules.Setup.Services;
 using Dynamite.Modules.Setup.Templates;
 using Microsoft.Extensions.Logging;
 
 // ────────────────────────────────────────────────────────────────────────────
-// SetupModule — slash commands /setup gaming|community|streamer
+// SetupModule — slash commands /setup gaming|community|streamer|smart
 // ────────────────────────────────────────────────────────────────────────────
 
 [RequireContext(ContextType.Guild)]
@@ -18,11 +19,13 @@ using Microsoft.Extensions.Logging;
 public class SetupModule : InteractionModuleBase<SocketInteractionContext>
 {
     private readonly SetupExecutor _executor;
+    private readonly SmartSetupEngine _smartEngine;
     private readonly ILogger<SetupModule> _logger;
 
-    public SetupModule(SetupExecutor executor, ILogger<SetupModule> logger)
+    public SetupModule(SetupExecutor executor, SmartSetupEngine smartEngine, ILogger<SetupModule> logger)
     {
         _executor = executor;
+        _smartEngine = smartEngine;
         _logger = logger;
     }
 
@@ -37,6 +40,29 @@ public class SetupModule : InteractionModuleBase<SocketInteractionContext>
     [SlashCommand("streamer", "Set up a streamer community server")]
     public async Task SetupStreamerAsync()
         => await RunSetupAsync(StreamerTemplate.Create());
+
+    [SlashCommand("smart", "Smart wizard setup tailored to your community topic and scale")]
+    public async Task SetupSmartAsync(
+        [Summary("topic", "Main server theme or topic")] SmartServerTopic topic = SmartServerTopic.Community,
+        [Summary("scale", "Expected server member size")] SmartServerScale scale = SmartServerScale.Medium,
+        [Summary("economy", "Include economy and fishing channels")] bool economy = true,
+        [Summary("ticket", "Include support ticket channels")] bool ticket = true,
+        [Summary("moderation", "Include staff moderation channels")] bool moderation = true,
+        [Summary("voice", "Include voice lounges")] bool voice = true)
+    {
+        var options = new SmartSetupOptions
+        {
+            Topic = topic,
+            Scale = scale,
+            EnableEconomy = economy,
+            EnableTicket = ticket,
+            EnableModeration = moderation,
+            EnableVoice = voice
+        };
+
+        var template = _smartEngine.GenerateTemplate(options);
+        await RunSetupAsync(template);
+    }
 
     private async Task RunSetupAsync(SetupTemplate template)
     {
