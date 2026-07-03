@@ -1,4 +1,4 @@
-import { Globe, LogOut, ShieldAlert, Key } from 'lucide-react'
+import { Globe, LogOut, ShieldAlert } from 'lucide-react'
 import { Card, Button } from '@/components/ui'
 import type { UserProfile } from '@/types'
 
