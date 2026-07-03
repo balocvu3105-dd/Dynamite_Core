@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dynamite.API.DTOs.Auth;
 using Dynamite.API.DTOs.Guild;
+using Microsoft.Extensions.Caching.Memory;
 
 public class DiscordOAuthService
 {
@@ -15,11 +16,13 @@ public class DiscordOAuthService
 
     private readonly HttpClient _http;
     private readonly IConfiguration _config;
+    private readonly IMemoryCache _cache;
 
-    public DiscordOAuthService(HttpClient http, IConfiguration config)
+    public DiscordOAuthService(HttpClient http, IConfiguration config, IMemoryCache cache)
     {
         _http = http;
         _config = config;
+        _cache = cache;
     }
 
     /// <summary>
@@ -87,6 +90,12 @@ public class DiscordOAuthService
     public async Task<IEnumerable<DiscordGuildDto>> GetManageableGuildsAsync(
         string discordAccessToken, CancellationToken ct = default)
     {
+        var cacheKey = $"ManageableGuilds_{discordAccessToken}";
+        if (_cache.TryGetValue(cacheKey, out IEnumerable<DiscordGuildDto>? cachedGuilds) && cachedGuilds != null)
+        {
+            return cachedGuilds;
+        }
+
         using var request = new HttpRequestMessage(
             HttpMethod.Get, $"{DiscordApiBase}/users/@me/guilds");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", discordAccessToken);
@@ -97,14 +106,18 @@ public class DiscordOAuthService
         var json = await response.Content.ReadAsStringAsync(ct);
         var guilds = JsonSerializer.Deserialize<List<DiscordGuildRaw>>(json) ?? [];
 
-        return guilds
+        var result = guilds
             // Discord trả permissions là string — parse về long trước khi check
             .Where(g => long.TryParse(g.Permissions, out var perms) && (perms & ManageGuildPermission) != 0)
             .Select(g => new DiscordGuildDto(
                 Id: g.Id,
                 Name: g.Name,
                 Icon: g.Icon,
-                Permissions: long.TryParse(g.Permissions, out var p) ? p : 0));
+                Permissions: long.TryParse(g.Permissions, out var p) ? p : 0))
+            .ToList();
+
+        _cache.Set(cacheKey, result, TimeSpan.FromMinutes(5));
+        return result;
     }
 
     public async Task<DiscordGuildDetailRaw?> GetGuildDetailAsync(

@@ -6,10 +6,12 @@ using Dynamite.Application.Interfaces;
 using Dynamite.Core.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Dynamite.API.Filters;
 
 [ApiController]
 [Route("api/guilds/{guildId}/logging")]
 [Authorize]
+[RequireGuildAdmin]
 public class LoggingController : ControllerBase
 {
     private readonly IServerLogService _logService;

@@ -5,6 +5,7 @@ using Dynamite.Modules.Setup.Services;
 using Dynamite.Modules.Setup.Templates;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Dynamite.API.Filters;
 
 public record SmartSetupRequestDto(
     string Topic,
@@ -18,6 +19,7 @@ public record SmartSetupRequestDto(
 [ApiController]
 [Route("api/guilds/{guildId}/setup")]
 [Authorize]
+[RequireGuildAdmin]
 public class SetupController : ControllerBase
 {
     private readonly SmartSetupEngine _smartEngine;

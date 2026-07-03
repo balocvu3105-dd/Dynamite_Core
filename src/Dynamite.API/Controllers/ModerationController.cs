@@ -5,10 +5,13 @@ using Dynamite.API.DTOs.Moderation;
 using Dynamite.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+using Dynamite.API.Filters;
 
 [ApiController]
-[Route("api/guilds/{guildId}")]
+[Route("api/guilds/{guildId}/moderation")]
 [Authorize]
+[RequireGuildAdmin]
 public class ModerationController : ControllerBase
 {
     private readonly IModerationService _moderation;

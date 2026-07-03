@@ -6,6 +6,7 @@ using Dynamite.Core.Interfaces.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Dynamite.API.Filters;
 
 public record BlacklistEntryDto(
     string UserId,
@@ -29,6 +30,7 @@ public record RemoveBlacklistRequestDto(string Reason);
 [ApiController]
 [Route("api/guilds/{guildId}/blacklist")]
 [Authorize]
+[RequireGuildAdmin]
 public class BlacklistController : ControllerBase
 {
     private readonly IBlacklistService _blacklistService;

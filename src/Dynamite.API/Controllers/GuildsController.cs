@@ -8,6 +8,7 @@ using Dynamite.API.Services;
 using Dynamite.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Dynamite.API.Filters;
 
 [ApiController]
 [Route("api/guilds")]
@@ -71,13 +72,12 @@ public class GuildsController : ControllerBase
     /// Gọi Discord REST bằng bot token để lấy live data.
     /// </summary>
     [HttpGet("{guildId}/info")]
+    [RequireGuildAdmin]
     public async Task<IActionResult> GetGuildInfo(
         string guildId,
         [FromHeader(Name = "X-Discord-Token")] string? discordToken,
         CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(discordToken))
-            return BadRequest(new { error = "X-Discord-Token header is required." });
 
         if (!ulong.TryParse(guildId, out var guildIdUlong))
             return BadRequest(new { error = "Invalid guild ID." });
@@ -121,21 +121,13 @@ public class GuildsController : ControllerBase
     /// GET /api/guilds/{guildId}/settings
     /// </summary>
     [HttpGet("{guildId}/settings")]
+    [RequireGuildAdmin]
     public async Task<IActionResult> GetSettings(
         string guildId,
-        [FromHeader(Name = "X-Discord-Token")] string? discordToken,
         CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(discordToken))
-            return BadRequest(new { error = "X-Discord-Token header is required." });
-
         if (!ulong.TryParse(guildId, out var guildIdUlong))
             return BadRequest(new { error = "Invalid guild ID." });
-
-        // Authorization: verify caller has ManageGuild in this guild
-        var guilds = await _discord.GetManageableGuildsAsync(discordToken, ct);
-        if (_guildAuth.GetManageableGuild(guilds, guildId) is null)
-            return Forbid();
 
         var config = await _guildConfig.GetOrCreateConfigAsync(guildIdUlong, string.Empty);
 
@@ -158,22 +150,14 @@ public class GuildsController : ControllerBase
     /// PATCH /api/guilds/{guildId}/settings
     /// </summary>
     [HttpPatch("{guildId}/settings")]
+    [RequireGuildAdmin]
     public async Task<IActionResult> UpdateSettings(
         string guildId,
         [FromBody] UpdateGuildSettingsRequest request,
-        [FromHeader(Name = "X-Discord-Token")] string? discordToken,
         CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(discordToken))
-            return BadRequest(new { error = "X-Discord-Token header is required." });
-
         if (!ulong.TryParse(guildId, out var guildIdUlong))
             return BadRequest(new { error = "Invalid guild ID." });
-
-        // Authorization: verify caller has ManageGuild in this guild
-        var guilds = await _discord.GetManageableGuildsAsync(discordToken, ct);
-        if (_guildAuth.GetManageableGuild(guilds, guildId) is null)
-            return Forbid();
 
         var config = await _guildConfig.GetOrCreateConfigAsync(guildIdUlong, string.Empty);
 

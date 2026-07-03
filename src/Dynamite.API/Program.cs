@@ -28,6 +28,7 @@ builder.Services.Configure<HostOptions>(options =>
 // ─── Application + Infrastructure layers ─────────────────────────────────────
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddMemoryCache();
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 var allowedOrigins = builder.Configuration

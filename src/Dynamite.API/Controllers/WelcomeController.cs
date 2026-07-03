@@ -5,10 +5,12 @@ using Dynamite.API.DTOs.Welcome;
 using Dynamite.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Dynamite.API.Filters;
 
 [ApiController]
 [Route("api/guilds/{guildId}/welcome")]
 [Authorize]
+[RequireGuildAdmin]
 public class WelcomeController : ControllerBase
 {
     private readonly IGuildConfigService _guildConfig;

@@ -6,12 +6,14 @@ using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Economy.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Dynamite.API.Filters;
 
 public record UpdateBalanceRequestDto(long Coins);
 
 [ApiController]
 [Route("api/guilds/{guildId}/economy")]
 [Authorize]
+[RequireGuildAdmin]
 public class EconomyController : ControllerBase
 {
     private readonly WalletService _walletService;
