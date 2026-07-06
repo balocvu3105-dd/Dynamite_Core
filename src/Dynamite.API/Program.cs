@@ -46,7 +46,15 @@ builder.Services.AddCors(options =>
     });
 });
 
-var jwtSecret = builder.Configuration["Jwt:Secret"] ?? "Dynamite@Secret#Key$2026!Dashboard%API&Secure";
+var jwtSecret = builder.Configuration["Jwt:Secret"];
+if (string.IsNullOrEmpty(jwtSecret))
+{
+    if (!builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException("CRITICAL SECURITY ERROR: 'Jwt:Secret' is not configured in environment variables for Production environment!");
+    }
+    jwtSecret = "Dynamite@Secret#Key$2026!Dashboard%API&Secure";
+}
 if (jwtSecret.Length < 32) jwtSecret = jwtSecret.PadRight(32, 'X');
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "Dynamite";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "DynamiteDashboard";

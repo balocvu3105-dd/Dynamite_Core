@@ -8,11 +8,11 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
-/// Action filter này đảm bảo request chỉ được xử lý nếu user có quyền ManageGuild.
+/// Action filter này đảm bảo request chỉ được xử lý nếu user có quyền Administrator hoặc là Chủ sở hữu (Owner).
 /// Yêu cầu:
 /// 1. Route chứa tham số {guildId}.
 /// 2. Header chứa X-Discord-Token.
-/// 3. Token hợp lệ và có quyền ManageGuild.
+/// 3. Token hợp lệ và có quyền Administrator hoặc là Chủ sở hữu server.
 /// </summary>
 public class RequireGuildAdminAttribute : Attribute, IAsyncActionFilter
 {
@@ -41,7 +41,21 @@ public class RequireGuildAdminAttribute : Attribute, IAsyncActionFilter
 
         try
         {
-            // Lấy danh sách guild (có hỗ trợ cache bên trong DiscordOAuthService hoặc GuildAuthorizationService)
+            // 1. Validate X-Discord-Token thuộc về đúng user đang đăng nhập (từ JWT claims - không tin tưởng web 100%)
+            var jwtUserId = context.HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                         ?? context.HttpContext.User.FindFirst("sub")?.Value;
+
+            if (!string.IsNullOrEmpty(jwtUserId))
+            {
+                var discordUser = await discordService.GetCurrentUserAsync(discordToken, context.HttpContext.RequestAborted);
+                if (discordUser.Id != jwtUserId)
+                {
+                    context.Result = new StatusCodeResult(403); // Forbidden: Token Discord không khớp với User đang đăng nhập!
+                    return;
+                }
+            }
+
+            // 2. Lấy danh sách guild (có hỗ trợ cache bên trong DiscordOAuthService hoặc GuildAuthorizationService)
             var guilds = await discordService.GetManageableGuildsAsync(discordToken, context.HttpContext.RequestAborted);
             
             // Kiểm tra user có quyền quản lý guild này hay không

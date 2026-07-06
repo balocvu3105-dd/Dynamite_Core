@@ -40,7 +40,11 @@ export default function LoginPage() {
           <Button
             size="lg"
             className="w-full gap-3"
-            onClick={() => window.location.href = discordOAuthUrl()}
+            onClick={() => {
+              const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+              sessionStorage.setItem('oauth_state', state)
+              window.location.href = discordOAuthUrl(state)
+            }}
           >
             {/* Discord logo SVG */}
             <svg width="20" height="20" viewBox="0 0 71 55" fill="currentColor">

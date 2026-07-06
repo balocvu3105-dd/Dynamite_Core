@@ -14,6 +14,7 @@ public class UserWalletConfiguration : IEntityTypeConfiguration<UserWallet>
 
         builder.Property(w => w.GuildId).HasConversion<long>();
         builder.Property(w => w.UserId).HasConversion<long>();
+        builder.Property(w => w.Coins).IsConcurrencyToken();
 
         builder.HasIndex(w => new { w.GuildId, w.UserId }).IsUnique();
         builder.HasIndex(w => new { w.GuildId, w.Coins });

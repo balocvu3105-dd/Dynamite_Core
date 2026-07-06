@@ -12,7 +12,7 @@ public class DiscordOAuthService
 {
     private const string DiscordApiBase = "https://discord.com/api/v10";
     private const string TokenEndpoint = "https://discord.com/api/oauth2/token";
-    private const long ManageGuildPermission = 0x20;
+    private const long AdministratorPermission = 0x8;
 
     private readonly HttpClient _http;
     private readonly IConfiguration _config;
@@ -68,6 +68,12 @@ public class DiscordOAuthService
     public async Task<DiscordUserDto> GetCurrentUserAsync(
         string discordAccessToken, CancellationToken ct = default)
     {
+        var cacheKey = $"CurrentUser_{discordAccessToken}";
+        if (_cache.TryGetValue(cacheKey, out DiscordUserDto? cachedUser) && cachedUser != null)
+        {
+            return cachedUser;
+        }
+
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{DiscordApiBase}/users/@me");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", discordAccessToken);
 
@@ -78,13 +84,16 @@ public class DiscordOAuthService
         var raw = JsonSerializer.Deserialize<DiscordUserRaw>(json)
             ?? throw new InvalidOperationException("Failed to deserialize Discord user.");
 
-        return new DiscordUserDto(
+        var result = new DiscordUserDto(
             Id: raw.Id,
             Username: raw.Username,
             Avatar: raw.Avatar is not null
                 ? $"https://cdn.discordapp.com/avatars/{raw.Id}/{raw.Avatar}.png"
                 : null,
             Email: raw.Email);
+
+        _cache.Set(cacheKey, result, TimeSpan.FromMinutes(5));
+        return result;
     }
 
     public async Task<DiscordUserDto?> GetUserByIdAsync(
@@ -132,13 +141,14 @@ public class DiscordOAuthService
         var guilds = JsonSerializer.Deserialize<List<DiscordGuildRaw>>(json) ?? [];
 
         var result = guilds
-            // Discord trả permissions là string — parse về long trước khi check
-            .Where(g => long.TryParse(g.Permissions, out var perms) && (perms & ManageGuildPermission) != 0)
+            // Discord trả permissions là string — parse về long trước khi check Admin hoặc Owner
+            .Where(g => g.Owner || (long.TryParse(g.Permissions, out var perms) && (perms & AdministratorPermission) != 0))
             .Select(g => new DiscordGuildDto(
                 Id: g.Id,
                 Name: g.Name,
                 Icon: g.Icon,
-                Permissions: long.TryParse(g.Permissions, out var p) ? p : 0))
+                Permissions: long.TryParse(g.Permissions, out var p) ? p : 0,
+                Owner: g.Owner))
             .ToList();
 
         _cache.Set(cacheKey, result, TimeSpan.FromMinutes(5));
@@ -221,7 +231,8 @@ file record DiscordGuildRaw(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("icon")] string? Icon,
-    [property: JsonPropertyName("permissions")] string Permissions);
+    [property: JsonPropertyName("permissions")] string Permissions,
+    [property: JsonPropertyName("owner")] bool Owner);
 
 file record DiscordGuildFullRaw(
     [property: JsonPropertyName("name")] string Name,

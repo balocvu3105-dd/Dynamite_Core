@@ -25,7 +25,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
-    localStorage.clear()
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('discordToken')
+    localStorage.removeItem('user')
     set({ user: null, accessToken: null, discordToken: null, isAuthenticated: false })
   },
 
@@ -39,7 +41,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         const user = JSON.parse(raw) as DiscordUser
         set({ user, accessToken: token, discordToken, isAuthenticated: true })
       } catch {
-        localStorage.clear()
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('discordToken')
+        localStorage.removeItem('user')
       }
     }
   },

@@ -27,11 +27,16 @@ export function formatDate(iso: string) {
   }).format(new Date(iso))
 }
 
-export function discordOAuthUrl() {
+export function discordOAuthUrl(state?: string) {
   const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID || "1514609829610782862"
+  const defaultRedirect = typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : "http://localhost:5173/auth/callback"
   const redirectUri = encodeURIComponent(
-    import.meta.env.VITE_DISCORD_REDIRECT_URI || "http://localhost:5173/auth/callback"
+    import.meta.env.VITE_DISCORD_REDIRECT_URI || defaultRedirect
   )
   const scope = encodeURIComponent("identify email guilds")
-  return `https://discord.com/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}`
+  let url = `https://discord.com/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}`
+  if (state) {
+    url += `&state=${encodeURIComponent(state)}`
+  }
+  return url
 }

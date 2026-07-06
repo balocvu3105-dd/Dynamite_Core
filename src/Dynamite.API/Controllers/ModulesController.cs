@@ -2,6 +2,7 @@
 namespace Dynamite.API.Controllers;
 
 using Dynamite.API.DTOs.Guild;
+using Dynamite.API.Filters;
 using Dynamite.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 [ApiController]
 [Route("api/guilds/{guildId}/modules")]
 [Authorize]
+[RequireGuildAdmin]
 public class ModulesController : ControllerBase
 {
     private readonly IGuildConfigService _guildConfig;

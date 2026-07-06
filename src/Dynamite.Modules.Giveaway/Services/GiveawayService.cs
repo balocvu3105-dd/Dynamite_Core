@@ -146,7 +146,14 @@ public class GiveawayService
         };
 
         await _repo.AddEntryAsync(entry);
-        await _repo.SaveChangesAsync();
+        try
+        {
+            await _repo.SaveChangesAsync();
+        }
+        catch (Exception ex) when (ex.GetType().Name == "DbUpdateException" || (ex.InnerException != null && ex.InnerException.Message.Contains("duplicate key")))
+        {
+            return ServiceResult.Fail("You have already entered this giveaway!");
+        }
 
         var entryCount = await _repo.GetEntryCountAsync(giveaway.Id);
         await UpdateEmbedAsync(giveaway, entryCount);

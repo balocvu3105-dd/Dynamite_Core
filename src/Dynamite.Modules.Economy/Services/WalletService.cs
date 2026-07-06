@@ -64,7 +64,14 @@ public class WalletService
         };
 
         await _repo.AddTransactionAsync(tx);
-        await _repo.SaveChangesAsync();
+        try
+        {
+            await _repo.SaveChangesAsync();
+        }
+        catch (Exception ex) when (ex.GetType().Name == "DbUpdateConcurrencyException")
+        {
+            return ServiceResult<DailyResult>.Fail("⚠️ Concurrent daily claim detected. Please try again.");
+        }
 
         _logger.LogInformation("User {UserId} claimed daily: {Coins} coins (streak {Streak})",
             userId, earned, wallet.DailyStreak);
@@ -105,7 +112,14 @@ public class WalletService
         };
 
         await _repo.AddTransactionAsync(tx);
-        await _repo.SaveChangesAsync();
+        try
+        {
+            await _repo.SaveChangesAsync();
+        }
+        catch (Exception ex) when (ex.GetType().Name == "DbUpdateConcurrencyException")
+        {
+            return ServiceResult<TransferResult>.Fail("⚠️ Transaction failed due to concurrent balance modification. Please try again.");
+        }
 
         return ServiceResult<TransferResult>.Ok(new TransferResult(from.Coins, to.Coins));
     }

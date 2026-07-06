@@ -18,5 +18,6 @@ public record DiscordGuildDto(
     string Id,
     string Name,
     string? Icon,
-    long Permissions  // bitmask — dùng để check ManageGuild
+    long Permissions,  // bitmask — dùng để check Administrator
+    bool Owner         // true nếu user là chủ sở hữu server
 );

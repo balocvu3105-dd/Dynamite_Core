@@ -11,7 +11,7 @@ using Dynamite.Modules.RoleManagement.Services;
 using Microsoft.Extensions.Logging;
 
 [RequireContext(ContextType.Guild)]
-[RequireUserPermission(GuildPermission.ManageRoles)]
+[RequireUserPermission(GuildPermission.Administrator)]
 [Group("rolepanel", "Manage self-assignable role panels")]
 public class RolePanelModule : InteractionModuleBase<SocketInteractionContext>
 {

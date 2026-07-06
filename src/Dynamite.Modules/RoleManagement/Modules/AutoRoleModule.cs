@@ -8,7 +8,7 @@ using Dynamite.Application.Interfaces;
 using Dynamite.Modules.RoleManagement.Helpers;
 
 [RequireContext(ContextType.Guild)]
-[RequireUserPermission(GuildPermission.ManageRoles)]
+[RequireUserPermission(GuildPermission.Administrator)]
 [Group("autorole", "Manage automatic role assignment on member join")]
 public class AutoRoleModule : InteractionModuleBase<SocketInteractionContext>
 {

@@ -6,6 +6,7 @@ using Dynamite.Core.Interfaces.Repositories;
 using Dynamite.Modules.Economy.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using Dynamite.API.Filters;
 
 public record UpdateBalanceRequestDto(long Coins);
@@ -68,6 +69,7 @@ public class EconomyController : ControllerBase
         var oldCoins = wallet.Coins;
         wallet.Coins = Math.Max(0, request.Coins);
 
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub") ?? "Admin";
         var diff = wallet.Coins - oldCoins;
         var tx = new Transaction
         {
@@ -75,7 +77,7 @@ public class EconomyController : ControllerBase
             ToWalletId = wallet.Id,
             Amount = Math.Abs(diff),
             Type = diff >= 0 ? TransactionType.AdminGrant : TransactionType.AdminDeduct,
-            Note = "Updated via Web Dashboard",
+            Note = $"Updated via Web Dashboard by Admin ({adminId})",
             CreatedAt = DateTime.UtcNow
         };
 

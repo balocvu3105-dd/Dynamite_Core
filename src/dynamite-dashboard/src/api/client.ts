@@ -21,7 +21,9 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.clear()
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('discordToken')
+      localStorage.removeItem('user')
       window.location.href = '/login'
     }
     return Promise.reject(err)
