@@ -28,8 +28,10 @@ export function formatDate(iso: string) {
 }
 
 export function discordOAuthUrl() {
-  const clientId = "1514609829610782862"
-  const redirectUri = encodeURIComponent("http://localhost:5173/auth/callback")
+  const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID || "1514609829610782862"
+  const redirectUri = encodeURIComponent(
+    import.meta.env.VITE_DISCORD_REDIRECT_URI || "http://localhost:5173/auth/callback"
+  )
   const scope = encodeURIComponent("identify email guilds")
   return `https://discord.com/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}`
 }
