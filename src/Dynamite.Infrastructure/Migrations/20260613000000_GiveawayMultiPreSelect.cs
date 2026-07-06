@@ -1,10 +1,14 @@
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Dynamite.Infrastructure.Persistence;
 
 #nullable disable
 
 namespace Dynamite.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260613000000_GiveawayMultiPreSelect")]
     public partial class GiveawayMultiPreSelect : Migration
     {
         /// <inheritdoc />
