@@ -57,7 +57,7 @@ if [ -z "$VPS_PATH" ]; then
 fi
 echo "==> Tim thay thu muc repo tai: $VPS_PATH"
 cd "$VPS_PATH"
-git stash && git pull origin main && docker compose up --build -d && echo '=== Deploy OK ==='
+git stash && git pull origin main && docker compose -f docker-compose.yml up --build -d && echo '=== Deploy OK ==='
 '@
 
 ssh "${VPS_USER}@${VPS_IP}" $VPS_COMMANDS
