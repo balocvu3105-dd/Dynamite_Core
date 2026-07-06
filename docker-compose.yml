@@ -74,6 +74,8 @@ services:
       Discord__ClientId: ${DISCORD_CLIENT_ID}
       Discord__ClientSecret: ${DISCORD_CLIENT_SECRET}
       Discord__RedirectUri: ${DISCORD_REDIRECT_URI}
+      Discord__Token: ${DISCORD_TOKEN}
+      Discord__BotToken: ${DISCORD_TOKEN}
       Jwt__Secret: ${JWT_SECRET}
       Jwt__Issuer: ${JWT_ISSUER:-dynamite-api}
       Jwt__Audience: ${JWT_AUDIENCE:-dynamite-dashboard}
