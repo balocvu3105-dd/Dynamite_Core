@@ -150,9 +150,12 @@ public class DiscordOAuthService
         string guildId,
         CancellationToken ct = default)
     {
+        var botToken = _config["Discord:BotToken"] ?? _config["Discord:Token"];
+        if (string.IsNullOrWhiteSpace(botToken)) return null;
+
         using var chanReq = new HttpRequestMessage(
             HttpMethod.Get, $"{DiscordApiBase}/guilds/{guildId}/channels");
-        chanReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", discordAccessToken);
+        chanReq.Headers.Authorization = new AuthenticationHeaderValue("Bot", botToken);
 
         var chanResp = await _http.SendAsync(chanReq, ct);
         if (!chanResp.IsSuccessStatusCode) return null;
@@ -162,7 +165,7 @@ public class DiscordOAuthService
 
         using var guildReq = new HttpRequestMessage(
             HttpMethod.Get, $"{DiscordApiBase}/guilds/{guildId}");
-        guildReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", discordAccessToken);
+        guildReq.Headers.Authorization = new AuthenticationHeaderValue("Bot", botToken);
 
         var guildResp = await _http.SendAsync(guildReq, ct);
         if (!guildResp.IsSuccessStatusCode) return null;
