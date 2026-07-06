@@ -3,12 +3,14 @@ namespace Dynamite.API.Controllers;
 
 using Dynamite.API.DTOs.Security;
 using Dynamite.Application.Interfaces;
+using Dynamite.API.Filters;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
 [Route("api/guilds/{guildId}/security")]
 [Authorize]
+[RequireGuildAdmin]
 public class SecurityController : ControllerBase
 {
     private readonly IAntiSpamService _antiSpam;

@@ -47,10 +47,10 @@ public class AntiSpamService : IAntiSpamService
         ulong guildId, string guildName,
         int threshold, int windowSeconds, CancellationToken ct = default)
     {
-        if (threshold < 2 || threshold > 30)
-            throw new ArgumentException("Threshold must be between 2 and 30.");
-        if (windowSeconds < 2 || windowSeconds > 60)
-            throw new ArgumentException("Window must be between 2 and 60 seconds.");
+        if (threshold < 1 || threshold > 30)
+            throw new ArgumentException("Threshold must be between 1 and 30.");
+        if (windowSeconds < 1 || windowSeconds > 60)
+            throw new ArgumentException("Window must be between 1 and 60 seconds.");
 
         var config = await GetOrCreateConfigAsync(guildId, guildName, ct);
         config.MessageThreshold = threshold;
@@ -62,8 +62,8 @@ public class AntiSpamService : IAntiSpamService
         ulong guildId, string guildName,
         int threshold, CancellationToken ct = default)
     {
-        if (threshold < 2 || threshold > 20)
-            throw new ArgumentException("Mention threshold must be between 2 and 20.");
+        if (threshold < 1 || threshold > 20)
+            throw new ArgumentException("Mention threshold must be between 1 and 20.");
 
         var config = await GetOrCreateConfigAsync(guildId, guildName, ct);
         config.MentionThreshold = threshold;
@@ -79,7 +79,8 @@ public class AntiSpamService : IAntiSpamService
         switch (feature.ToLower())
         {
             case "antiinvite": config.AntiInvite = enabled; break;
-            case "antiscam": config.AntiScamLink = enabled; break;
+            case "antiscam":
+            case "antiscamlink": config.AntiScamLink = enabled; break;
             case "antiraid": config.AntiRaid = enabled; break;
             default: throw new ArgumentException($"Unknown feature: {feature}");
         }
