@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -11,38 +11,6 @@ namespace Dynamite.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "ModeratorUsername",
-                table: "Warnings",
-                type: "character varying(100)",
-                maxLength: 100,
-                nullable: false,
-                defaultValue: "");
-
-            migrationBuilder.AddColumn<string>(
-                name: "TargetUsername",
-                table: "Warnings",
-                type: "character varying(100)",
-                maxLength: 100,
-                nullable: false,
-                defaultValue: "");
-
-            migrationBuilder.AddColumn<string>(
-                name: "ModeratorUsername",
-                table: "ModerationActions",
-                type: "character varying(100)",
-                maxLength: 100,
-                nullable: false,
-                defaultValue: "");
-
-            migrationBuilder.AddColumn<string>(
-                name: "TargetUsername",
-                table: "ModerationActions",
-                type: "character varying(100)",
-                maxLength: 100,
-                nullable: false,
-                defaultValue: "");
-
             migrationBuilder.CreateTable(
                 name: "ServerActivityLogs",
                 columns: table => new
@@ -88,22 +56,6 @@ namespace Dynamite.Infrastructure.Migrations
         {
             migrationBuilder.DropTable(
                 name: "ServerActivityLogs");
-
-            migrationBuilder.DropColumn(
-                name: "ModeratorUsername",
-                table: "Warnings");
-
-            migrationBuilder.DropColumn(
-                name: "TargetUsername",
-                table: "Warnings");
-
-            migrationBuilder.DropColumn(
-                name: "ModeratorUsername",
-                table: "ModerationActions");
-
-            migrationBuilder.DropColumn(
-                name: "TargetUsername",
-                table: "ModerationActions");
         }
     }
 }
