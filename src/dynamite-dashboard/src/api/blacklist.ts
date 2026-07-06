@@ -19,6 +19,12 @@ export interface AddBlacklistRequest {
   notes?: string | null
 }
 
+export interface DiscordUserLookup {
+  id: string
+  username: string
+  avatar: string | null
+}
+
 export const blacklistApi = {
   getBlacklist: (guildId: string, count = 50) =>
     api
@@ -34,4 +40,10 @@ export const blacklistApi = {
     api
       .delete(`/api/guilds/${guildId}/blacklist/${userId}`, { data: { reason } })
       .then((r) => r.data),
+
+  lookupUser: (guildId: string, userId: string) =>
+    api
+      .get<DiscordUserLookup>(`/api/guilds/${guildId}/blacklist/lookup/${userId}`)
+      .then((r) => r.data),
 }
+

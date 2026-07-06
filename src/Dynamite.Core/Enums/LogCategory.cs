@@ -6,5 +6,8 @@ public enum LogCategory
     Member = 1,
     Voice = 2,
     Server = 3,
-    Audit = 4   // Immutable audit trail — owner/dev only
+    Audit = 4,   // Immutable audit trail — owner/dev only
+    Moderation = 5,
+    Security = 6,
+    Economy = 7
 }

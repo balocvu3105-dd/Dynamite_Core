@@ -78,6 +78,11 @@ public class MemberLogger
     {
         using var scope = _scopeFactory.CreateScope();
         var logService = scope.ServiceProvider.GetRequiredService<IServerLogService>();
+
+        var title = embed.Title ?? embed.Author?.Name ?? category.ToString();
+        var description = embed.Description ?? string.Join("\n", embed.Fields.Select(f => $"{f.Name}: {f.Value}"));
+        await logService.LogActivityAsync(guildId, category, category.ToString(), title, description);
+
         var channelId = await logService.GetLogChannelAsync(guildId, category);
         if (channelId is null) return;
         await SendToChannelAsync(guildId, channelId.Value, embed);

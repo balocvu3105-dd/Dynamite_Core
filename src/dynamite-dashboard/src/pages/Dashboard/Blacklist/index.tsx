@@ -23,6 +23,32 @@ export default function BlacklistPage() {
   const [newUserNotes, setNewUserNotes] = useState('')
   const [removeReason, setRemoveReason] = useState('')
   const [search, setSearch] = useState('')
+  const [targetAvatarUrl, setTargetAvatarUrl] = useState<string | null>(null)
+  const [isLookingUp, setIsLookingUp] = useState(false)
+
+  // ── Auto lookup Discord user when ID is entered ────────────────────────────
+  useQuery({
+    queryKey: ['lookupUser', guildId, newUserId.trim()],
+    queryFn: async () => {
+      setIsLookingUp(true)
+      try {
+        const user = await blacklistApi.lookupUser(guildId!, newUserId.trim())
+        if (user) {
+          setNewUserName(user.username)
+          setTargetAvatarUrl(user.avatar)
+          toast.success(lang === 'vi' ? `Đã tìm thấy: ${user.username}` : `Found user: ${user.username}`)
+        }
+        return user
+      } catch (err) {
+        return null
+      } finally {
+        setIsLookingUp(false)
+      }
+    },
+    enabled: !!guildId && newUserId.trim().length >= 17 && /^\d+$/.test(newUserId.trim()),
+    retry: false,
+    staleTime: 60000,
+  })
 
   // ── Fetch blacklist ────────────────────────────────────────────────────────
   const { data: blacklist, isLoading, isError } = useQuery({
@@ -38,6 +64,7 @@ export default function BlacklistPage() {
       blacklistApi.addToBlacklist(guildId!, {
         targetUserId: newUserId.trim(),
         targetUsername: newUserName.trim() || `Discord User #${newUserId.slice(-4)}`,
+        targetAvatarUrl: targetAvatarUrl,
         reason: newUserReason.trim() || (lang === 'vi' ? 'Vi phạm quy định' : 'Rule violation'),
         notes: newUserNotes.trim() || null,
       }),
@@ -46,6 +73,7 @@ export default function BlacklistPage() {
       qc.invalidateQueries({ queryKey: ['blacklist', guildId] })
       setNewUserId('')
       setNewUserName('')
+      setTargetAvatarUrl(null)
       setNewUserReason('')
       setNewUserNotes('')
     },
@@ -134,16 +162,31 @@ export default function BlacklistPage() {
             type="text"
             placeholder="Discord User ID (vd: 1514609829610782862)"
             value={newUserId}
-            onChange={(e) => setNewUserId(e.target.value)}
+            onChange={(e) => {
+              setNewUserId(e.target.value)
+              if (e.target.value.trim().length < 17) {
+                setTargetAvatarUrl(null)
+              }
+            }}
             className="sm:col-span-4 px-3 py-2 rounded-md bg-[--color-surface-alt] border border-[--color-border] text-sm text-[--color-text] focus:ring-2 focus:ring-[--color-danger] outline-none"
           />
-          <input
-            type="text"
-            placeholder={lang === 'vi' ? 'Tên hiển thị / Username (tùy chọn)' : 'Display Name (optional)'}
-            value={newUserName}
-            onChange={(e) => setNewUserName(e.target.value)}
-            className="sm:col-span-3 px-3 py-2 rounded-md bg-[--color-surface-alt] border border-[--color-border] text-sm text-[--color-text] focus:ring-2 focus:ring-[--color-brand] outline-none"
-          />
+          <div className="sm:col-span-3 relative flex items-center">
+            {targetAvatarUrl && (
+              <img src={targetAvatarUrl} alt="avatar" className="w-5 h-5 rounded-full absolute left-2.5" />
+            )}
+            <input
+              type="text"
+              placeholder={isLookingUp ? (lang === 'vi' ? 'Đang tìm tên...' : 'Looking up...') : (lang === 'vi' ? 'Tên hiển thị (tự động điền)' : 'Display Name (auto-filled)')}
+              value={newUserName}
+              onChange={(e) => setNewUserName(e.target.value)}
+              className={`w-full ${targetAvatarUrl ? 'pl-9 pr-8' : 'px-3'} py-2 rounded-md bg-[--color-surface-alt] border border-[--color-border] text-sm text-[--color-text] focus:ring-2 focus:ring-[--color-brand] outline-none`}
+            />
+            {isLookingUp && (
+              <div className="absolute right-2.5">
+                <Spinner size="sm" />
+              </div>
+            )}
+          </div>
           <input
             type="text"
             placeholder={lang === 'vi' ? 'Lý do cấm (bắt buộc)' : 'Ban reason (required)'}

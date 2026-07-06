@@ -53,6 +53,10 @@ public class VoiceLogger
         using var scope = _scopeFactory.CreateScope();
         var logService = scope.ServiceProvider.GetRequiredService<IServerLogService>();
 
+        var title = embed.Title ?? "Voice Activity";
+        var description = embed.Description ?? string.Join("\n", embed.Fields.Select(f => $"{f.Name}: {f.Value}"));
+        await logService.LogActivityAsync(guildId, LogCategory.Voice, "VoiceStateUpdated", title, description, user.Id.ToString(), user.Username, user.GetAvatarUrl() ?? user.GetDefaultAvatarUrl());
+
         var channelId = await logService.GetLogChannelAsync(guildId, LogCategory.Voice);
         if (channelId is null) return;
 

@@ -22,6 +22,7 @@ public class AppDbContext : DbContext
 
     // Phase 9b
     public DbSet<GuildPresence> GuildPresences => Set<GuildPresence>();
+    public DbSet<ServerActivityLog> ServerActivityLogs => Set<ServerActivityLog>();
 
     // Phase 10a
     public DbSet<Giveaway> Giveaways => Set<Giveaway>();

@@ -184,6 +184,10 @@ public class ModAuditLogger
             using var scope = _scopeFactory.CreateScope();
             var logService = scope.ServiceProvider.GetRequiredService<IServerLogService>();
 
+            var title = embed.Title ?? embed.Author?.Name ?? "Moderation Audit";
+            var description = embed.Description ?? string.Join("\n", embed.Fields.Select(f => $"{f.Name}: {f.Value}"));
+            await logService.LogActivityAsync(guildId, LogCategory.Moderation, "ModAction", title, description);
+
             var channelId = await logService.GetLogChannelAsync(guildId, LogCategory.Audit);
             if (channelId is null) return;
 

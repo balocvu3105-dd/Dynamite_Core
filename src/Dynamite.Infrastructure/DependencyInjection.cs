@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<IFishingSnapshotRepository, FishingSnapshotRepository>();
         services.AddScoped<IFishTrophyRepository, FishTrophyRepository>();
         services.AddScoped<IFishEncyclopediaRepository, FishEncyclopediaRepository>();
+        services.AddScoped<IServerActivityLogRepository, ServerActivityLogRepository>();
 
         return services;
     }

@@ -87,6 +87,31 @@ export interface LoggingConfig {
   memberLogChannelId: string | null
   voiceLogChannelId: string | null
   serverLogChannelId: string | null
+  modLogChannelId?: string | null
+  auditLogChannelId?: string | null
+}
+
+export interface ServerActivityLogItem {
+  id: string
+  guildId: string
+  category: number
+  eventType: string
+  title: string
+  description: string
+  actorId?: string | null
+  actorUsername?: string | null
+  actorAvatarUrl?: string | null
+  targetId?: string | null
+  targetUsername?: string | null
+  metadata?: string | null
+  createdAt: string
+}
+
+export interface ActivityLogsResponse {
+  logs: ServerActivityLogItem[]
+  totalCount: number
+  page: number
+  pageSize: number
 }
 
 // ── Welcome ───────────────────────────────────────────────────────────────────

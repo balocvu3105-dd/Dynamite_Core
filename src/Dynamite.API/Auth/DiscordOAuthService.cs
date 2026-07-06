@@ -87,6 +87,31 @@ public class DiscordOAuthService
             Email: raw.Email);
     }
 
+    public async Task<DiscordUserDto?> GetUserByIdAsync(
+        string userId, CancellationToken ct = default)
+    {
+        var botToken = _config["Discord:BotToken"] ?? _config["Discord:Token"];
+        if (string.IsNullOrWhiteSpace(botToken)) return null;
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{DiscordApiBase}/users/{userId}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bot", botToken);
+
+        var response = await _http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode) return null;
+
+        var json = await response.Content.ReadAsStringAsync(ct);
+        var raw = JsonSerializer.Deserialize<DiscordUserRaw>(json);
+        if (raw is null) return null;
+
+        return new DiscordUserDto(
+            Id: raw.Id,
+            Username: raw.Username,
+            Avatar: raw.Avatar is not null
+                ? $"https://cdn.discordapp.com/avatars/{raw.Id}/{raw.Avatar}.png"
+                : null,
+            Email: null);
+    }
+
     public async Task<IEnumerable<DiscordGuildDto>> GetManageableGuildsAsync(
         string discordAccessToken, CancellationToken ct = default)
     {

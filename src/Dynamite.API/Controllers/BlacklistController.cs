@@ -6,6 +6,7 @@ using Dynamite.Core.Interfaces.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Dynamite.API.Auth;
 using Dynamite.API.Filters;
 
 public record BlacklistEntryDto(
@@ -35,11 +36,16 @@ public class BlacklistController : ControllerBase
 {
     private readonly IBlacklistService _blacklistService;
     private readonly IGuildConfigRepository _guildConfigRepo;
+    private readonly DiscordOAuthService _oauthService;
 
-    public BlacklistController(IBlacklistService blacklistService, IGuildConfigRepository guildConfigRepo)
+    public BlacklistController(
+        IBlacklistService blacklistService,
+        IGuildConfigRepository guildConfigRepo,
+        DiscordOAuthService oauthService)
     {
         _blacklistService = blacklistService;
         _guildConfigRepo = guildConfigRepo;
+        _oauthService = oauthService;
     }
 
     /// <summary>
@@ -144,5 +150,21 @@ public class BlacklistController : ControllerBase
         {
             return NotFound(new { error = "No active blacklist entry found for this user." });
         }
+    }
+
+    /// <summary>
+    /// GET /api/guilds/{guildId}/blacklist/lookup/{userId} — lookup discord user by ID
+    /// </summary>
+    [HttpGet("lookup/{userId}")]
+    public async Task<IActionResult> LookupUser(string guildId, string userId, CancellationToken ct)
+    {
+        if (!ulong.TryParse(userId, out _))
+            return BadRequest(new { error = "Invalid Discord User ID." });
+
+        var user = await _oauthService.GetUserByIdAsync(userId, ct);
+        if (user is null)
+            return NotFound(new { error = "User not found on Discord." });
+
+        return Ok(user);
     }
 }

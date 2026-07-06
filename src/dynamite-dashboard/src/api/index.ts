@@ -10,6 +10,7 @@ import type {
   LoggingConfig,
   WelcomeConfig,
   SecurityConfig,
+  ActivityLogsResponse,
 } from '@/types'
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -37,17 +38,17 @@ export const guildsApi = {
 export const moderationApi = {
   getWarnings: (guildId: string, page = 1, pageSize = 20, userId?: string) =>
     api
-      .get<PagedResult<Warning>>(`/api/guilds/${guildId}/warnings`, {
+      .get<PagedResult<Warning>>(`/api/guilds/${guildId}/moderation/warnings`, {
         params: { page, pageSize, userId },
       })
       .then((r) => r.data),
 
   deleteWarning: (guildId: string, warningId: string) =>
-    api.delete(`/api/guilds/${guildId}/warnings/${warningId}`).then((r) => r.data),
+    api.delete(`/api/guilds/${guildId}/moderation/warnings/${warningId}`).then((r) => r.data),
 
   getModLogs: (guildId: string, page = 1, pageSize = 20, userId?: string) =>
     api
-      .get<PagedResult<ModLog>>(`/api/guilds/${guildId}/modlogs`, {
+      .get<PagedResult<ModLog>>(`/api/guilds/${guildId}/moderation/modlogs`, {
         params: { page, pageSize, userId },
       })
       .then((r) => r.data),
@@ -60,6 +61,9 @@ export const loggingApi = {
 
   update: (guildId: string, data: Partial<LoggingConfig>) =>
     api.patch(`/api/guilds/${guildId}/logging`, data).then((r) => r.data),
+
+  getActivities: (guildId: string, params?: { category?: number; search?: string; page?: number; pageSize?: number }) =>
+    api.get<ActivityLogsResponse>(`/api/guilds/${guildId}/logging/activities`, { params }).then((r) => r.data),
 }
 
 // ── Welcome ───────────────────────────────────────────────────────────────────

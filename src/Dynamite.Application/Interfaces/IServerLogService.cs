@@ -1,6 +1,7 @@
 // src/Dynamite.Application/Interfaces/IServerLogService.cs
 namespace Dynamite.Application.Interfaces;
 
+using Dynamite.Core.Entities;
 using Dynamite.Core.Enums;
 
 public interface IServerLogService
@@ -25,5 +26,27 @@ public interface IServerLogService
         ulong guildId,
         string guildName,
         LogCategory category,
+        CancellationToken ct = default);
+
+    Task LogActivityAsync(
+        ulong guildId,
+        LogCategory category,
+        string eventType,
+        string title,
+        string description,
+        string? actorId = null,
+        string? actorUsername = null,
+        string? actorAvatarUrl = null,
+        string? targetId = null,
+        string? targetUsername = null,
+        string? metadata = null,
+        CancellationToken ct = default);
+
+    Task<(IEnumerable<ServerActivityLog> Logs, int TotalCount)> GetActivityLogsAsync(
+        ulong guildId,
+        LogCategory? category = null,
+        string? search = null,
+        int page = 1,
+        int pageSize = 50,
         CancellationToken ct = default);
 }

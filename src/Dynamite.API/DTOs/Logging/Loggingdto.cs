@@ -10,7 +10,9 @@ public record LoggingConfigDto(
     string? MessageLogChannelId,
     string? MemberLogChannelId,
     string? VoiceLogChannelId,
-    string? ServerLogChannelId
+    string? ServerLogChannelId,
+    string? ModLogChannelId = null,
+    string? AuditLogChannelId = null
 );
 
 /// <summary>
@@ -22,5 +24,7 @@ public record UpdateLoggingConfigRequest(
     string? MessageLogChannelId,
     string? MemberLogChannelId,
     string? VoiceLogChannelId,
-    string? ServerLogChannelId
+    string? ServerLogChannelId,
+    string? ModLogChannelId = null,
+    string? AuditLogChannelId = null
 );
