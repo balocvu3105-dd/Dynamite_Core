@@ -58,7 +58,7 @@ public class RequireGuildAdminAttribute : Attribute, IAsyncActionFilter
         }
         catch (Exception)
         {
-            context.Result = new StatusCodeResult(403); // Forbidden nếu gọi Discord API lỗi (thường do token hết hạn)
+            context.Result = new StatusCodeResult(401); // Unauthorized nếu gọi Discord API lỗi (thường do token hết hạn)
             return;
         }
 
