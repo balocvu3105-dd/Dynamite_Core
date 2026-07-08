@@ -88,6 +88,7 @@ public static class StreamerTemplate
                 Name = "🎙 VOICE",
                 Channels =
                 [
+                    new() { Name = "➕ Join to Create", Type = ChannelType.Voice, IsTempVoiceTrigger = true },
                     new() { Name = "Hang Out",    Type = ChannelType.Voice },
                     new() { Name = "Watch Party", Type = ChannelType.Voice },
                     new() { Name = "AFK",         Type = ChannelType.Voice },

@@ -53,6 +53,9 @@ public class ChannelTemplate
     // Slow mode tính bằng giây. 0 = tắt.
     public int SlowModeInterval { get; init; } = 0;
 
+    // Đánh dấu channel này là trigger cho TempVoice (Join to Create)
+    public bool IsTempVoiceTrigger { get; init; } = false;
+
     // Override permissions riêng cho channel này (ngoài category overwrites)
     public IReadOnlyList<PermissionOverwriteTemplate> Overwrites { get; init; } = [];
 }

@@ -74,13 +74,14 @@ public class JwtService
 
         var tokenBytes = RandomNumberGenerator.GetBytes(64);
         var tokenString = Convert.ToBase64String(tokenBytes);
+        var hashedToken = HashToken(tokenString);
 
         var refreshToken = new RefreshToken
         {
             DiscordUserId = discordUserId,
             Username      = username,
             Avatar        = avatar,
-            Token         = tokenString,
+            Token         = hashedToken,
             ExpiresAt     = DateTime.UtcNow.AddDays(
                 int.Parse(_config["Jwt:RefreshTokenExpiryDays"]!)),
             IsRevoked     = false
@@ -100,8 +101,9 @@ public class JwtService
         string token,
         CancellationToken ct = default)
     {
+        var hashedToken = HashToken(token);
         var record = await _db.RefreshTokens
-            .FirstOrDefaultAsync(x => x.Token == token, ct);
+            .FirstOrDefaultAsync(x => x.Token == hashedToken, ct);
 
         if (record is null || !record.IsActive)
             return null;
@@ -113,14 +115,18 @@ public class JwtService
         string token,
         CancellationToken ct = default)
     {
+        var hashedToken = HashToken(token);
         var record = await _db.RefreshTokens
-            .FirstOrDefaultAsync(x => x.Token == token, ct);
+            .FirstOrDefaultAsync(x => x.Token == hashedToken, ct);
 
         if (record is null) return;
 
         record.IsRevoked = true;
         await _db.SaveChangesAsync(ct);
     }
+
+    private static string HashToken(string token) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant();
 
     // ─────────────────────────────────────────────
     // HELPERS

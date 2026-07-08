@@ -82,6 +82,7 @@ public static class CommunityTemplate
                 Name = "🎙 VOICE",
                 Channels =
                 [
+                    new() { Name = "➕ Join to Create", Type = ChannelType.Voice, IsTempVoiceTrigger = true },
                     new() { Name = "Lounge",      Type = ChannelType.Voice },
                     new() { Name = "Study Hall",  Type = ChannelType.Voice },
                     new() { Name = "Events",      Type = ChannelType.Voice },

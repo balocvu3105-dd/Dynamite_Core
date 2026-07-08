@@ -129,6 +129,7 @@ public class SmartSetupEngine
         {
             var voiceChannels = new List<ChannelTemplate>
             {
+                new() { Name = "➕ Join to Create", Type = ChannelType.Voice, IsTempVoiceTrigger = true },
                 new() { Name = "General Lounge", Type = ChannelType.Voice },
                 new() { Name = "Chill & Music", Type = ChannelType.Voice }
             };

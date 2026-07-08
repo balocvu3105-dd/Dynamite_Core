@@ -79,6 +79,7 @@ public static class GamingTemplate
                 Name = "🔊 VOICE",
                 Channels =
                 [
+                    new() { Name = "➕ Join to Create", Type = ChannelType.Voice, IsTempVoiceTrigger = true },
                     new() { Name = "General",  Type = ChannelType.Voice },
                     new() { Name = "Gaming #1", Type = ChannelType.Voice },
                     new() { Name = "Gaming #2", Type = ChannelType.Voice },

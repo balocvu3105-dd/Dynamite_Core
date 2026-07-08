@@ -6,6 +6,8 @@ using Discord.Interactions;
 using Discord.WebSocket;
 using Dynamite.Modules.Setup.Services;
 using Dynamite.Modules.Setup.Templates;
+using Dynamite.Modules.Voice.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -144,10 +146,12 @@ public class SetupModule : InteractionModuleBase<SocketInteractionContext>
 
 public class SetupExecutor
 {
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<SetupExecutor> _logger;
 
-    public SetupExecutor(ILogger<SetupExecutor> logger)
+    public SetupExecutor(IServiceScopeFactory scopeFactory, ILogger<SetupExecutor> logger)
     {
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
@@ -272,6 +276,21 @@ public class SetupExecutor
                     doneChannels++;
                     _logger.LogInformation("Created channel '{Name}' in '{Category}'",
                         channelDef.Name, categoryDef.Name);
+
+                    if (channelDef.IsTempVoiceTrigger || channelDef.Name.Contains("Join to Create", StringComparison.OrdinalIgnoreCase) || channelDef.Name.Contains("Tạo phòng", StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            using var scope = _scopeFactory.CreateScope();
+                            var tempVoiceService = scope.ServiceProvider.GetRequiredService<TempVoiceService>();
+                            await tempVoiceService.SetupAsync(guild.Id, guild.Name, channel.Id, category.Id, 0, ct);
+                            _logger.LogInformation("Auto-configured TempVoice trigger channel {ChannelId} ({ChannelName}) for guild {GuildId}", channel.Id, channel.Name, guild.Id);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to auto-configure TempVoice trigger channel for guild {GuildId}", guild.Id);
+                        }
+                    }
                 }
 
                 await progressCallback(

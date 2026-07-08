@@ -34,8 +34,8 @@ public class EconomyEventHandler
     public void Subscribe()
     {
         if (_subscribed) return;
-        _client.MessageReceived     += OnMessageReceivedAsync;
-        _client.UserVoiceStateUpdated += OnVoiceStateUpdatedAsync;
+        _client.MessageReceived += msg => SafeRun(() => OnMessageReceivedAsync(msg));
+        _client.UserVoiceStateUpdated += (user, before, after) => SafeRun(() => OnVoiceStateUpdatedAsync(user, before, after));
         _subscribed = true;
         _logger.LogInformation("EconomyEventHandler subscribed");
     }
@@ -154,5 +154,15 @@ public class EconomyEventHandler
             await dm.SendMessageAsync(embed: embed);
         }
         catch { /* User đóng DM — bỏ qua */ }
+    }
+
+    private Task SafeRun(Func<Task> handler)
+    {
+        _ = Task.Run(async () =>
+        {
+            try { await handler(); }
+            catch (Exception ex) { _logger.LogError(ex, "Unhandled exception in EconomyEventHandler"); }
+        });
+        return Task.CompletedTask;
     }
 }
