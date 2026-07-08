@@ -8,6 +8,7 @@ services:
     container_name: dynamite_postgres
     restart: unless-stopped
     environment:
+      TZ: Asia/Ho_Chi_Minh
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -31,6 +32,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      TZ: Asia/Ho_Chi_Minh
       ConnectionStrings__DefaultConnection: >-
         Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
     networks:
@@ -46,6 +48,7 @@ services:
       migrator:
         condition: service_completed_successfully
     environment:
+      TZ: Asia/Ho_Chi_Minh
       Discord__Token: ${DISCORD_TOKEN}
       Discord__TestGuildId: ${DISCORD_TEST_GUILD_ID}
       ConnectionStrings__DefaultConnection: >-
@@ -65,6 +68,7 @@ services:
       migrator:
         condition: service_completed_successfully
     environment:
+      TZ: Asia/Ho_Chi_Minh
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5000
       ConnectionStrings__DefaultConnection: >-
@@ -96,6 +100,8 @@ services:
         VITE_DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:-http://localhost:5173/auth/callback}
     container_name: dynamite_dashboard
     restart: unless-stopped
+    environment:
+      TZ: Asia/Ho_Chi_Minh
     ports:
       - "${DASHBOARD_PORT:-3000}:80"
     networks:
