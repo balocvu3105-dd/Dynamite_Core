@@ -182,7 +182,7 @@ public class RolePanelInteractionService
         {
             await interaction.FollowupAsync(
                 embed: RoleManagementEmbeds.Error("Not Found",
-                    "This role no longer exists in the panel database (likely due to a database migration/reset or deletion). Please ask an admin to recreate this panel using `/rolepanel setup`."),
+                    "This role no longer exists in the panel database (likely due to a database migration/reset or deletion). Please ask an admin to recreate this panel using `/rolepanel create`."),
                 ephemeral: true);
             return;
         }
