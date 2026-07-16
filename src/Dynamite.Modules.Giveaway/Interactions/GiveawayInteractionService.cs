@@ -1,6 +1,7 @@
 // src/Dynamite.Modules.Giveaway/Interactions/GiveawayInteractionService.cs
 namespace Dynamite.Modules.Giveaway.Interactions;
 
+using Discord;
 using Discord.WebSocket;
 using Dynamite.Modules.Giveaway.Helpers;
 using Dynamite.Modules.Giveaway.Services;
@@ -26,19 +27,38 @@ public class GiveawayInteractionService
 
         await interaction.DeferAsync(ephemeral: true);
 
+        var guildUser = interaction.User as IGuildUser;
+        if (guildUser is null && interaction.Channel is IGuildChannel guildChannel)
+        {
+            guildUser = await guildChannel.Guild.GetUserAsync(interaction.User.Id);
+        }
+
+        if (guildUser is null)
+        {
+            await interaction.FollowupAsync("Could not resolve your member profile on this server. Please try again.", ephemeral: true);
+            return;
+        }
+
         using var scope = _scopeFactory.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<GiveawayService>();
 
         var messageId = interaction.Message.Id;
         var userId = interaction.User.Id;
-        var guildId = ((SocketGuildChannel)interaction.Channel).Guild.Id;
+        var guildId = guildUser.Guild.Id;
 
-        var result = await service.EnterAsync(messageId, userId, guildId);
+        try
+        {
+            var result = await service.EnterAsync(messageId, userId, guildId);
+            await interaction.FollowupAsync(
+                result ? "You have entered the giveaway! 🎉" : result.ErrorMessage,
+                ephemeral: true);
 
-        await interaction.FollowupAsync(
-            result ? "You have entered the giveaway! 🎉" : result.ErrorMessage,
-            ephemeral: true);
-
-        _logger.LogDebug("User {UserId} attempted giveaway entry: {Result}", userId, result.Success);
+            _logger.LogDebug("User {UserId} attempted giveaway entry: {Result}", userId, result.Success);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to enter giveaway for user {UserId}", userId);
+            await interaction.FollowupAsync("An error occurred while entering the giveaway.", ephemeral: true);
+        }
     }
 }

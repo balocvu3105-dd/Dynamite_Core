@@ -68,6 +68,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton(new DiscordSocketClient(new DiscordSocketConfig
         {
             LogLevel = LogSeverity.Info,
+            AlwaysDownloadUsers = true,
             GatewayIntents = GatewayIntents.Guilds
                 | GatewayIntents.GuildMembers
                 | GatewayIntents.GuildMessages

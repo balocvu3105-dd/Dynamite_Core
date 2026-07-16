@@ -1,6 +1,7 @@
 // src/Dynamite.Modules.Ticket/Interactions/TicketInteractionService.cs
 namespace Dynamite.Modules.Ticket.Interactions;
 
+using Discord;
 using Discord.WebSocket;
 using Dynamite.Modules.Ticket.Helpers;
 using Dynamite.Modules.Ticket.Services;
@@ -36,14 +37,33 @@ public class TicketInteractionService
     {
         await interaction.DeferAsync(ephemeral: true);
 
-        var guild = ((SocketGuildChannel)interaction.Channel).Guild;
+        var guildUser = interaction.User as IGuildUser;
+        if (guildUser is null && interaction.Channel is IGuildChannel guildChannel)
+        {
+            guildUser = await guildChannel.Guild.GetUserAsync(interaction.User.Id);
+        }
+
+        if (guildUser is null)
+        {
+            await interaction.FollowupAsync("Could not resolve your member profile on this server. Please try again.", ephemeral: true);
+            return;
+        }
+
         using var scope = _scopeFactory.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<TicketService>();
 
-        var result = await service.OpenTicketAsync(guild.Id, interaction.User.Id);
-        await interaction.FollowupAsync(
-            result ? $"Your ticket has been created: <#{result.Value}>" : result.ErrorMessage,
-            ephemeral: true);
+        try
+        {
+            var result = await service.OpenTicketAsync(guildUser.Guild.Id, interaction.User.Id);
+            await interaction.FollowupAsync(
+                result ? $"Your ticket has been created: <#{result.Value}>" : result.ErrorMessage,
+                ephemeral: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to open ticket for user {UserId}", interaction.User.Id);
+            await interaction.FollowupAsync("An error occurred while opening the ticket.", ephemeral: true);
+        }
     }
 
     private async Task HandleCloseAsync(SocketMessageComponent interaction)
@@ -53,27 +73,39 @@ public class TicketInteractionService
         using var scope = _scopeFactory.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<TicketService>();
 
-        var result = await service.CloseTicketAsync(
-            interaction.Channel.Id,
-            interaction.User.Id);
+        try
+        {
+            var result = await service.CloseTicketAsync(
+                interaction.Channel.Id,
+                interaction.User.Id);
 
-        if (!result)
-            await interaction.FollowupAsync(result.ErrorMessage, ephemeral: true);
-        // Nếu success thì channel đã được rename, không cần followup thêm
+            if (!result)
+                await interaction.FollowupAsync(result.ErrorMessage, ephemeral: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to close ticket in channel {ChannelId}", interaction.Channel.Id);
+            await interaction.FollowupAsync("An error occurred while closing the ticket.", ephemeral: true);
+        }
     }
 
     private async Task HandleDeleteAsync(SocketMessageComponent interaction)
     {
-        // Không defer vì channel sẽ bị xóa ngay — chỉ staff mới thấy nút này
         await interaction.DeferAsync(ephemeral: true);
 
         using var scope = _scopeFactory.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<TicketService>();
 
-        await service.DeleteTicketAsync(
-            interaction.Channel.Id,
-            interaction.User.Id);
-
-        // Channel đã bị xóa nên không cần followup
+        try
+        {
+            await service.DeleteTicketAsync(
+                interaction.Channel.Id,
+                interaction.User.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete ticket in channel {ChannelId}", interaction.Channel.Id);
+            await interaction.FollowupAsync("An error occurred while deleting the ticket.", ephemeral: true);
+        }
     }
 }

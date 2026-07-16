@@ -59,11 +59,23 @@ public class RolePanelInteractionService
         // Defer trước — lookup DB có thể mất thời gian
         await interaction.DeferAsync(ephemeral: true);
 
+        var guildUser = interaction.User as IGuildUser;
+        if (guildUser is null && interaction.Channel is IGuildChannel guildChannel)
+        {
+            guildUser = await guildChannel.Guild.GetUserAsync(interaction.User.Id);
+        }
+
+        if (guildUser is null)
+        {
+            await interaction.FollowupAsync(
+                embed: RoleManagementEmbeds.Error("Error",
+                    "Could not resolve your member profile on this server. Please try again or contact an admin."),
+                ephemeral: true);
+            return;
+        }
+
         using var scope = _scopeFactory.CreateScope();
         var panelService = scope.ServiceProvider.GetRequiredService<IRolePanelService>();
-
-        var guildUser = interaction.User as IGuildUser;
-        if (guildUser is null) return;
 
         // Load panel MỘT lần (kèm toàn bộ items) — vừa đỡ query lặp,
         // vừa cần để enforce MaxRoles trên tổng role của panel
@@ -74,7 +86,7 @@ public class RolePanelInteractionService
         {
             await interaction.FollowupAsync(
                 embed: RoleManagementEmbeds.Error("Not Found",
-                    "This panel no longer exists. Please ask an admin to recreate it."),
+                    "This panel no longer exists in the bot database (likely due to a database migration/reset or deletion). Please ask an admin to recreate this panel."),
                 ephemeral: true);
             return;
         }
@@ -88,6 +100,21 @@ public class RolePanelInteractionService
         {
             var item = panel.Items.FirstOrDefault(i => i.Id == itemId);
             if (item is null) continue;
+
+            var role = guildUser.Guild.GetRole(item.RoleId);
+            if (role is null)
+            {
+                results.Add($"✖ **{item.Label}** failed — role deleted on server.");
+                continue;
+            }
+
+            var socketGuild = ((SocketGuildChannel)interaction.Channel).Guild;
+            var botUser = socketGuild.CurrentUser;
+            if (botUser is not null && botUser.Hierarchy <= role.Position)
+            {
+                results.Add($"✖ **{item.Label}** failed — bot role below target role.");
+                continue;
+            }
 
             var hasRole = guildUser.RoleIds.Contains(item.RoleId);
             try
@@ -130,6 +157,21 @@ public class RolePanelInteractionService
     {
         await interaction.DeferAsync(ephemeral: true);
 
+        var guildUser = interaction.User as IGuildUser;
+        if (guildUser is null && interaction.Channel is IGuildChannel guildChannel)
+        {
+            guildUser = await guildChannel.Guild.GetUserAsync(interaction.User.Id);
+        }
+
+        if (guildUser is null)
+        {
+            await interaction.FollowupAsync(
+                embed: RoleManagementEmbeds.Error("Error",
+                    "Could not resolve your member profile on this server. Please try again or contact an admin."),
+                ephemeral: true);
+            return;
+        }
+
         using var scope = _scopeFactory.CreateScope();
         var panelService = scope.ServiceProvider.GetRequiredService<IRolePanelService>();
 
@@ -140,13 +182,31 @@ public class RolePanelInteractionService
         {
             await interaction.FollowupAsync(
                 embed: RoleManagementEmbeds.Error("Not Found",
-                    "This role no longer exists in the panel configuration."),
+                    "This role no longer exists in the panel database (likely due to a database migration/reset or deletion). Please ask an admin to recreate this panel using `/rolepanel setup`."),
                 ephemeral: true);
             return;
         }
 
-        var guildUser = interaction.User as IGuildUser;
-        if (guildUser is null) return;
+        var role = guildUser.Guild.GetRole(item.RoleId);
+        if (role is null)
+        {
+            await interaction.FollowupAsync(
+                embed: RoleManagementEmbeds.Error("Role Deleted",
+                    $"The role **{item.Label}** no longer exists on this server. Please ask an admin to update the panel."),
+                ephemeral: true);
+            return;
+        }
+
+        var socketGuild = ((SocketGuildChannel)interaction.Channel).Guild;
+        var botUser = socketGuild.CurrentUser;
+        if (botUser is not null && botUser.Hierarchy <= role.Position)
+        {
+            await interaction.FollowupAsync(
+                embed: RoleManagementEmbeds.Error("Permission Error",
+                    $"My bot role is below **@{role.Name}** in Server Settings → Roles. Please ask an admin to drag the bot's role higher!"),
+                ephemeral: true);
+            return;
+        }
 
         var hasRole = guildUser.RoleIds.Contains(item.RoleId);
 
@@ -187,6 +247,21 @@ public class RolePanelInteractionService
             await interaction.FollowupAsync(
                 embed: RoleManagementEmbeds.Error("Role Deleted",
                     $"The role **{item.Label}** no longer exists on this server. Please ask an admin to update the panel."),
+                ephemeral: true);
+        }
+        catch (Discord.Net.HttpException ex) when (ex.DiscordCode == Discord.DiscordErrorCode.MissingPermissions)
+        {
+            await interaction.FollowupAsync(
+                embed: RoleManagementEmbeds.Error("Missing Permissions",
+                    $"The bot does not have permission (`Manage Roles`) or proper hierarchy to assign **{item.Label}**. Please ask an admin to fix bot roles."),
+                ephemeral: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error assigning role {RoleId} to user {UserId}", item.RoleId, guildUser.Id);
+            await interaction.FollowupAsync(
+                embed: RoleManagementEmbeds.Error("Error",
+                    $"Failed to update role: {ex.Message}. Please contact an admin."),
                 ephemeral: true);
         }
     }

@@ -250,39 +250,80 @@ public class BotHostedService : IHostedService
 
     private async Task OnButtonExecutedAsync(SocketMessageComponent interaction)
     {
-        var customId = interaction.Data.CustomId;
-
-        if (customId == VerifyInteractionService.VerifyButtonId)
+        try
         {
-            var verifyService = _services.GetRequiredService<VerifyInteractionService>();
-            await verifyService.HandleVerifyAsync(interaction);
-            return;
-        }
+            var customId = interaction.Data.CustomId;
 
-        if (customId == Dynamite.Modules.Giveaway.Helpers.GiveawayEmbedBuilder.EnterButtonId)
+            if (customId == VerifyInteractionService.VerifyButtonId)
+            {
+                var verifyService = _services.GetRequiredService<VerifyInteractionService>();
+                await verifyService.HandleVerifyAsync(interaction);
+                return;
+            }
+
+            if (customId == Dynamite.Modules.Giveaway.Helpers.GiveawayEmbedBuilder.EnterButtonId)
+            {
+                var giveawayService = _services.GetRequiredService<GiveawayInteractionService>();
+                await giveawayService.HandleButtonAsync(interaction);
+                return;
+            }
+
+            if (customId == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.OpenButtonId  ||
+                customId == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.CloseButtonId ||
+                customId == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.DeleteButtonId)
+            {
+                var ticketService = _services.GetRequiredService<TicketInteractionService>();
+                await ticketService.HandleButtonAsync(interaction);
+                return;
+            }
+
+            if (customId.StartsWith(RolePanelInteractionService.ButtonPrefix))
+            {
+                var rolePanelService = _services.GetRequiredService<RolePanelInteractionService>();
+                await rolePanelService.HandleButtonAsync(interaction);
+                return;
+            }
+
+            // Unhandled button
+            _logger.LogWarning("Unhandled button executed with customId: {CustomId} by user {UserId}", customId, interaction.User.Id);
+            if (!interaction.HasResponded)
+                await interaction.RespondAsync("⚠️ Nút này không còn khả dụng hoặc không hợp lệ.", ephemeral: true);
+        }
+        catch (Exception ex)
         {
-            var giveawayService = _services.GetRequiredService<GiveawayInteractionService>();
-            await giveawayService.HandleButtonAsync(interaction);
-            return;
+            _logger.LogError(ex, "Error handling button interaction {CustomId}", interaction.Data.CustomId);
+            if (!interaction.HasResponded)
+                try { await interaction.RespondAsync("❌ Đã xảy ra lỗi khi xử lý thao tác này.", ephemeral: true); } catch {}
+            else
+                try { await interaction.FollowupAsync("❌ Đã xảy ra lỗi khi xử lý thao tác này.", ephemeral: true); } catch {}
         }
-
-        if (customId == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.OpenButtonId  ||
-            customId == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.CloseButtonId ||
-            customId == Dynamite.Modules.Ticket.Helpers.TicketEmbedBuilder.DeleteButtonId)
-        {
-            var ticketService = _services.GetRequiredService<TicketInteractionService>();
-            await ticketService.HandleButtonAsync(interaction);
-            return;
-        }
-
-        var rolePanelService = _services.GetRequiredService<RolePanelInteractionService>();
-        await rolePanelService.HandleButtonAsync(interaction);
     }
 
     private async Task OnSelectMenuExecutedAsync(SocketMessageComponent interaction)
     {
-        var rolePanelService = _services.GetRequiredService<RolePanelInteractionService>();
-        await rolePanelService.HandleSelectAsync(interaction);
+        try
+        {
+            var customId = interaction.Data.CustomId;
+            if (customId.StartsWith(RolePanelInteractionService.SelectPrefix))
+            {
+                var rolePanelService = _services.GetRequiredService<RolePanelInteractionService>();
+                await rolePanelService.HandleSelectAsync(interaction);
+                return;
+            }
+
+            // Unhandled select menu
+            _logger.LogWarning("Unhandled select menu executed with customId: {CustomId} by user {UserId}", customId, interaction.User.Id);
+            if (!interaction.HasResponded)
+                await interaction.RespondAsync("⚠️ Menu này không còn khả dụng hoặc không hợp lệ.", ephemeral: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling select menu interaction {CustomId}", interaction.Data.CustomId);
+            if (!interaction.HasResponded)
+                try { await interaction.RespondAsync("❌ Đã xảy ra lỗi khi xử lý thao tác này.", ephemeral: true); } catch {}
+            else
+                try { await interaction.FollowupAsync("❌ Đã xảy ra lỗi khi xử lý thao tác này.", ephemeral: true); } catch {}
+        }
     }
 
     private async Task OnModalSubmittedAsync(SocketModal modal)
