@@ -33,6 +33,20 @@ using Dynamite.Modules.Voice.Services;
 using Dynamite.Shared;
 using Serilog;
 
+// ─── Global Unhandled Exception & Crash Logging ─────────────────────────────
+AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+{
+    var ex = e.ExceptionObject as Exception;
+    Log.Fatal(ex, "FATAL: Unhandled exception caused bot process to crash: {Message}", ex?.Message ?? "Unknown fatal exception");
+    Log.CloseAndFlush();
+};
+
+TaskScheduler.UnobservedTaskException += (sender, e) =>
+{
+    Log.Error(e.Exception, "ERROR: Unobserved task exception detected: {Message}", e.Exception?.Message);
+    e.SetObserved();
+};
+
 var host = Host.CreateDefaultBuilder(args)
     .UseSerilog((context, config) =>
     {
@@ -196,4 +210,18 @@ var host = Host.CreateDefaultBuilder(args)
     })
     .Build();
 
-await host.RunAsync();
+try
+{
+    Log.Information("Starting Dynamite Bot host...");
+    await host.RunAsync();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Host terminated unexpectedly with error: {Message}", ex.Message);
+    throw;
+}
+finally
+{
+    Log.Information("Host stopped. Closing log buffer...");
+    Log.CloseAndFlush();
+}

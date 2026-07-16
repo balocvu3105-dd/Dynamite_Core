@@ -11,16 +11,11 @@ $VPS_IP      = if ($env:VPS_IP) { $env:VPS_IP } else { "103.77.243.86" }
 
 $REPO = $PSScriptRoot
 $COMMIT_MSG = @'
-chore: security hardening, zero-trust identity binding, and infrastructure optimization
+fix: add startup notifications, crash recovery detection, and global exception handling
 
-Security Hardening & Bug Fixes:
-- REST API & Dashboard: Enforce strict Administrator (0x8) and Server Owner authorization in RequireGuildAdmin and GuildAuthorizationService.
-- Zero-Trust Identity Binding: Verify X-Discord-Token ownership against JWT sub/NameIdentifier claim via Discord API with 5-minute caching.
-- Broken Access Control / IDOR: Protect ModulesController with RequireGuildAdmin attribute.
-- Concurrency & Race Conditions: Enable EF Core Optimistic Concurrency Control on UserWallet and handle duplicate key exceptions in GiveawayService.
-- Infrastructure: Restrict PostgreSQL port exposure to local loopback (127.0.0.1:5432) in docker-compose.yml.
-- Frontend Security: Eliminate raw DOM manipulation (XSS) in Callback.tsx, implement OAuth state CSRF protection, and safeguard localStorage.
-- Audit Logging: Record exact server-side verified admin Discord User IDs in economy balance updates.
+- BotHostedService: Implement SendStartupNotificationsAsync triggered after OnReadyAsync to notify Discord audit log channels when the bot boots up or restarts.
+- Crash State Detection: Add session state markers (bot_running.flag and clean_shutdown.flag) to differentiate between graceful shutdowns and unexpected crashes (Crash Detected vs Online).
+- Global Exception Handling: Hook AppDomain.CurrentDomain.UnhandledException and TaskScheduler.UnobservedTaskException in Program.cs to log fatal crashes and execute Log.CloseAndFlush() before process termination.
 '@
 
 Set-Location $REPO

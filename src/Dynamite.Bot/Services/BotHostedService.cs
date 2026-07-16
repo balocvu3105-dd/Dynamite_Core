@@ -36,6 +36,8 @@ public class BotHostedService : IHostedService
 
     private readonly ModAuditLogger _modAuditLogger;
     private bool _modulesLoaded = false;
+    private bool _startupNotificationSent = false;
+    private bool _crashedLastTime = false;
 
     private static readonly IReadOnlyList<Assembly> ModuleAssemblies =
     [
@@ -75,6 +77,35 @@ public class BotHostedService : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        // ── Check Crash State Marker ──
+        try
+        {
+            var logsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+            Directory.CreateDirectory(logsDir);
+            var runningFlagPath = Path.Combine(logsDir, "bot_running.flag");
+            var cleanFlagPath = Path.Combine(logsDir, "clean_shutdown.flag");
+
+            if (File.Exists(runningFlagPath) && !File.Exists(cleanFlagPath))
+            {
+                _crashedLastTime = true;
+                _logger.LogWarning("Crash detected! Previous session ended abruptly without clean shutdown.");
+            }
+            else
+            {
+                _crashedLastTime = false;
+            }
+
+            File.WriteAllText(runningFlagPath, DateTime.UtcNow.ToString("O"));
+            if (File.Exists(cleanFlagPath))
+            {
+                File.Delete(cleanFlagPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not update session state flags");
+        }
+
         _client.Log += LogAsync;
         _client.Ready += OnReadyAsync;
         _client.InteractionCreated += OnInteractionCreatedAsync;
@@ -108,6 +139,25 @@ public class BotHostedService : IHostedService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Some shutdown notifications could not be sent");
+        }
+
+        // ── Mark Clean Shutdown Flag ──
+        try
+        {
+            var logsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+            Directory.CreateDirectory(logsDir);
+            var runningFlagPath = Path.Combine(logsDir, "bot_running.flag");
+            var cleanFlagPath = Path.Combine(logsDir, "clean_shutdown.flag");
+
+            File.WriteAllText(cleanFlagPath, DateTime.UtcNow.ToString("O"));
+            if (File.Exists(runningFlagPath))
+            {
+                File.Delete(runningFlagPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not write clean shutdown flag");
         }
 
         await _client.StopAsync();
@@ -154,6 +204,64 @@ public class BotHostedService : IHostedService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to send shutdown notifications");
+        }
+    }
+
+    private async Task SendStartupNotificationsAsync(bool crashedLastTime, CancellationToken ct)
+    {
+        try
+        {
+            using var scope = _services.CreateScope();
+            var logService = scope.ServiceProvider.GetRequiredService<IServerLogService>();
+
+            var title = crashedLastTime
+                ? "⚠️ Dynamite Vừa Khởi Động Lại Sau Sự Cố"
+                : "🟢 Dynamite Đã Khởi Động Thành Công";
+
+            var description = crashedLastTime
+                ? "Bot vừa phục hồi sau một sự cố sập đột ngột (Crash / Mất kết nối máy chủ / OOM).\nToàn bộ hệ thống và lệnh Slash đã hoạt động trở lại bình thường."
+                : "Bot đã hoàn tất quá trình khởi động và sẵn sàng hoạt động sau bảo trì hoặc khởi động định kỳ.";
+
+            var color = crashedLastTime ? new Color(0xFEE75C) : new Color(0x57F287);
+
+            var embed = new EmbedBuilder()
+                .WithTitle(title)
+                .WithDescription(description)
+                .WithColor(color)
+                .AddField("🕒 Thời gian", $"<t:{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}:F> (<t:{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}:R>)")
+                .AddField("⚙️ Trạng thái", "🟢 Sẵn sàng phục vụ", true)
+                .AddField("🔢 Slash Commands", $"{_interactions.SlashCommands.Count} lệnh", true)
+                .WithTimestamp(DateTimeOffset.UtcNow)
+                .WithFooter(crashedLastTime ? "Dynamite | Auto Crash Recovery Notify" : "Dynamite | Startup Notification")
+                .Build();
+
+            int sentCount = 0;
+            foreach (var guild in _client.Guilds)
+            {
+                if (ct.IsCancellationRequested) break;
+
+                try
+                {
+                    var auditChannelId = await logService.GetLogChannelAsync(guild.Id, LogCategory.Audit, ct);
+                    if (auditChannelId is null) continue;
+
+                    var channel = guild.GetTextChannel(auditChannelId.Value);
+                    if (channel is null) continue;
+
+                    await channel.SendMessageAsync(embed: embed);
+                    sentCount++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Could not send startup notification to guild {GuildId}", guild.Id);
+                }
+            }
+
+            _logger.LogInformation("Startup notifications sent to {Count} guilds (CrashDetected={CrashDetected})", sentCount, crashedLastTime);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send startup notifications");
         }
     }
 
@@ -219,6 +327,24 @@ public class BotHostedService : IHostedService
 
             _statusProvider.SetReady();
             _logger.LogInformation("Bot is ready!");
+
+            if (!_startupNotificationSent)
+            {
+                _startupNotificationSent = true;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(2));
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                        await SendStartupNotificationsAsync(_crashedLastTime, cts.Token);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to send startup notifications");
+                    }
+                });
+            }
         }
         catch (Exception ex)
         {
