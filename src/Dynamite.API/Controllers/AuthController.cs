@@ -38,39 +38,47 @@ public class AuthController : ControllerBase
         if (string.IsNullOrEmpty(body.Code))
             return BadRequest(new { error = "Code is required." });
 
-        // Exchange code → Discord access token
-        var discordAccessToken = await _discord.ExchangeCodeAsync(body.Code, ct);
-
-        // Lấy user info từ Discord
-        var discordUser = await _discord.GetCurrentUserAsync(discordAccessToken, ct);
-
-        // Issue JWT
-        var (accessToken, expiry) = _jwt.GenerateAccessToken(
-            discordUser.Id,
-            discordUser.Username,
-            discordUser.Avatar);
-
-        var refreshToken = await _jwt.GenerateRefreshTokenAsync(
-            discordUser.Id, discordUser.Username, discordUser.Avatar, ct);
-
-        _logger.LogInformation("User {UserId} ({Username}) logged in via SPA",
-            discordUser.Id, discordUser.Username);
-
-        // Trả về accessToken + discordToken (để frontend gửi X-Discord-Token header)
-        return Ok(new
+        try
         {
-            accessToken,
-            refreshToken,
-            discordToken = discordAccessToken,
-            expiresIn = (int)(expiry - DateTime.UtcNow).TotalSeconds,
-            user = new
+            // Exchange code → Discord access token
+            var discordAccessToken = await _discord.ExchangeCodeAsync(body.Code, body.RedirectUri, ct);
+
+            // Lấy user info từ Discord
+            var discordUser = await _discord.GetCurrentUserAsync(discordAccessToken, ct);
+
+            // Issue JWT
+            var (accessToken, expiry) = _jwt.GenerateAccessToken(
+                discordUser.Id,
+                discordUser.Username,
+                discordUser.Avatar);
+
+            var refreshToken = await _jwt.GenerateRefreshTokenAsync(
+                discordUser.Id, discordUser.Username, discordUser.Avatar, ct);
+
+            _logger.LogInformation("User {UserId} ({Username}) logged in via SPA",
+                discordUser.Id, discordUser.Username);
+
+            // Trả về accessToken + discordToken (để frontend gửi X-Discord-Token header)
+            return Ok(new
             {
-                id = discordUser.Id,
-                username = discordUser.Username,
-                avatar = discordUser.Avatar,
-                email = discordUser.Email,
-            }
-        });
+                accessToken,
+                refreshToken,
+                discordToken = discordAccessToken,
+                expiresIn = (int)(expiry - DateTime.UtcNow).TotalSeconds,
+                user = new
+                {
+                    id = discordUser.Id,
+                    username = discordUser.Username,
+                    avatar = discordUser.Avatar,
+                    email = discordUser.Email,
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during SPA login with code {Code}", body.Code);
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     /// <summary>
@@ -118,27 +126,35 @@ public class AuthController : ControllerBase
 
         Response.Cookies.Delete("oauth_state");
 
-        var discordAccessToken = await _discord.ExchangeCodeAsync(code, ct);
-        var discordUser = await _discord.GetCurrentUserAsync(discordAccessToken, ct);
+        try
+        {
+            var discordAccessToken = await _discord.ExchangeCodeAsync(code, null, ct);
+            var discordUser = await _discord.GetCurrentUserAsync(discordAccessToken, ct);
 
-        var (accessToken, expiry) = _jwt.GenerateAccessToken(
-            discordUser.Id,
-            discordUser.Username,
-            discordUser.Avatar);
+            var (accessToken, expiry) = _jwt.GenerateAccessToken(
+                discordUser.Id,
+                discordUser.Username,
+                discordUser.Avatar);
 
-        var refreshToken = await _jwt.GenerateRefreshTokenAsync(
-            discordUser.Id, discordUser.Username, discordUser.Avatar, ct);
+            var refreshToken = await _jwt.GenerateRefreshTokenAsync(
+                discordUser.Id, discordUser.Username, discordUser.Avatar, ct);
 
-        SetRefreshTokenCookie(refreshToken);
+            SetRefreshTokenCookie(refreshToken);
 
-        _logger.LogInformation("User {UserId} ({Username}) logged in",
-            discordUser.Id, discordUser.Username);
+            _logger.LogInformation("User {UserId} ({Username}) logged in",
+                discordUser.Id, discordUser.Username);
 
-        return Ok(new TokenResponse(
-            AccessToken: accessToken,
-            RefreshToken: refreshToken,
-            AccessTokenExpiry: expiry,
-            User: discordUser));
+            return Ok(new TokenResponse(
+                AccessToken: accessToken,
+                RefreshToken: refreshToken,
+                AccessTokenExpiry: expiry,
+                User: discordUser));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during OAuth callback with code {Code}", code);
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     /// <summary>
@@ -222,4 +238,4 @@ public class AuthController : ControllerBase
 /// <summary>
 /// Request body cho POST /api/auth/discord (SPA flow)
 /// </summary>
-public record SpaLoginRequest(string Code);
+public record SpaLoginRequest(string Code, string? RedirectUri = null);

@@ -40,15 +40,16 @@ public class DiscordOAuthService
         return $"https://discord.com/api/oauth2/authorize?client_id={clientId}&redirect_uri={redirectUri}&response_type=code&scope={scope}&state={encodedState}";
     }
 
-    public async Task<string> ExchangeCodeAsync(string code, CancellationToken ct = default)
+    public async Task<string> ExchangeCodeAsync(string code, string? redirectUri = null, CancellationToken ct = default)
     {
+        var targetRedirectUri = !string.IsNullOrWhiteSpace(redirectUri) ? redirectUri : _config["Discord:RedirectUri"]!;
         var body = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["client_id"] = _config["Discord:ClientId"]!,
             ["client_secret"] = _config["Discord:ClientSecret"]!,
             ["grant_type"] = "authorization_code",
             ["code"] = code,
-            ["redirect_uri"] = _config["Discord:RedirectUri"]!,
+            ["redirect_uri"] = targetRedirectUri,
         });
 
         var response = await _http.PostAsync(TokenEndpoint, body, ct);

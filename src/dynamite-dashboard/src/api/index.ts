@@ -15,8 +15,8 @@ import type {
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 export const authApi = {
-  login: (code: string) =>
-    api.post<AuthResponse>('/api/auth/discord', { code }).then((r) => r.data),
+  login: (code: string, redirectUri?: string) =>
+    api.post<AuthResponse>('/api/auth/discord', { code, redirectUri }).then((r) => r.data),
 }
 
 // ── Guilds ────────────────────────────────────────────────────────────────────

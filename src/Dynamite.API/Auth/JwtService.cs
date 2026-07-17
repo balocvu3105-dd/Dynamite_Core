@@ -83,7 +83,7 @@ public class JwtService
             Avatar        = avatar,
             Token         = hashedToken,
             ExpiresAt     = DateTime.UtcNow.AddDays(
-                int.Parse(_config["Jwt:RefreshTokenExpiryDays"]!)),
+                int.Parse(_config["Jwt:RefreshTokenExpiryDays"] ?? "7")),
             IsRevoked     = false
         };
 

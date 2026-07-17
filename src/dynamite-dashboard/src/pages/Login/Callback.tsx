@@ -32,15 +32,18 @@ export default function AuthCallbackPage() {
       return
     }
 
+    const redirectUri = import.meta.env.VITE_DISCORD_REDIRECT_URI || `${window.location.origin}/auth/callback`
+
     authApi
-      .login(code)
+      .login(code, redirectUri)
       .then((res) => {
         login(res.user, res.accessToken, res.discordToken ?? res.accessToken)
         navigate('/servers', { replace: true })
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.error('Auth error:', err)
-        setError(err.message || 'Đăng nhập thất bại. Vui lòng thử lại.')
+        const errorMessage = err.response?.data?.error || err.response?.data?.message || err.message || 'Đăng nhập thất bại. Vui lòng thử lại.'
+        setError(errorMessage)
       })
   }, [login, navigate])
 

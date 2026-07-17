@@ -49,6 +49,8 @@ public class ErrorHandlingMiddleware
             UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "Unauthorized."),
             ArgumentException e => (HttpStatusCode.BadRequest, e.Message),
             KeyNotFoundException e => (HttpStatusCode.NotFound, e.Message),
+            InvalidOperationException e when e.Message.Contains("Discord") || e.Message.Contains("Token") || e.Message.Contains("Auth") => (HttpStatusCode.BadRequest, e.Message),
+            HttpRequestException e => (HttpStatusCode.BadGateway, $"Upstream service error: {e.Message}"),
             _ => (HttpStatusCode.InternalServerError, "An unexpected error occurred.")
         };
 
