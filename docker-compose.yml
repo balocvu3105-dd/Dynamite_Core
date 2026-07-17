@@ -5,7 +5,6 @@ services:
 
   postgres:
     image: postgres:16
-    command: ["postgres", "-c", "flush_data=off"]
     container_name: dynamite_postgres
     restart: unless-stopped
     environment:
